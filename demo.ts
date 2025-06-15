@@ -1,1 +1,1 @@
-new URLSearchParams();
+new Headers();

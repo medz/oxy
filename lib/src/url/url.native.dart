@@ -9,13 +9,13 @@ final class Store {
 
   @override
   String toString() {
-    final searchParams = this.searchParams.stringify();
-    if (uri.query == searchParams) return uri.toString();
-    return uri.replace(query: searchParams).toString();
+    final search = searchParams.stringify();
+    if (uri.query != search) uri = uri.replace(query: search);
+    return uri.toString();
   }
 }
 
-extension type URL._(Store _) {
+extension type URL._(Store _) implements Object {
   factory URL(String url, [String? base]) {
     final uri = switch (base) {
       String base => Uri.parse(base).resolve(url),

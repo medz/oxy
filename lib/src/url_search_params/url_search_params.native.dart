@@ -30,14 +30,16 @@ extension type URLSearchParams._(List<(String, String)> _) {
 
   factory URLSearchParams.parse(String query) {
     final parts = query.cleanStartWithQuestionMark().split("&").map((e) {
-      final [name, ...values] = e.split('=');
-      if (values.isEmpty) return (name.tryDecodeQueryComponent(), '');
+      final [name, ...values] = e.trim().split('=');
+      if (name.trim().isEmpty) return null;
+      if (values.isEmpty) return (name.trim().tryDecodeQueryComponent(), '');
 
       final value = values.join("").tryDecodeQueryComponent();
-      return (name.tryDecodeQueryComponent(), value);
+      return (name.trim().tryDecodeQueryComponent(), value);
     });
+    final entries = parts.whereType<(String, String)>().toList();
 
-    return URLSearchParams._(List.from(parts));
+    return URLSearchParams._(entries);
   }
 
   factory URLSearchParams.fromMap(Map<String, String> source) {

@@ -39,25 +39,28 @@ extension type URLSearchParams._(JSObject _) {
   }
 
   @JS("keys")
-  external JSArray<JSString> _keys();
+  external JSObject _keys();
   Iterable<String> keys() sync* {
-    for (final key in _keys().toDart) {
+    final entries = JSArray.from<JSString>(_keys());
+    for (final key in entries.toDart) {
       yield key.toDart;
     }
   }
 
   @JS("values")
-  external JSArray<JSString> _values();
+  external JSObject _values();
   Iterable<String> values() sync* {
-    for (final value in _values().toDart) {
+    final entries = JSArray.from<JSString>(_values());
+    for (final value in entries.toDart) {
       yield value.toDart;
     }
   }
 
   @JS("entries")
-  external JSArray<JSArray<JSString>> _entries();
+  external JSObject _entries();
   Iterable<List<String>> entries() sync* {
-    for (final entry in _entries().toDart) {
+    final entries = JSArray.from<JSArray<JSString>>(_entries());
+    for (final entry in entries.toDart) {
       final [name, value] = entry.toDart;
       yield [name.toDart, value.toDart];
     }
