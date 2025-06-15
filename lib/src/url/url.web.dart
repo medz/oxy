@@ -3,7 +3,7 @@ import 'dart:js_interop';
 import '../url_search_params/url_search_params.dart' show URLSearchParams;
 
 @JS("URL")
-extension type URL._(JSObject _) {
+extension type URL._(JSObject _) implements JSObject {
   external static URL? parse(String url, [String? base]);
   external static bool canParse(String url, [String base]);
   external factory URL(String url, [String? base]);

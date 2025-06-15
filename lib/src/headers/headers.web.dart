@@ -2,7 +2,7 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 @JS("Headers")
-extension type Headers._(JSObject _) {
+extension type Headers._(JSObject _) implements JSObject {
   factory Headers([Map<String, String>? init]) {
     final obj = JSObject();
     if (init != null && init.isNotEmpty) {
