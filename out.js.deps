@@ -1,10 +1,13 @@
 file:///Users/seven/workspace/flutter/bin/cache/dart-sdk/lib/_internal/dart2js_platform.dill
 file:///Users/seven/workspace/flutter/bin/cache/dart-sdk/lib/libraries.json
 file:///Users/seven/workspace/webfetch/.dart_tool/package_config.json
-file:///Users/seven/workspace/webfetch/bin/main.dart
+file:///Users/seven/workspace/webfetch/example/main.dart
 file:///Users/seven/workspace/webfetch/lib/src/body/body.web.dart
 file:///Users/seven/workspace/webfetch/lib/src/headers/headers.web.dart
+file:///Users/seven/workspace/webfetch/lib/src/request/cache.dart
+file:///Users/seven/workspace/webfetch/lib/src/request/credentials.dart
 file:///Users/seven/workspace/webfetch/lib/src/request/mode.dart
+file:///Users/seven/workspace/webfetch/lib/src/request/redirect.dart
 file:///Users/seven/workspace/webfetch/lib/src/request/request.web.dart
 file:///Users/seven/workspace/webfetch/lib/src/url/url.web.dart
 file:///Users/seven/workspace/webfetch/lib/src/url_search_params/url_search_params.dart

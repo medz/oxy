@@ -277,67 +277,6 @@
       }
       return B.UnknownJavaScriptObject_methods;
     },
-    JSString__isWhitespace(codeUnit) {
-      if (codeUnit < 256)
-        switch (codeUnit) {
-          case 9:
-          case 10:
-          case 11:
-          case 12:
-          case 13:
-          case 32:
-          case 133:
-          case 160:
-            return true;
-          default:
-            return false;
-        }
-      switch (codeUnit) {
-        case 5760:
-        case 8192:
-        case 8193:
-        case 8194:
-        case 8195:
-        case 8196:
-        case 8197:
-        case 8198:
-        case 8199:
-        case 8200:
-        case 8201:
-        case 8202:
-        case 8232:
-        case 8233:
-        case 8239:
-        case 8287:
-        case 12288:
-        case 65279:
-          return true;
-        default:
-          return false;
-      }
-    },
-    JSString__skipLeadingWhitespace(string, index) {
-      var t1, codeUnit;
-      for (t1 = string.length; index < t1;) {
-        codeUnit = string.charCodeAt(index);
-        if (codeUnit !== 32 && codeUnit !== 13 && !J.JSString__isWhitespace(codeUnit))
-          break;
-        ++index;
-      }
-      return index;
-    },
-    JSString__skipTrailingWhitespace(string, index) {
-      var t1, index0, codeUnit;
-      for (t1 = string.length; index > 0; index = index0) {
-        index0 = index - 1;
-        if (!(index0 < t1))
-          return A.ioore(string, index0);
-        codeUnit = string.charCodeAt(index0);
-        if (codeUnit !== 32 && codeUnit !== 13 && !J.JSString__isWhitespace(codeUnit))
-          break;
-      }
-      return index;
-    },
     getInterceptor$(receiver) {
       if (typeof receiver == "number") {
         if (Math.floor(receiver) == receiver)
@@ -2489,6 +2428,8 @@
       t1 = buffer._contents;
       return t1.charCodeAt(0) == 0 ? t1 : t1;
     },
+    _Enum: function _Enum() {
+    },
     Error: function Error() {
     },
     AssertionError: function AssertionError(t0) {
@@ -2534,6 +2475,18 @@
     StringBuffer: function StringBuffer(t0) {
       this._contents = t0;
     },
+    RequestCache: function RequestCache(t0) {
+      this._name = t0;
+    },
+    RequestCredentials: function RequestCredentials(t0) {
+      this._name = t0;
+    },
+    RequestMode: function RequestMode(t0) {
+      this._name = t0;
+    },
+    RequestRedirect: function RequestRedirect(t0) {
+      this._name = t0;
+    },
     printString(string) {
       if (typeof dartPrint == "function") {
         dartPrint(string);
@@ -2552,14 +2505,21 @@
     throwLateFieldADI(fieldName) {
       throw A.initializeExceptionWrapper(new A.LateError("Field '" + fieldName + "' has been assigned during initialization."), new Error());
     },
-    main() {
-      var t1 = init.G,
-        t2 = type$.JSObject._as(new t1.URL("https://x.com")),
-        _this = {};
+    Request_constructor_(input) {
+      var _this = {};
       _this.method = "GET";
       _this.mode = "cors";
-      B.JSString_methods.trim$0("GET");
-      A.printString(A.S(new t1.Request(t2, _this)));
+      _this.credentials = "same-origin";
+      _this.cache = "default";
+      _this.redirect = "follow";
+      return new init.G.Request(input, _this);
+    },
+    main() {
+      var t1 = init.G,
+        t2 = type$.JSObject;
+      A.Request_constructor_(t2._as(new t1.URL("https://x.com")));
+      A.Request_constructor_(t2._as(new t1.URL("https://x.com")));
+      A.printString("true");
     }
   },
   B = {};
@@ -2684,28 +2644,6 @@
     $isTrustedGetRuntimeType: 1
   };
   J.JSString.prototype = {
-    trim$0(receiver) {
-      var startIndex, t1, endIndex0,
-        result = receiver.trim(),
-        endIndex = result.length;
-      if (endIndex === 0)
-        return result;
-      if (0 >= endIndex)
-        return A.ioore(result, 0);
-      if (result.charCodeAt(0) === 133) {
-        startIndex = J.JSString__skipLeadingWhitespace(result, 1);
-        if (startIndex === endIndex)
-          return "";
-      } else
-        startIndex = 0;
-      t1 = endIndex - 1;
-      if (!(t1 >= 0))
-        return A.ioore(result, t1);
-      endIndex0 = result.charCodeAt(t1) === 133 ? J.JSString__skipTrailingWhitespace(result, t1) : endIndex;
-      if (startIndex === 0 && endIndex0 === endIndex)
-        return result;
-      return result.substring(startIndex, endIndex0);
-    },
     toString$0(receiver) {
       return receiver;
     },
@@ -2945,6 +2883,11 @@
       return A.Iterable_iterableToFullString(receiver, "[", "]");
     }
   };
+  A._Enum.prototype = {
+    toString$0(_) {
+      return this._enumToString$0();
+    }
+  };
   A.Error.prototype = {};
   A.AssertionError.prototype = {
     toString$0(_) {
@@ -3047,6 +2990,26 @@
       return t1.charCodeAt(0) == 0 ? t1 : t1;
     }
   };
+  A.RequestCache.prototype = {
+    _enumToString$0() {
+      return "RequestCache." + this._name;
+    }
+  };
+  A.RequestCredentials.prototype = {
+    _enumToString$0() {
+      return "RequestCredentials." + this._name;
+    }
+  };
+  A.RequestMode.prototype = {
+    _enumToString$0() {
+      return "RequestMode." + this._name;
+    }
+  };
+  A.RequestRedirect.prototype = {
+    _enumToString$0() {
+      return "RequestRedirect." + this._name;
+    }
+  };
   (function aliases() {
     var _ = J.LegacyJavaScriptObject.prototype;
     _.super$LegacyJavaScriptObject$toString = _.toString$0;
@@ -3056,7 +3019,7 @@
       _inherit = hunkHelpers.inherit,
       _inheritMany = hunkHelpers.inheritMany;
     _inherit(A.Object, null);
-    _inheritMany(A.Object, [A.JS_CONST, J.Interceptor, J.ArrayIterator, A.Error, A.ListIterator, A.FixedLengthListMixin, A.Closure, A.Rti, A._FunctionParameters, A._Type, A.ListBase, A.Null, A.StringBuffer]);
+    _inheritMany(A.Object, [A.JS_CONST, J.Interceptor, J.ArrayIterator, A.Error, A.ListIterator, A.FixedLengthListMixin, A.Closure, A.Rti, A._FunctionParameters, A._Type, A.ListBase, A._Enum, A.Null, A.StringBuffer]);
     _inheritMany(J.Interceptor, [J.JSBool, J.JSNull, J.JavaScriptObject, J.JavaScriptBigInt, J.JavaScriptSymbol, J.JSNumber, J.JSString]);
     _inheritMany(J.JavaScriptObject, [J.LegacyJavaScriptObject, J.JSArray, A.NativeByteBuffer, A.NativeTypedData]);
     _inheritMany(J.LegacyJavaScriptObject, [J.PlainJavaScriptObject, J.UnknownJavaScriptObject, J.JavaScriptFunction]);
@@ -3076,6 +3039,7 @@
     _inheritMany(A.NativeTypedArrayOfInt, [A.NativeInt16List, A.NativeInt32List, A.NativeInt8List, A.NativeUint16List, A.NativeUint32List, A.NativeUint8ClampedList, A.NativeUint8List]);
     _inherit(A._TypeError, A._Error);
     _inheritMany(A.ArgumentError, [A.RangeError, A.IndexError]);
+    _inheritMany(A._Enum, [A.RequestCache, A.RequestCredentials, A.RequestMode, A.RequestRedirect]);
     _mixin(A._NativeTypedArrayOfDouble_NativeTypedArray_ListMixin, A.ListBase);
     _mixin(A._NativeTypedArrayOfDouble_NativeTypedArray_ListMixin_FixedLengthListMixin, A.FixedLengthListMixin);
     _mixin(A._NativeTypedArrayOfInt_NativeTypedArray_ListMixin, A.ListBase);
@@ -3126,7 +3090,6 @@
   (function constants() {
     B.Interceptor_methods = J.Interceptor.prototype;
     B.JSArray_methods = J.JSArray.prototype;
-    B.JSString_methods = J.JSString.prototype;
     B.JavaScriptFunction_methods = J.JavaScriptFunction.prototype;
     B.JavaScriptObject_methods = J.JavaScriptObject.prototype;
     B.PlainJavaScriptObject_methods = J.PlainJavaScriptObject.prototype;
@@ -3256,6 +3219,10 @@
 };
     B.C_JS_CONST3 = function(hooks) { return hooks; }
 ;
+    B.RequestCache_default_ = new A.RequestCache("default_");
+    B.RequestCredentials_sameOrigin = new A.RequestCredentials("sameOrigin");
+    B.RequestMode_cors = new A.RequestMode("cors");
+    B.RequestRedirect_1 = new A.RequestRedirect("follow");
     B.Type_ByteBuffer_rqD = A.typeLiteral("ByteBuffer");
     B.Type_ByteData_9dB = A.typeLiteral("ByteData");
     B.Type_Float32List_9Kz = A.typeLiteral("Float32List");
