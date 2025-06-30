@@ -24,14 +24,13 @@ extension type ReadableStreamDefaultReader._(JSObject _) {
 }
 
 @JS("ReadableStream")
-extension type ReadableStream._(JSObject _) {
+extension type ReadableStream._(JSObject _) implements JSObject {
   external factory ReadableStream(UnderlyingSource _);
-
   external ReadableStreamDefaultReader getReader();
 }
 
-@JS("ReadableStreamDefaultController")
-extension type ReadableStreamDefaultController._(JSObject _) {
+@JS("ReadableByteStreamController")
+extension type ReadableByteStreamController._(JSObject _) {
   external void enqueue(JSUint8Array _);
   external void error(JSAny? _);
   external void close();
@@ -40,12 +39,18 @@ extension type ReadableStreamDefaultController._(JSObject _) {
 ReadableStream toWebReadableStream(Stream<Uint8List> stream) {
   late final StreamSubscription<Uint8List> subscription;
 
-  void start(ReadableStreamDefaultController controller) {
-    void error(e) => controller.error(e.jsify());
-    void done() => controller.close();
+  void start(ReadableByteStreamController controller) async {
+    void error(e) => controller.error(e?.toString().toJS);
+    void done() {
+      try {
+        controller.close();
+      } catch (_) {}
+    }
 
     subscription = stream.listen(
-      (event) => controller.enqueue(event.toJS),
+      (event) {
+        if (event.isNotEmpty) controller.enqueue(event.toJS);
+      },
       onError: error,
       onDone: done,
     );
