@@ -1,7 +1,8 @@
-import 'abort/abort.dart';
+import 'abort.dart';
 import 'body.dart';
 import 'dirver.dart';
 import 'headers.dart';
+import 'request.dart';
 
 class Oxy {
   Oxy({required this.dirver});
@@ -24,7 +25,7 @@ extension OxyRequestMethods on Oxy {
     RequestPriority priority = RequestPriority.auto,
     RequestRedirect redirect = RequestRedirect.follow,
     String referrer = "about:client",
-    ReferrerPolicy? referrerPolicy,
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
     RequestCredentials credentials = RequestCredentials.sameOrigin,
   }) {
     return call(
@@ -59,7 +60,7 @@ extension OxyRequestMethods on Oxy {
     RequestPriority priority = RequestPriority.auto,
     RequestRedirect redirect = RequestRedirect.follow,
     String referrer = "about:client",
-    ReferrerPolicy? referrerPolicy,
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
     RequestCredentials credentials = RequestCredentials.sameOrigin,
   }) {
     return call(
@@ -94,7 +95,7 @@ extension OxyRequestMethods on Oxy {
     RequestPriority priority = RequestPriority.auto,
     RequestRedirect redirect = RequestRedirect.follow,
     String referrer = "about:client",
-    ReferrerPolicy? referrerPolicy,
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
     RequestCredentials credentials = RequestCredentials.sameOrigin,
   }) {
     return call(
@@ -128,7 +129,7 @@ extension OxyRequestMethods on Oxy {
     RequestPriority priority = RequestPriority.auto,
     RequestRedirect redirect = RequestRedirect.follow,
     String referrer = "about:client",
-    ReferrerPolicy? referrerPolicy,
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
     RequestCredentials credentials = RequestCredentials.sameOrigin,
   }) {
     return call(
@@ -161,7 +162,7 @@ extension OxyRequestMethods on Oxy {
     RequestPriority priority = RequestPriority.auto,
     RequestRedirect redirect = RequestRedirect.follow,
     String referrer = "about:client",
-    ReferrerPolicy? referrerPolicy,
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
     RequestCredentials credentials = RequestCredentials.sameOrigin,
   }) {
     return call(

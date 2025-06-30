@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import '../mark_stream.dart';
-import '../tee_stream_to_two_streams.dart';
+import '_internal/mark_stream.dart';
+import '_internal/tee_stream_to_two_streams.dart';
 
 /// [Request]/[Response] common body properties base class.
 class Body {
