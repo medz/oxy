@@ -3,9 +3,6 @@ import 'dart:async';
 import 'package:test/test.dart';
 import 'package:oxy/oxy.dart';
 
-// Platform detection
-bool get isWeb => identical(0, 0.0);
-
 void main() {
   group('AbortController', () {
     test('should create AbortController with signal', () {
@@ -100,14 +97,7 @@ void main() {
 
       await Future.delayed(Duration(milliseconds: 150));
       expect(signal.aborted, isTrue);
-
-      if (isWeb) {
-        // On web, reason is a DOMException object
-        expect(signal.reason.toString(), contains('TimeoutError'));
-      } else {
-        // On native, reason is a string
-        expect(signal.reason, equals('TimeoutError'));
-      }
+      expect(signal.reason.toString(), contains('TimeoutError'));
     });
 
     test('should throw TimeoutError when timeout signal is checked', () async {
@@ -469,7 +459,7 @@ void main() {
       await Future.delayed(Duration.zero);
 
       expect(listener1Called, isTrue);
-      // Behavior may vary - this tests the implementation's specific behavior
+      expect(listener2Called, isFalse);
     });
   });
 

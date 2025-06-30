@@ -23,7 +23,7 @@ class Event {
     this.cancelable = false,
     this.composed = false,
   }) : timeStamp = DateTime.now().millisecondsSinceEpoch,
-       isTrusted = false;
+       isTrusted = true;
 
   final bool bubbles;
   final bool cancelable;
@@ -97,31 +97,26 @@ class EventTarget {
     event.target ??= this;
     event.currentTarget = this;
 
-    // Collect listeners to call and remove
-    final listenersToCall = <_EventListener>[];
-    final listenersToRemove = <_EventListener>[];
+    // Remove aborted listeners first
+    _listeners.removeWhere((listener) => listener.signal?.aborted == true);
 
-    for (final listener in _listeners) {
-      if (listener.type == event.type) {
-        // Check if AbortSignal is aborted
-        if (listener.signal?.aborted == true) {
-          listenersToRemove.add(listener);
-          continue;
-        }
+    // Create a copy of listeners to iterate over, but check the original list
+    // during iteration to handle listeners removed during dispatch
+    final listenersSnapshot = List<_EventListener>.from(_listeners);
 
-        listenersToCall.add(listener);
-      }
-    }
-
-    // Remove aborted listeners
-    for (final listener in listenersToRemove) {
-      _listeners.remove(listener);
-    }
-
-    // Call listeners
-    for (final listener in listenersToCall) {
+    for (final listener in listenersSnapshot) {
       if (event._immediatePropagationStopped) {
         break;
+      }
+
+      // Skip if listener is not for this event type
+      if (listener.type != event.type) {
+        continue;
+      }
+
+      // Skip if listener was removed during dispatch
+      if (!_listeners.contains(listener)) {
+        continue;
       }
 
       try {
