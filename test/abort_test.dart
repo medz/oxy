@@ -145,31 +145,17 @@ void main() {
       var eventFired = false;
       Event? capturedEvent;
 
-      // Skip addEventListener test on web due to JS interop issues
-      if (isWeb) {
-        // Test onabort callback instead on web
-        controller.signal.onabort = (event) {
-          eventFired = true;
-          capturedEvent = event;
-        };
-      } else {
-        controller.signal.addEventListener('abort', (event) {
-          eventFired = true;
-          capturedEvent = event;
-        });
-      }
+      controller.signal.addEventListener('abort', (event) {
+        eventFired = true;
+        capturedEvent = event;
+      });
 
       expect(eventFired, isFalse);
       controller.abort();
 
-      // Give a small delay for event to propagate
-      await Future.delayed(Duration.zero);
-
       expect(eventFired, isTrue);
       expect(capturedEvent?.type, equals('abort'));
-      if (!isWeb) {
-        expect(capturedEvent?.target, equals(controller.signal));
-      }
+      expect(capturedEvent?.target, equals(controller.signal));
     });
 
     test('should trigger onabort callback when signal is aborted', () async {
@@ -184,9 +170,6 @@ void main() {
 
       expect(callbackFired, isFalse);
       controller.abort();
-
-      // Give a small delay for callback to execute
-      await Future.delayed(Duration.zero);
 
       expect(callbackFired, isTrue);
       expect(capturedEvent?.type, equals('abort'));
