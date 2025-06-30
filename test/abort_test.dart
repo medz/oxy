@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:test/test.dart';
 import 'package:oxy/oxy.dart';
 
@@ -242,38 +244,23 @@ void main() {
 
     test('should trigger event for timeout signal', () async {
       final signal = AbortSignal.timeout(50);
-      var eventFired = false;
+      final completer = Completer<bool>.sync();
 
-      if (isWeb) {
-        signal.onabort = (event) {
-          eventFired = true;
-        };
-      } else {
-        signal.addEventListener('abort', (event) {
-          eventFired = true;
-        });
-      }
+      signal.addEventListener('abort', (_) {
+        completer.complete(true);
+      });
 
-      await Future.delayed(Duration(milliseconds: 100));
-      expect(eventFired, isTrue);
+      expect(await completer.future, isTrue);
     });
 
     test('should not trigger event on already aborted signal', () async {
       final signal = AbortSignal.abort();
       var eventCount = 0;
 
-      // Adding listener to already aborted signal should not trigger immediately
-      if (isWeb) {
-        signal.onabort = (event) {
-          eventCount++;
-        };
-      } else {
-        signal.addEventListener('abort', (event) {
-          eventCount++;
-        });
-      }
+      signal.addEventListener('abort', (event) {
+        eventCount++;
+      });
 
-      await Future.delayed(Duration.zero);
       expect(eventCount, equals(0));
     });
   });
