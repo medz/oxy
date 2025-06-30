@@ -11,7 +11,7 @@ class _Part {
 
 const _setCookieHeaders = ['set-cookie', 'set-cookie2'];
 
-class Headers extends Iterable<(String, String)> {
+class Headers {
   Headers([Map<String, String>? init]) {
     if (init != null && init.isNotEmpty) {
       for (final MapEntry(:key, :value) in init.entries) {
@@ -21,11 +21,6 @@ class Headers extends Iterable<(String, String)> {
   }
 
   final _parts = <_Part>[];
-
-  @override
-  Iterator<(String, String)> get iterator {
-    return entries().iterator;
-  }
 
   void append(String name, String value) {
     _parts.add(_Part(name, value));

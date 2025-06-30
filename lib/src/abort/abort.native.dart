@@ -17,16 +17,13 @@ class _EventListener {
 }
 
 class Event {
-  Event({
-    required this.type,
+  Event(
+    this.type, {
     this.bubbles = false,
     this.cancelable = false,
     this.composed = false,
-    this.currentTarget,
-    this.isTrusted = false,
-    this.target,
-    int? timeStamp,
-  }) : timeStamp = timeStamp ?? DateTime.now().millisecondsSinceEpoch;
+  }) : timeStamp = DateTime.now().millisecondsSinceEpoch,
+       isTrusted = false;
 
   final bool bubbles;
   final bool cancelable;
@@ -60,6 +57,8 @@ class Event {
 }
 
 class EventTarget {
+  EventTarget();
+
   final _listeners = <_EventListener>[];
 
   void addEventListener(
@@ -125,7 +124,12 @@ class EventTarget {
         break;
       }
 
-      listener.callback(event);
+      try {
+        listener.callback(event);
+      } catch (e) {
+        // Continue to next listener even if current one throws
+        // This matches browser behavior where listener exceptions don't stop event propagation
+      }
 
       // Remove once listeners
       if (listener.once) {
@@ -153,6 +157,32 @@ class AbortSignal extends EventTarget {
     return signal;
   }
 
+  factory AbortSignal.any(Iterable<AbortSignal> signals) {
+    // If any signal is already aborted, return an aborted signal
+    for (final signal in signals) {
+      if (signal.aborted) {
+        return AbortSignal.abort(signal.reason);
+      }
+    }
+
+    // Create a new signal that will abort when any of the source signals abort
+    final anySignal = AbortSignal();
+
+    void onAnyAbort(Event event) {
+      if (!anySignal.aborted && event.target is AbortSignal) {
+        final abortedSignal = event.target as AbortSignal;
+        anySignal._abort(abortedSignal.reason);
+      }
+    }
+
+    // Listen to all signals
+    for (final signal in signals) {
+      signal.addEventListener('abort', onAnyAbort);
+    }
+
+    return anySignal;
+  }
+
   bool _aborted;
   dynamic _reason;
 
@@ -172,7 +202,7 @@ class AbortSignal extends EventTarget {
     _aborted = true;
     _reason = reason;
 
-    final event = Event(type: 'abort');
+    final event = Event("abort");
     onabort?.call(event);
     dispatchEvent(event);
   }
