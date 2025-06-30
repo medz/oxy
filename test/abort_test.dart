@@ -197,22 +197,16 @@ void main() {
       var eventListenerFired = false;
       var onabortFired = false;
 
-      if (!isWeb) {
-        controller.signal.addEventListener('abort', (event) {
-          eventListenerFired = true;
-        });
-      }
-
+      controller.signal.addEventListener('abort', (event) {
+        eventListenerFired = true;
+      });
       controller.signal.onabort = (event) {
         onabortFired = true;
       };
 
       controller.abort();
-      await Future.delayed(Duration.zero);
 
-      if (!isWeb) {
-        expect(eventListenerFired, isTrue);
-      }
+      expect(eventListenerFired, isTrue);
       expect(onabortFired, isTrue);
     });
 
@@ -222,21 +216,12 @@ void main() {
         final controller = AbortController();
         var eventCount = 0;
 
-        if (isWeb) {
-          controller.signal.onabort = (event) {
-            eventCount++;
-          };
-        } else {
-          controller.signal.addEventListener('abort', (event) {
-            eventCount++;
-          });
-        }
+        controller.signal.addEventListener('abort', (event) {
+          eventCount++;
+        });
 
         controller.abort();
         controller.abort(); // Second abort should not trigger event
-
-        // Give a small delay for events to propagate
-        await Future.delayed(Duration.zero);
 
         expect(eventCount, equals(1));
       },
