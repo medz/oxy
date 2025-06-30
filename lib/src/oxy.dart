@@ -2,7 +2,6 @@ import 'abort/abort.dart';
 import 'body.dart';
 import 'dirver.dart';
 import 'headers.dart';
-import 'request.dart';
 
 class Oxy {
   Oxy({required this.dirver});
