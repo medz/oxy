@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'abort.dart';
+import 'abort/abort.dart';
 import 'body.dart';
 import 'headers.dart';
 
@@ -195,7 +195,7 @@ enum ReferrerPolicy {
 /// ```dart
 /// final request = Request("https://example.com");
 /// ```
-class Request extends Stream<Uint8List> implements Body {
+class Request implements Body {
   Request(
     this.url, {
     String method = "GET",
@@ -239,29 +239,11 @@ class Request extends Stream<Uint8List> implements Body {
   final RequestCache cache;
 
   @override
-  bool get isBroadcast => body.isBroadcast;
-
-  @override
   bool get bodyUsed => _body.bodyUsed;
 
   /// Returns the request stream body.
   @override
-  Stream<Uint8List> get body => _body;
-
-  @override
-  StreamSubscription<Uint8List> listen(
-    void Function(Uint8List event)? onData, {
-    Function? onError,
-    void Function()? onDone,
-    bool? cancelOnError,
-  }) {
-    return body.listen(
-      onData,
-      onError: onError,
-      onDone: onDone,
-      cancelOnError: cancelOnError,
-    );
-  }
+  Stream<Uint8List> get body => _body.body;
 
   @override
   Request clone() {
