@@ -32,7 +32,7 @@ extension type Event._(JSObject _) implements JSObject {
   external int get eventPhase;
   external bool get isTrusted;
   external EventTarget? get target;
-  external int get timeStamp;
+  external num get timeStamp;
   external String get type;
 
   external JSArray<EventTarget> _composedPath();
@@ -50,16 +50,19 @@ extension type _EventListenerOptions._(JSObject _) {
 extension type _AddEventListenerOptions._(JSObject _)
     implements _EventListenerOptions {
   external factory _AddEventListenerOptions({
-    bool capture,
-    bool once,
-    bool passive,
-    AbortSignal? signal,
+    bool? capture,
+    bool? once,
+    bool? passive,
   });
+
+  external AbortSignal? signal;
 }
 
 @JS("EventTarget")
 extension type EventTarget._(JSObject _) implements JSObject {
   external factory EventTarget();
+
+  static final _jsFuncCache = Expando<JSFunction>();
 
   @JS("addEventListener")
   external void _addEventListener(
@@ -76,13 +79,15 @@ extension type EventTarget._(JSObject _) implements JSObject {
     bool passive = false,
     AbortSignal? signal,
   }) {
+    final callback = _jsFuncCache[listener] ??= listener.toJS;
     final options = _AddEventListenerOptions(
       capture: capture,
       once: once,
       passive: passive,
-      signal: signal,
     );
-    _addEventListener(type, listener.toJS, options);
+    if (signal != null) options.signal = signal;
+
+    _addEventListener(type, callback, options);
   }
 
   @JS("removeEventListener")
@@ -97,8 +102,9 @@ extension type EventTarget._(JSObject _) implements JSObject {
     void Function(Event event) listener, {
     bool capture = false,
   }) {
+    final callback = _jsFuncCache[listener] ??= listener.toJS;
     final options = _EventListenerOptions(capture: capture);
-    _removeEventListener(type, listener.toJS, options);
+    _removeEventListener(type, callback, options);
   }
 
   external bool dispatchEvent(Event event);
