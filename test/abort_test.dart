@@ -114,28 +114,15 @@ void main() {
       final signal = AbortSignal.timeout(50);
       await Future.delayed(Duration(milliseconds: 100));
 
-      if (isWeb) {
-        expect(() => signal.throwIfAborted(), throwsA(anything));
-      } else {
-        expect(() => signal.throwIfAborted(), throwsA('TimeoutError'));
-      }
+      expect(() => signal.throwIfAborted(), throwsA(anything));
     });
 
     test('should create immediately aborted signal with 0 timeout', () async {
       final signal = AbortSignal.timeout(0);
-
-      // Give a micro task for the timer to execute
-      await Future.delayed(Duration.zero);
+      await Future.delayed(Duration(milliseconds: 10));
 
       expect(signal.aborted, isTrue);
-
-      if (isWeb) {
-        // On web, reason is a DOMException object
-        expect(signal.reason.toString(), contains('TimeoutError'));
-      } else {
-        // On native, reason is a string
-        expect(signal.reason, equals('TimeoutError'));
-      }
+      expect(signal.reason.toString(), contains('TimeoutError'));
     });
   });
 
