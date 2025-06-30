@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:oxy/oxy.dart';
+import 'package:oxy/src/abort.dart';
 
 void main() {
   group('AbortController', () {
@@ -9,6 +9,7 @@ void main() {
       final controller = AbortController();
       expect(controller.signal, isA<AbortSignal>());
       expect(controller.signal.aborted, isFalse);
+      expect(controller.signal.reason, isNull);
     });
 
     test('should abort signal when abort() is called', () {
@@ -49,6 +50,20 @@ void main() {
       final signal2 = controller.signal;
       expect(identical(signal1, signal2), isTrue);
     });
+
+    test('should abort with different types of reasons', () {
+      final controller1 = AbortController();
+      final controller2 = AbortController();
+      final controller3 = AbortController();
+
+      controller1.abort('String reason');
+      controller2.abort(42);
+      controller3.abort(Exception('Custom exception'));
+
+      expect(controller1.signal.reason, equals('String reason'));
+      expect(controller2.signal.reason, equals(42));
+      expect(controller3.signal.reason, isA<Exception>());
+    });
   });
 
   group('AbortSignal', () {
@@ -59,21 +74,10 @@ void main() {
       expect(signal.reason, isNull);
     });
 
-    test('should create aborted signal with AbortSignal.abort()', () {
-      final signal = AbortSignal.abort();
-      expect(signal.aborted, isTrue);
-    });
-
-    test('should create aborted signal with reason', () {
-      const reason = 'Custom abort reason';
-      final signal = AbortSignal.abort(reason);
-      expect(signal.aborted, isTrue);
-      expect(signal.reason, equals(reason));
-    });
-
     test('should throw when calling throwIfAborted() on aborted signal', () {
-      final signal = AbortSignal.abort('Test error');
-      expect(() => signal.throwIfAborted(), throwsA('Test error'));
+      final controller = AbortController();
+      controller.abort('Test error');
+      expect(() => controller.signal.throwIfAborted(), throwsA('Test error'));
     });
 
     test(
@@ -85,484 +89,255 @@ void main() {
     );
 
     test('should throw default reason when no reason provided', () {
-      final signal = AbortSignal.abort();
-      expect(() => signal.throwIfAborted(), throwsA(anything));
+      final controller = AbortController();
+      controller.abort();
+      expect(() => controller.signal.throwIfAborted(), throwsA('aborted'));
+    });
+
+    test('should throw with complex reason objects', () {
+      final controller = AbortController();
+      final customError = Exception('Custom error message');
+      controller.abort(customError);
+      expect(() => controller.signal.throwIfAborted(), throwsA(customError));
     });
   });
 
-  group('AbortSignal.timeout()', () {
-    test('should create signal that aborts after timeout', () async {
-      final signal = AbortSignal.timeout(100);
-      expect(signal.aborted, isFalse);
+  group('AbortSignal onAbort callbacks', () {
+    test('should call callback when signal is aborted', () {
+      final controller = AbortController();
+      var callbackCalled = false;
 
-      await Future.delayed(Duration(milliseconds: 150));
-      expect(signal.aborted, isTrue);
-      expect(signal.reason.toString(), contains('TimeoutError'));
+      controller.signal.onAbort(() {
+        callbackCalled = true;
+      });
+
+      expect(callbackCalled, isFalse);
+      controller.abort();
+      expect(callbackCalled, isTrue);
     });
 
-    test('should throw TimeoutError when timeout signal is checked', () async {
-      final signal = AbortSignal.timeout(50);
-      await Future.delayed(Duration(milliseconds: 100));
+    test('should call callback immediately if signal is already aborted', () {
+      final controller = AbortController();
+      controller.abort();
 
-      expect(() => signal.throwIfAborted(), throwsA(anything));
+      var callbackCalled = false;
+      controller.signal.onAbort(() {
+        callbackCalled = true;
+      });
+
+      expect(callbackCalled, isTrue);
     });
 
-    test('should create immediately aborted signal with 0 timeout', () async {
-      final signal = AbortSignal.timeout(0);
-      await Future.delayed(Duration(milliseconds: 10));
+    test('should call multiple callbacks when signal is aborted', () {
+      final controller = AbortController();
+      var callback1Called = false;
+      var callback2Called = false;
+      var callback3Called = false;
 
-      expect(signal.aborted, isTrue);
-      expect(signal.reason.toString(), contains('TimeoutError'));
+      controller.signal.onAbort(() => callback1Called = true);
+      controller.signal.onAbort(() => callback2Called = true);
+      controller.signal.onAbort(() => callback3Called = true);
+
+      expect(callback1Called, isFalse);
+      expect(callback2Called, isFalse);
+      expect(callback3Called, isFalse);
+
+      controller.abort();
+
+      expect(callback1Called, isTrue);
+      expect(callback2Called, isTrue);
+      expect(callback3Called, isTrue);
+    });
+
+    test('should handle callback exceptions gracefully', () {
+      final controller = AbortController();
+      var goodCallbackCalled = false;
+
+      controller.signal.onAbort(() {
+        throw Exception('Bad callback');
+      });
+
+      controller.signal.onAbort(() {
+        goodCallbackCalled = true;
+      });
+
+      // Should not throw even if callback throws
+      expect(() => controller.abort(), returnsNormally);
+      expect(goodCallbackCalled, isTrue);
+    });
+
+    test('should clear callbacks after abort', () {
+      final controller = AbortController();
+      var callCount = 0;
+
+      controller.signal.onAbort(() => callCount++);
+      controller.signal.onAbort(() => callCount++);
+
+      controller.abort();
+      expect(callCount, equals(2));
+
+      // Adding new callback after abort should call it immediately
+      controller.signal.onAbort(() => callCount++);
+      expect(callCount, equals(3));
     });
   });
 
-  group('AbortSignal Events', () {
-    test('should trigger abort event when signal is aborted', () async {
+  group('AbortSignal integration scenarios', () {
+    test('should work with simulated async operation', () async {
       final controller = AbortController();
-      var eventFired = false;
-      Event? capturedEvent;
+      var operationCompleted = false;
+      var operationAborted = false;
 
-      controller.signal.addEventListener('abort', (event) {
-        eventFired = true;
-        capturedEvent = event;
-      });
-
-      expect(eventFired, isFalse);
-      controller.abort();
-
-      expect(eventFired, isTrue);
-      expect(capturedEvent?.type, equals('abort'));
-      expect(capturedEvent?.target, equals(controller.signal));
-    });
-
-    test('should trigger onabort callback when signal is aborted', () async {
-      final controller = AbortController();
-      var callbackFired = false;
-      Event? capturedEvent;
-
-      controller.signal.onabort = (event) {
-        callbackFired = true;
-        capturedEvent = event;
-      };
-
-      expect(callbackFired, isFalse);
-      controller.abort();
-
-      expect(callbackFired, isTrue);
-      expect(capturedEvent?.type, equals('abort'));
-    });
-
-    test('should trigger both addEventListener and onabort', () async {
-      final controller = AbortController();
-      var eventListenerFired = false;
-      var onabortFired = false;
-
-      controller.signal.addEventListener('abort', (event) {
-        eventListenerFired = true;
-      });
-      controller.signal.onabort = (event) {
-        onabortFired = true;
-      };
-
-      controller.abort();
-
-      expect(eventListenerFired, isTrue);
-      expect(onabortFired, isTrue);
-    });
-
-    test(
-      'should not trigger event multiple times when already aborted',
-      () async {
-        final controller = AbortController();
-        var eventCount = 0;
-
-        controller.signal.addEventListener('abort', (event) {
-          eventCount++;
+      // Simulate an async operation that respects abort signal
+      Future<void> simulateOperation(AbortSignal signal) async {
+        signal.onAbort(() {
+          operationAborted = true;
         });
 
-        controller.abort();
-        controller.abort(); // Second abort should not trigger event
+        for (int i = 0; i < 10; i++) {
+          signal.throwIfAborted();
+          await Future.delayed(Duration(milliseconds: 10));
+        }
 
-        expect(eventCount, equals(1));
-      },
-    );
-
-    test('should trigger event for timeout signal', () async {
-      final signal = AbortSignal.timeout(50);
-      final completer = Completer<bool>.sync();
-
-      signal.addEventListener('abort', (_) {
-        completer.complete(true);
-      });
-
-      expect(await completer.future, isTrue);
-    });
-
-    test('should not trigger event on already aborted signal', () async {
-      final signal = AbortSignal.abort();
-      var eventCount = 0;
-
-      signal.addEventListener('abort', (event) {
-        eventCount++;
-      });
-
-      expect(eventCount, equals(0));
-    });
-  });
-
-  group('EventTarget addEventListener/removeEventListener', () {
-    test('should add and remove event listeners correctly', () async {
-      final controller = AbortController();
-      var eventCount = 0;
-
-      void listener(Event event) {
-        eventCount++;
+        operationCompleted = true;
       }
 
-      controller.signal.addEventListener('abort', listener);
-      controller.abort();
+      // Start operation
+      final operationFuture = simulateOperation(controller.signal);
 
-      expect(eventCount, equals(1));
+      // Abort after 50ms
+      Timer(
+        Duration(milliseconds: 50),
+        () => controller.abort('User cancelled'),
+      );
 
-      // Remove listener and abort again (though signal is already aborted)
-      controller.signal.removeEventListener('abort', listener);
+      // Wait for operation to complete or abort
+      try {
+        await operationFuture;
+        fail('Operation should have been aborted');
+      } catch (e) {
+        expect(e, equals('User cancelled'));
+      }
 
-      // Create new controller to test removal
-      final controller2 = AbortController();
-      controller2.signal.addEventListener('abort', listener);
-      controller2.signal.removeEventListener('abort', listener);
-      controller2.abort();
-
-      expect(eventCount, equals(1)); // Should still be 1
+      expect(operationCompleted, isFalse);
+      expect(operationAborted, isTrue);
     });
 
-    test('should support once option', () async {
+    test('should work with timeout scenario', () async {
       final controller = AbortController();
-      var eventCount = 0;
+      var timeoutTriggered = false;
 
-      controller.signal.addEventListener('abort', (event) {
-        eventCount++;
-      }, once: true);
-
-      controller.abort();
-      await Future.delayed(Duration.zero);
-      expect(eventCount, equals(1));
-
-      // Listener should be automatically removed after first call
-      // So aborting again shouldn't increase count (though signal is already aborted)
-      final controller2 = AbortController();
-      controller2.signal.addEventListener('abort', (event) {
-        eventCount++;
-      }, once: true);
-
-      controller2.abort();
-
-      expect(eventCount, equals(2)); // Increased by new controller
-    });
-
-    test('should support signal option for automatic cleanup', () async {
-      final controller = AbortController();
-      final cleanupController = AbortController();
-      var eventCount = 0;
-
-      controller.signal.addEventListener('abort', (event) {
-        eventCount++;
-      }, signal: cleanupController.signal);
-
-      // Abort the cleanup signal first
-      cleanupController.abort();
-
-      // Now abort the main signal - listener should not fire
-      controller.abort();
-
-      expect(eventCount, equals(0));
-    });
-  });
-
-  group('Event object properties', () {
-    test('should have correct event properties', () async {
-      final controller = AbortController();
-      Event? capturedEvent;
-
-      controller.signal.addEventListener('abort', (event) {
-        capturedEvent = event;
+      // Set up timeout
+      Timer(Duration(milliseconds: 100), () {
+        timeoutTriggered = true;
+        controller.abort('Timeout');
       });
 
-      controller.abort();
-
-      expect(capturedEvent, isNotNull);
-      expect(capturedEvent!.type, equals('abort'));
-      expect(capturedEvent!.bubbles, isFalse);
-      expect(capturedEvent!.cancelable, isFalse);
-      expect(capturedEvent!.target, equals(controller.signal));
-      expect(capturedEvent!.currentTarget, equals(controller.signal));
-      expect(capturedEvent!.defaultPrevented, isFalse);
-      expect(capturedEvent!.timeStamp, isA<num>());
+      // Simulate long-running operation
+      try {
+        await Future.delayed(Duration(milliseconds: 200));
+        controller.signal.throwIfAborted();
+        fail('Should have timed out');
+      } catch (e) {
+        expect(e, equals('Timeout'));
+        expect(timeoutTriggered, isTrue);
+      }
     });
 
-    test('should prevent default if cancelable', () async {
-      final controller = AbortController();
-      Event? capturedEvent;
-
-      controller.signal.addEventListener('abort', (event) {
-        capturedEvent = event;
-        event.preventDefault();
-      });
-
-      controller.abort();
-
-      // Abort event is not cancelable by default
-      expect(capturedEvent!.defaultPrevented, isFalse);
-    });
-  });
-
-  group('AbortSignal.any()', () {
-    test('should create signal that aborts when any source signal aborts', () {
+    test('should handle multiple controllers independently', () {
       final controller1 = AbortController();
       final controller2 = AbortController();
-      final anySignal = AbortSignal.any([
-        controller1.signal,
-        controller2.signal,
-      ]);
 
-      expect(anySignal.aborted, isFalse);
+      var signal1Aborted = false;
+      var signal2Aborted = false;
 
-      controller1.abort('reason1');
-      expect(anySignal.aborted, isTrue);
-      expect(anySignal.reason, equals('reason1'));
+      controller1.signal.onAbort(() => signal1Aborted = true);
+      controller2.signal.onAbort(() => signal2Aborted = true);
+
+      // Abort only first controller
+      controller1.abort();
+
+      expect(signal1Aborted, isTrue);
+      expect(signal2Aborted, isFalse);
+      expect(controller1.signal.aborted, isTrue);
+      expect(controller2.signal.aborted, isFalse);
     });
 
-    test(
-      'should abort immediately if any source signal is already aborted',
-      () {
-        final controller1 = AbortController();
-        final abortedSignal = AbortSignal.abort('already aborted');
-        final anySignal = AbortSignal.any([controller1.signal, abortedSignal]);
-
-        expect(anySignal.aborted, isTrue);
-        expect(anySignal.reason, equals('already aborted'));
-      },
-    );
-
-    test('should trigger event when any signal aborts', () async {
-      final controller1 = AbortController();
-      final controller2 = AbortController();
-      final anySignal = AbortSignal.any([
-        controller1.signal,
-        controller2.signal,
-      ]);
-
-      var eventFired = false;
-      anySignal.addEventListener('abort', (event) {
-        eventFired = true;
-      });
-
-      controller2.abort();
-
-      expect(eventFired, isTrue);
-    });
-
-    test('should work with timeout signals', () async {
+    test('should work with HTTP request simulation', () async {
       final controller = AbortController();
-      final timeoutSignal = AbortSignal.timeout(100);
-      final anySignal = AbortSignal.any([controller.signal, timeoutSignal]);
 
-      expect(anySignal.aborted, isFalse);
+      Future<String> simulateHttpRequest(AbortSignal signal) async {
+        // Simulate network delay
+        for (int i = 0; i < 5; i++) {
+          signal.throwIfAborted();
+          await Future.delayed(Duration(milliseconds: 20));
+        }
 
-      await Future.delayed(Duration(milliseconds: 150));
-      expect(anySignal.aborted, isTrue);
-      expect(anySignal.reason.toString(), contains('TimeoutError'));
-    });
+        return 'Response data';
+      }
 
-    test('should handle empty signal array', () {
-      final anySignal = AbortSignal.any([]);
-      expect(anySignal.aborted, isFalse);
+      // Start request
+      final requestFuture = simulateHttpRequest(controller.signal);
+
+      // Cancel request after 50ms
+      Timer(
+        Duration(milliseconds: 50),
+        () => controller.abort('User cancelled'),
+      );
+
+      // Should throw due to abort
+      expect(requestFuture, throwsA('User cancelled'));
     });
   });
 
-  group('Edge cases and error conditions', () {
+  group('AbortSignal edge cases', () {
     test('should handle null reason gracefully', () {
       final controller = AbortController();
       controller.abort(null);
 
       expect(controller.signal.aborted, isTrue);
       expect(controller.signal.reason, isNull);
+      expect(() => controller.signal.throwIfAborted(), throwsA('aborted'));
     });
 
-    test('should handle complex objects as reasons', () {
+    test('should handle empty string reason', () {
       final controller = AbortController();
-      final complexReason = {'error': 'custom', 'code': 123};
+      controller.abort('');
 
-      controller.abort(complexReason);
-      expect(controller.signal.reason, equals(complexReason));
+      expect(controller.signal.reason, equals(''));
+      expect(() => controller.signal.throwIfAborted(), throwsA(''));
     });
 
-    test('should maintain event listener order', () async {
+    test('should maintain state consistency after multiple operations', () {
       final controller = AbortController();
-      final callOrder = <int>[];
+      final signal = controller.signal;
 
-      controller.signal.addEventListener('abort', (event) {
-        callOrder.add(1);
-      });
+      // Initial state
+      expect(signal.aborted, isFalse);
+      expect(signal.reason, isNull);
 
-      controller.signal.addEventListener('abort', (event) {
-        callOrder.add(2);
-      });
+      // Add callbacks
+      var callbackCount = 0;
+      signal.onAbort(() => callbackCount++);
+      signal.onAbort(() => callbackCount++);
 
-      controller.signal.addEventListener('abort', (event) {
-        callOrder.add(3);
-      });
+      // Abort
+      controller.abort('test reason');
 
-      controller.abort();
+      expect(signal.aborted, isTrue);
+      expect(signal.reason, equals('test reason'));
+      expect(callbackCount, equals(2));
 
-      expect(callOrder, equals([1, 2, 3]));
-    });
+      // Try to abort again
+      controller.abort('different reason');
 
-    test('should handle event listener exceptions gracefully', () async {
-      final controller = AbortController();
-      var secondListenerCalled = false;
+      expect(signal.aborted, isTrue);
+      expect(signal.reason, equals('test reason')); // Should not change
+      expect(callbackCount, equals(2)); // Should not increase
 
-      controller.signal.addEventListener('abort', (event) {
-        throw Exception('Listener error');
-      });
-
-      controller.signal.addEventListener('abort', (event) {
-        secondListenerCalled = true;
-      });
-
-      expect(() {
-        controller.abort();
-      }, returnsNormally);
-
-      // Second listener should still be called despite first one throwing
-      expect(secondListenerCalled, isTrue);
-    });
-
-    test('should support removing listeners during event dispatch', () async {
-      final controller = AbortController();
-      var listener1Called = false;
-      var listener2Called = false;
-
-      void listener2(Event event) {
-        listener2Called = true;
-      }
-
-      void listener1(Event event) {
-        listener1Called = true;
-        controller.signal.removeEventListener('abort', listener2);
-      }
-
-      controller.signal.addEventListener('abort', listener1);
-      controller.signal.addEventListener('abort', listener2);
-
-      controller.abort();
-      await Future.delayed(Duration.zero);
-
-      expect(listener1Called, isTrue);
-      expect(listener2Called, isFalse);
-    });
-  });
-
-  group('Memory and resource management', () {
-    test('should clean up timeout resources', () async {
-      // Create many timeout signals to test resource cleanup
-      final signals = <AbortSignal>[];
-      for (int i = 0; i < 100; i++) {
-        signals.add(AbortSignal.timeout(10));
-      }
-
-      await Future.delayed(Duration(milliseconds: 50));
-
-      // All signals should be aborted
-      for (final signal in signals) {
-        expect(signal.aborted, isTrue);
-      }
-    });
-
-    test('should handle rapid abort/create cycles', () {
-      for (int i = 0; i < 1000; i++) {
-        final controller = AbortController();
-        controller.abort('test $i');
-        expect(controller.signal.aborted, isTrue);
-      }
-    });
-  });
-
-  group('Integration scenarios', () {
-    test('should work in typical fetch-like scenario', () async {
-      final controller = AbortController();
-      var operationAborted = false;
-      var cleanupCalled = false;
-
-      // Simulate async operation that can be aborted
-      Future<String> simulatedFetch() async {
-        try {
-          for (int i = 0; i < 10; i++) {
-            controller.signal.throwIfAborted();
-            await Future.delayed(Duration(milliseconds: 10));
-          }
-          return 'Success';
-        } catch (e) {
-          operationAborted = true;
-          cleanupCalled = true;
-          rethrow;
-        }
-      }
-
-      final fetchFuture = simulatedFetch();
-
-      // Abort after 50ms
-      Future.delayed(Duration(milliseconds: 50), () {
-        controller.abort('User cancelled');
-      });
-
-      expect(() => fetchFuture, throwsA('User cancelled'));
-      await Future.delayed(Duration(milliseconds: 100));
-
-      expect(operationAborted, isTrue);
-      expect(cleanupCalled, isTrue);
-    });
-
-    test('should support chained operations with different signals', () async {
-      final controller1 = AbortController();
-      final controller2 = AbortController();
-      final combinedSignal = AbortSignal.any([
-        controller1.signal,
-        controller2.signal,
-      ]);
-
-      var step1Completed = false;
-      var step2Aborted = false;
-
-      // Step 1
-      try {
-        controller1.signal.throwIfAborted();
-        step1Completed = true;
-      } catch (e) {
-        // Should not abort here
-      }
-
-      // Step 2 with combined signal
-      try {
-        combinedSignal.throwIfAborted();
-        await Future.delayed(Duration(milliseconds: 10));
-        combinedSignal.throwIfAborted();
-      } catch (e) {
-        step2Aborted = true;
-      }
-
-      // Abort second controller
-      controller2.abort('Step 2 cancelled');
-
-      try {
-        combinedSignal.throwIfAborted();
-      } catch (e) {
-        step2Aborted = true;
-      }
-
-      expect(step1Completed, isTrue);
-      expect(step2Aborted, isTrue);
-      expect(combinedSignal.aborted, isTrue);
+      // Add callback after abort
+      signal.onAbort(() => callbackCount++);
+      expect(callbackCount, equals(3)); // Should be called immediately
     });
   });
 }

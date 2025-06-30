@@ -1,214 +1,180 @@
-class _EventListener {
-  const _EventListener({
-    this.capture = false,
-    this.once = false,
-    this.passive = false,
-    this.signal,
-    required this.callback,
-    required this.type,
-  });
+/// An interface for signaling the abortion of asynchronous operations.
+///
+/// AbortSignal provides a way to communicate with an asynchronous operation
+/// and abort it if needed. This is commonly used with HTTP requests to
+/// cancel them before completion.
+///
+/// Example:
+/// ```dart
+/// final controller = AbortController();
+/// final signal = controller.signal;
+///
+/// // Set up abort handling
+/// signal.onAbort(() {
+///   print('Operation was aborted');
+/// });
+///
+/// // Later, abort the operation
+/// controller.abort('User cancelled');
+/// ```
+abstract interface class AbortSignal {
+  const AbortSignal();
 
-  final String type;
-  final bool capture;
-  final bool once;
-  final bool passive;
-  final AbortSignal? signal;
-  final void Function(Event event) callback;
+  /// Whether the signal has been aborted.
+  ///
+  /// Returns `true` if [abort] has been called on the associated controller,
+  /// `false` otherwise.
+  bool get aborted;
+
+  /// The reason for the abortion, if any.
+  ///
+  /// Returns the reason passed to [abort], or `null` if no reason was provided
+  /// or the signal hasn't been aborted yet.
+  Object? get reason;
+
+  /// Registers a callback to be called when the signal is aborted.
+  ///
+  /// If the signal is already aborted when this method is called,
+  /// the callback will be executed immediately.
+  ///
+  /// Example:
+  /// ```dart
+  /// signal.onAbort(() {
+  ///   print('Request cancelled');
+  ///   // Clean up resources
+  /// });
+  /// ```
+  void onAbort(void Function() callback);
+
+  /// Throws an exception if the signal has been aborted.
+  ///
+  /// This method is useful for checking abort status in long-running
+  /// operations and immediately terminating execution if needed.
+  ///
+  /// Throws the abort reason if available, otherwise throws 'aborted'.
+  ///
+  /// Example:
+  /// ```dart
+  /// void longRunningOperation(AbortSignal signal) {
+  ///   for (int i = 0; i < 1000; i++) {
+  ///     signal.throwIfAborted(); // Check if cancelled
+  ///     // Do some work...
+  ///   }
+  /// }
+  /// ```
+  void throwIfAborted();
 }
 
-class Event {
-  Event(
-    this.type, {
-    this.bubbles = false,
-    this.cancelable = false,
-    this.composed = false,
-  }) : timeStamp = DateTime.now().millisecondsSinceEpoch,
-       isTrusted = true;
+/// Internal implementation of AbortSignal.
+class _AbortSignalImpl implements AbortSignal {
+  bool _aborted = false;
+  Object? _reason;
+  final _callbacks = <void Function()>[];
 
-  final bool bubbles;
-  final bool cancelable;
-  final bool composed;
-  EventTarget? currentTarget;
-  bool _defaultPrevented = false;
-  final bool isTrusted;
-  EventTarget? target;
-  final int timeStamp;
-  final String type;
-
-  bool _immediatePropagationStopped = false;
-
-  bool get defaultPrevented => _defaultPrevented;
-
-  void preventDefault() {
-    if (cancelable) {
-      _defaultPrevented = true;
-    }
-  }
-
-  void stopImmediatePropagation() {
-    _immediatePropagationStopped = true;
-  }
-
-  // For fetch API, stopPropagation is equivalent to stopImmediatePropagation
-  // since there's no propagation chain
-  void stopPropagation() {
-    _immediatePropagationStopped = true;
-  }
-}
-
-class EventTarget {
-  EventTarget();
-
-  final _listeners = <_EventListener>[];
-
-  void addEventListener(
-    String type,
-    void Function(Event event) listener, {
-    bool capture = false,
-    bool once = false,
-    bool passive = false,
-    AbortSignal? signal,
-  }) {
-    final eventListener = _EventListener(
-      type: type,
-      callback: listener,
-      capture: capture,
-      once: once,
-      passive: passive,
-      signal: signal,
-    );
-    _listeners.add(eventListener);
-  }
-
-  void removeEventListener(
-    String type,
-    void Function(Event event) listener, {
-    bool capture = false,
-  }) {
-    _listeners.removeWhere((eventListener) {
-      return eventListener.type == type &&
-          eventListener.callback == listener &&
-          eventListener.capture == capture;
-    });
-  }
-
-  bool dispatchEvent(Event event) {
-    // Set event target and currentTarget
-    event.target ??= this;
-    event.currentTarget = this;
-
-    // Remove aborted listeners first
-    _listeners.removeWhere((listener) => listener.signal?.aborted == true);
-
-    // Create a copy of listeners to iterate over, but check the original list
-    // during iteration to handle listeners removed during dispatch
-    final listenersSnapshot = List<_EventListener>.from(_listeners);
-
-    for (final listener in listenersSnapshot) {
-      if (event._immediatePropagationStopped) {
-        break;
-      }
-
-      // Skip if listener is not for this event type
-      if (listener.type != event.type) {
-        continue;
-      }
-
-      // Skip if listener was removed during dispatch
-      if (!_listeners.contains(listener)) {
-        continue;
-      }
-
-      try {
-        listener.callback(event);
-      } catch (e) {
-        // Continue to next listener even if current one throws
-        // This matches browser behavior where listener exceptions don't stop event propagation
-      }
-
-      // Remove once listeners
-      if (listener.once) {
-        _listeners.remove(listener);
-      }
-    }
-
-    return !event.defaultPrevented;
-  }
-}
-
-class AbortSignal extends EventTarget {
-  AbortSignal() : _aborted = false;
-
-  factory AbortSignal.abort([dynamic reason]) {
-    return AbortSignal().._abort(reason);
-  }
-
-  factory AbortSignal.timeout(int milliseconds) {
-    final signal = AbortSignal();
-    Future.delayed(Duration(milliseconds: milliseconds), () {
-      signal._abort('TimeoutError');
-    });
-
-    return signal;
-  }
-
-  factory AbortSignal.any(Iterable<AbortSignal> signals) {
-    // If any signal is already aborted, return an aborted signal
-    for (final signal in signals) {
-      if (signal.aborted) {
-        return AbortSignal.abort(signal.reason);
-      }
-    }
-
-    // Create a new signal that will abort when any of the source signals abort
-    final anySignal = AbortSignal();
-
-    void onAnyAbort(Event event) {
-      if (!anySignal.aborted && event.target is AbortSignal) {
-        final abortedSignal = event.target as AbortSignal;
-        anySignal._abort(abortedSignal.reason);
-      }
-    }
-
-    // Listen to all signals
-    for (final signal in signals) {
-      signal.addEventListener('abort', onAnyAbort);
-    }
-
-    return anySignal;
-  }
-
-  bool _aborted;
-  dynamic _reason;
-
-  void Function(Event event)? onabort;
+  @override
   bool get aborted => _aborted;
-  dynamic get reason => _reason;
 
-  void throwIfAborted() {
-    if (_aborted) {
-      throw _reason ?? 'AbortError';
-    }
+  @override
+  Object? get reason => _reason;
+
+  @override
+  void onAbort(void Function() callback) {
+    if (aborted) return callback();
+    _callbacks.add(callback);
   }
 
-  void _abort([dynamic reason]) {
+  @override
+  void throwIfAborted() {
+    if (_aborted) throw _reason ?? 'aborted';
+  }
+
+  /// Aborts the signal with an optional reason.
+  ///
+  /// Once aborted, all registered callbacks will be executed and the signal
+  /// will remain in the aborted state. Subsequent calls to this method
+  /// will be ignored.
+  void abort([Object? reason]) {
     if (_aborted) return;
 
     _aborted = true;
     _reason = reason;
 
-    final event = Event("abort");
-    onabort?.call(event);
-    dispatchEvent(event);
+    // Execute all callbacks, ignoring any exceptions they might throw
+    for (final callback in _callbacks) {
+      try {
+        callback();
+      } catch (_) {
+        // Ignore callback exceptions to prevent one callback from
+        // affecting others or the abort process itself
+      }
+    }
+    _callbacks.clear();
   }
 }
 
+/// A controller for creating and managing AbortSignal instances.
+///
+/// AbortController provides a way to abort one or more asynchronous operations
+/// through its associated AbortSignal. This is commonly used to implement
+/// cancellation for HTTP requests, timers, and other async operations.
+///
+/// Example usage:
+/// ```dart
+/// // Create a controller
+/// final controller = AbortController();
+///
+/// // Pass the signal to an async operation
+/// try {
+///   final response = await httpClient.get(
+///     'https://api.example.com/data',
+///     signal: controller.signal,
+///   );
+///   print('Request completed: ${response.body}');
+/// } catch (e) {
+///   print('Request failed or was aborted: $e');
+/// }
+///
+/// // Later, abort the operation
+/// controller.abort('User requested cancellation');
+/// ```
+///
+/// Example with timeout:
+/// ```dart
+/// final controller = AbortController();
+///
+/// // Set up automatic abortion after 5 seconds
+/// Timer(Duration(seconds: 5), () {
+///   controller.abort('Request timeout');
+/// });
+///
+/// // Use the signal with your async operation
+/// await someAsyncOperation(controller.signal);
+/// ```
 class AbortController {
-  AbortController() : _signal = AbortSignal();
+  /// Creates a new AbortController with a fresh AbortSignal.
+  AbortController() : _signal = _AbortSignalImpl();
 
-  final AbortSignal _signal;
+  final _AbortSignalImpl _signal;
 
+  /// The AbortSignal associated with this controller.
+  ///
+  /// This signal can be passed to asynchronous operations to allow them
+  /// to be cancelled via this controller.
   AbortSignal get signal => _signal;
 
-  void abort([dynamic reason]) => signal._abort(reason);
+  /// Aborts the associated signal with an optional reason.
+  ///
+  /// Once called, the signal's [AbortSignal.aborted] property will be `true`
+  /// and all registered abort callbacks will be executed.
+  ///
+  /// The [reason] parameter allows you to specify why the operation was
+  /// aborted, which can be useful for debugging or providing user feedback.
+  ///
+  /// Example:
+  /// ```dart
+  /// controller.abort(); // Abort without reason
+  /// controller.abort('User cancelled'); // Abort with reason
+  /// controller.abort(TimeoutException('Request took too long'));
+  /// ```
+  void abort([Object? reason]) => _signal.abort(reason);
 }
