@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'abort.dart';
 import 'body.dart';
+import 'formdata.dart';
 import 'headers.dart';
 
 /// Defines the cache policy for HTTP requests.
@@ -401,7 +402,275 @@ class Request implements Body {
   }) : _body = body ?? Body(Stream.empty()),
        method = method.toUpperCase(),
        headers = headers ?? Headers(),
-       signal = signal ?? AbortSignal();
+       signal = signal ?? AbortController().signal;
+
+  /// Creates a Request with plain text content.
+  ///
+  /// This factory constructor creates a request with the given [text] content
+  /// as the body. The Content-Type header is automatically set to
+  /// 'text/plain; charset=utf-8'.
+  ///
+  /// Parameters:
+  /// - [url]: The request URL
+  /// - [text]: The text content
+  /// - [method]: The HTTP method (defaults to 'POST')
+  /// - [headers]: Additional headers (Content-Type will be added/overridden)
+  /// - [signal]: An optional abort signal
+  /// - Other parameters follow the main constructor defaults
+  ///
+  /// Example:
+  /// ```dart
+  /// final request = Request.text(
+  ///   'https://api.example.com/notes',
+  ///   'This is a note content',
+  ///   method: 'PUT',
+  /// );
+  /// ```
+  factory Request.text(
+    String url,
+    String text, {
+    String method = 'POST',
+    Headers? headers,
+    AbortSignal? signal,
+    RequestCache cache = RequestCache.defaults,
+    String integrity = "",
+    bool keepalive = false,
+    RequestMode mode = RequestMode.cors,
+    RequestPriority priority = RequestPriority.auto,
+    RequestRedirect redirect = RequestRedirect.follow,
+    String referrer = "about:client",
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
+    RequestCredentials credentials = RequestCredentials.sameOrigin,
+  }) {
+    final body = Body.text(text);
+    final requestHeaders = headers ?? Headers();
+
+    // Merge body headers with request headers (request headers take precedence)
+    for (final (name, value) in body.headers.entries()) {
+      if (!requestHeaders.has(name)) {
+        requestHeaders.set(name, value);
+      }
+    }
+
+    return Request(
+      url,
+      method: method,
+      headers: requestHeaders,
+      body: body,
+      signal: signal,
+      cache: cache,
+      integrity: integrity,
+      keepalive: keepalive,
+      mode: mode,
+      priority: priority,
+      redirect: redirect,
+      referrer: referrer,
+      referrerPolicy: referrerPolicy,
+      credentials: credentials,
+    );
+  }
+
+  /// Creates a Request with JSON content.
+  ///
+  /// This factory constructor creates a request with the given [data]
+  /// serialized as JSON. The Content-Type header is automatically set
+  /// to 'application/json'.
+  ///
+  /// Parameters:
+  /// - [url]: The request URL
+  /// - [data]: The data to serialize as JSON
+  /// - [method]: The HTTP method (defaults to 'POST')
+  /// - [headers]: Additional headers (Content-Type will be added/overridden)
+  /// - [signal]: An optional abort signal
+  /// - Other parameters follow the main constructor defaults
+  ///
+  /// Example:
+  /// ```dart
+  /// final request = Request.json(
+  ///   'https://api.example.com/users',
+  ///   {'name': 'John', 'email': 'john@example.com'},
+  /// );
+  /// ```
+  factory Request.json(
+    String url,
+    Object? data, {
+    String method = 'POST',
+    Headers? headers,
+    AbortSignal? signal,
+    RequestCache cache = RequestCache.defaults,
+    String integrity = "",
+    bool keepalive = false,
+    RequestMode mode = RequestMode.cors,
+    RequestPriority priority = RequestPriority.auto,
+    RequestRedirect redirect = RequestRedirect.follow,
+    String referrer = "about:client",
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
+    RequestCredentials credentials = RequestCredentials.sameOrigin,
+  }) {
+    final body = Body.json(data);
+    final requestHeaders = headers ?? Headers();
+
+    // Merge body headers with request headers (request headers take precedence)
+    for (final (name, value) in body.headers.entries()) {
+      if (!requestHeaders.has(name)) {
+        requestHeaders.set(name, value);
+      }
+    }
+
+    return Request(
+      url,
+      method: method,
+      headers: requestHeaders,
+      body: body,
+      signal: signal,
+      cache: cache,
+      integrity: integrity,
+      keepalive: keepalive,
+      mode: mode,
+      priority: priority,
+      redirect: redirect,
+      referrer: referrer,
+      referrerPolicy: referrerPolicy,
+      credentials: credentials,
+    );
+  }
+
+  /// Creates a Request with binary content.
+  ///
+  /// This factory constructor creates a request with the given [bytes] content.
+  /// The Content-Type header is automatically set to 'application/octet-stream'.
+  ///
+  /// Parameters:
+  /// - [url]: The request URL
+  /// - [bytes]: The binary data
+  /// - [method]: The HTTP method (defaults to 'POST')
+  /// - [headers]: Additional headers (Content-Type will be added/overridden)
+  /// - [signal]: An optional abort signal
+  /// - Other parameters follow the main constructor defaults
+  ///
+  /// Example:
+  /// ```dart
+  /// final data = Uint8List.fromList([1, 2, 3, 4]);
+  /// final request = Request.bytes(
+  ///   'https://api.example.com/upload',
+  ///   data,
+  /// );
+  /// ```
+  factory Request.bytes(
+    String url,
+    Uint8List bytes, {
+    String method = 'POST',
+    Headers? headers,
+    AbortSignal? signal,
+    RequestCache cache = RequestCache.defaults,
+    String integrity = "",
+    bool keepalive = false,
+    RequestMode mode = RequestMode.cors,
+    RequestPriority priority = RequestPriority.auto,
+    RequestRedirect redirect = RequestRedirect.follow,
+    String referrer = "about:client",
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
+    RequestCredentials credentials = RequestCredentials.sameOrigin,
+  }) {
+    final body = Body.bytes(bytes);
+    final requestHeaders = headers ?? Headers();
+
+    // Merge body headers with request headers (request headers take precedence)
+    for (final (name, value) in body.headers.entries()) {
+      if (!requestHeaders.has(name)) {
+        requestHeaders.set(name, value);
+      }
+    }
+
+    return Request(
+      url,
+      method: method,
+      headers: requestHeaders,
+      body: body,
+      signal: signal,
+      cache: cache,
+      integrity: integrity,
+      keepalive: keepalive,
+      mode: mode,
+      priority: priority,
+      redirect: redirect,
+      referrer: referrer,
+      referrerPolicy: referrerPolicy,
+      credentials: credentials,
+    );
+  }
+
+  /// Creates a Request with FormData content.
+  ///
+  /// This factory constructor creates a request with the given [formData].
+  /// The Content-Type header is automatically set to 'multipart/form-data'
+  /// with the appropriate boundary.
+  ///
+  /// Parameters:
+  /// - [url]: The request URL
+  /// - [formData]: The FormData to include in the request
+  /// - [method]: The HTTP method (defaults to 'POST')
+  /// - [headers]: Additional headers (Content-Type will be added/overridden)
+  /// - [signal]: An optional abort signal
+  /// - Other parameters follow the main constructor defaults
+  ///
+  /// Example:
+  /// ```dart
+  /// final formData = FormData();
+  /// formData.append('name', FormDataEntry.text('John'));
+  /// formData.append('file', FormDataEntry.file(
+  ///   File('document.pdf').openRead(),
+  ///   filename: 'document.pdf',
+  /// ));
+  ///
+  /// final request = Request.formdata(
+  ///   'https://api.example.com/upload',
+  ///   formData,
+  /// );
+  /// ```
+  factory Request.formdata(
+    String url,
+    FormData formData, {
+    String method = 'POST',
+    Headers? headers,
+    AbortSignal? signal,
+    RequestCache cache = RequestCache.defaults,
+    String integrity = "",
+    bool keepalive = false,
+    RequestMode mode = RequestMode.cors,
+    RequestPriority priority = RequestPriority.auto,
+    RequestRedirect redirect = RequestRedirect.follow,
+    String referrer = "about:client",
+    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
+    RequestCredentials credentials = RequestCredentials.sameOrigin,
+  }) {
+    final body = Body.formdata(formData);
+    final requestHeaders = headers ?? Headers();
+
+    // Merge body headers with request headers (request headers take precedence)
+    for (final (name, value) in body.headers.entries()) {
+      if (!requestHeaders.has(name)) {
+        requestHeaders.set(name, value);
+      }
+    }
+
+    return Request(
+      url,
+      method: method,
+      headers: requestHeaders,
+      body: body,
+      signal: signal,
+      cache: cache,
+      integrity: integrity,
+      keepalive: keepalive,
+      mode: mode,
+      priority: priority,
+      redirect: redirect,
+      referrer: referrer,
+      referrerPolicy: referrerPolicy,
+      credentials: credentials,
+    );
+  }
 
   final Body _body;
   final String url;
@@ -420,6 +689,7 @@ class Request implements Body {
   final String method;
 
   /// Returns the headers of the request.
+  @override
   final Headers headers;
 
   /// Returns the cache policy of the request.

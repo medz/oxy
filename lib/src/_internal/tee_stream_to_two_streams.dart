@@ -5,8 +5,8 @@ import 'dart:async';
     return (source, source);
   }
 
-  final c1 = StreamController<T>(sync: true);
-  final c2 = StreamController<T>(sync: true);
+  final c1 = StreamController<T>();
+  final c2 = StreamController<T>();
 
   StreamSubscription<T>? subscription;
   int subsCount = 0;
@@ -14,7 +14,7 @@ import 'dart:async';
   c1.onListen = c2.onListen = () {
     subsCount++;
     if (subsCount > 1) return;
-    subscription = source.listen(
+    subscription ??= source.listen(
       (event) {
         if (!c1.isClosed) c1.add(event);
         if (!c2.isClosed) c2.add(event);
@@ -32,9 +32,7 @@ import 'dart:async';
   c1.onCancel = c2.onCancel = () {
     subsCount--;
     if (subsCount != 0) return;
-
     subscription?.cancel();
-    subscription = null;
   };
 
   return (c1.stream, c2.stream);

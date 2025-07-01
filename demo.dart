@@ -1,10 +1,5 @@
-main() {
-  final stream = Stream.fromIterable([1, 2, 3]);
-  final subscription = stream.listen((event) {
-    print(event);
-  });
+import 'dart:convert';
 
-  subscription.onData((data) {
-    print('Received data: $data');
-  });
+main() {
+  print(utf8.encode('Content-Disposition: form-data;'));
 }
