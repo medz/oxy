@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import '_internal/mark_stream.dart';
 import '_internal/tee_stream_to_two_streams.dart';
-import 'data_helpers.dart';
+import '_internal/data_helpers.dart';
 import 'formdata.dart';
 import 'headers.dart';
 

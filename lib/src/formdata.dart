@@ -7,7 +7,7 @@ import 'package:mime/mime.dart';
 
 import '_internal/entry_store.dart';
 import '_internal/tee_stream_to_two_streams.dart';
-import 'data_helpers.dart';
+import '_internal/data_helpers.dart';
 
 /// Abstract base class for form data entries that can be included in a [FormData].
 ///
