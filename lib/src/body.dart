@@ -17,14 +17,14 @@ import 'headers.dart';
 /// The body can only be consumed once unless cloned. Use [bodyUsed] to check
 /// if the body has already been consumed, and [clone] to create a new instance
 /// that can be consumed independently.
-class Body implements DataHelpers {
+class Body extends FormDataHelper implements DataHelpers {
   /// Creates a new body from a stream of bytes.
   ///
   /// The [source] stream will be wrapped in a [MarkStream] to track usage
   /// and prevent multiple consumption of single-subscription streams.
   Body(Stream<Uint8List> source)
     : _source = MarkStream(source),
-      headers = Headers();
+      headers = Headers({"Content-Type": "application/octet-stream"});
 
   /// Creates a Body from plain text content.
   ///
@@ -87,9 +87,9 @@ class Body implements DataHelpers {
   /// ```dart
   /// final formData = FormData();
   /// formData.append('name', FormDataEntry.text('John'));
-  /// final body = Body.formdata(formData);
+  /// final body = Body.formData(formData);
   /// ```
-  factory Body.formdata(FormData formData) {
+  factory Body.formData(FormData formData) {
     return Body._(
       formData.stream(),
       Headers({
@@ -137,6 +137,7 @@ class Body implements DataHelpers {
   ///   print('Received ${chunk.length} bytes');
   /// }
   /// ```
+  @override
   Stream<Uint8List> get body => _source;
 
   /// Creates a clone of this body that can be consumed independently.

@@ -52,7 +52,7 @@ enum ResponseType {
 ///   print('Response data: $data');
 /// }
 /// ```
-class Response implements Body {
+class Response extends FormDataHelper implements Body {
   /// Creates a new Response instance.
   ///
   /// Parameters:
@@ -141,129 +141,6 @@ class Response implements Body {
     Headers? headers,
   }) {
     final body = Body.json(data);
-    final responseHeaders = headers ?? Headers();
-
-    // Merge body headers with response headers (response headers take precedence)
-    for (final (name, value) in body.headers.entries()) {
-      if (!responseHeaders.has(name)) {
-        responseHeaders.set(name, value);
-      }
-    }
-
-    return Response(
-      status: status,
-      statusText: statusText,
-      headers: responseHeaders,
-      body: body,
-    );
-  }
-
-  /// Creates a simple Response with plain text content.
-  ///
-  /// This factory constructor creates a response with the given [text] content.
-  /// The Content-Type header is automatically set to 'text/plain; charset=utf-8'.
-  ///
-  /// Parameters:
-  /// - [text]: The text content
-  /// - [status]: The HTTP status code (defaults to 200)
-  /// - [statusText]: The status text (defaults to 'OK')
-  /// - [headers]: Additional headers (Content-Type will be added/overridden)
-  ///
-  /// Example:
-  /// ```dart
-  /// final response = Response.text('Hello, World!');
-  /// final content = await response.text();
-  /// ```
-  factory Response.text(
-    String text, {
-    int status = 200,
-    String? statusText,
-    Headers? headers,
-  }) {
-    final body = Body.text(text);
-    final responseHeaders = headers ?? Headers();
-
-    // Merge body headers with response headers (response headers take precedence)
-    for (final (name, value) in body.headers.entries()) {
-      if (!responseHeaders.has(name)) {
-        responseHeaders.set(name, value);
-      }
-    }
-
-    return Response(
-      status: status,
-      statusText: statusText,
-      headers: responseHeaders,
-      body: body,
-    );
-  }
-
-  /// Creates a simple Response with binary content.
-  ///
-  /// This factory constructor creates a response with the given [bytes] content.
-  /// The Content-Type header is automatically set to 'application/octet-stream'.
-  ///
-  /// Parameters:
-  /// - [bytes]: The binary data
-  /// - [status]: The HTTP status code (defaults to 200)
-  /// - [statusText]: The status text (defaults to 'OK')
-  /// - [headers]: Additional headers (Content-Type will be added/overridden)
-  ///
-  /// Example:
-  /// ```dart
-  /// final data = Uint8List.fromList([1, 2, 3, 4]);
-  /// final response = Response.bytes(data);
-  /// final content = await response.bytes();
-  /// ```
-  factory Response.bytes(
-    Uint8List bytes, {
-    int status = 200,
-    String? statusText,
-    Headers? headers,
-  }) {
-    final body = Body.bytes(bytes);
-    final responseHeaders = headers ?? Headers();
-
-    // Merge body headers with response headers (response headers take precedence)
-    for (final (name, value) in body.headers.entries()) {
-      if (!responseHeaders.has(name)) {
-        responseHeaders.set(name, value);
-      }
-    }
-
-    return Response(
-      status: status,
-      statusText: statusText,
-      headers: responseHeaders,
-      body: body,
-    );
-  }
-
-  /// Creates a Response with FormData content.
-  ///
-  /// This factory constructor creates a response with the given [formData].
-  /// The Content-Type header is automatically set to 'multipart/form-data'
-  /// with the appropriate boundary.
-  ///
-  /// Parameters:
-  /// - [formData]: The FormData to include in the response
-  /// - [status]: The HTTP status code (defaults to 200)
-  /// - [statusText]: The status text (defaults to 'OK')
-  /// - [headers]: Additional headers (Content-Type will be added/overridden)
-  ///
-  /// Example:
-  /// ```dart
-  /// final formData = FormData();
-  /// formData.append('name', FormDataEntry.text('John'));
-  /// final response = Response.formdata(formData);
-  /// ```
-  factory Response.formdata(
-    FormData formData, {
-    int status = 200,
-    String? statusText,
-    Headers? headers,
-  }) {
-    final body = Body.formdata(formData);
     final responseHeaders = headers ?? Headers();
 
     // Merge body headers with response headers (response headers take precedence)
@@ -400,7 +277,5 @@ class Response implements Body {
   Future<String> text() => _body.text();
 
   @override
-  String toString() {
-    return 'Response($status)';
-  }
+  Future<FormData> formData() => _body.formData();
 }

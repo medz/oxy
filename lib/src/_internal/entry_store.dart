@@ -33,7 +33,7 @@ abstract class EntryStore<T> {
   /// Unlike [set], this method does not remove existing entries with the same
   /// name, allowing multiple entries with the same name to coexist.
   void append(String name, T value) {
-    _entries.add(_Entry(_normalizedName(name), name, value));
+    _entries.add(_Entry(name, _normalizedName(name), value));
   }
 
   /// Removes all entries with the specified [name].
@@ -88,7 +88,7 @@ abstract class EntryStore<T> {
   void set(String name, T value) {
     final normalized = _normalizedName(name);
     _entries.removeWhere((entry) => entry.normalizedName == normalized);
-    _entries.add(_Entry(normalized, name, value));
+    _entries.add(_Entry(name, normalized, value));
   }
 
   /// Returns an [Iterable] of all entries as name-value pairs.

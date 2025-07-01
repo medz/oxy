@@ -6,8 +6,10 @@ import 'dart:typed_data';
 import 'package:mime/mime.dart';
 
 import '_internal/entry_store.dart';
+import '_internal/header_params.dart';
 import '_internal/tee_stream_to_two_streams.dart';
 import '_internal/data_helpers.dart';
+import 'headers.dart';
 
 /// Abstract base class for form data entries that can be included in a [FormData].
 ///
@@ -238,29 +240,6 @@ class FormData extends EntryStore<FormDataEntry> {
     return 'OxyBoundary${List.generate(32, (_) => chars[random.nextInt(chars.length)]).join()}';
   }
 
-  static Map<String, String> _getHeaderParams(String? header) {
-    final result = <String, String>{};
-    if (header == null || header.isEmpty) return result;
-
-    for (final part in header.split(';')) {
-      final [name, ...values] = part.split('=');
-      final normalizedName = name.toLowerCase().trim();
-      if (normalizedName.isEmpty) continue;
-
-      String value = values.join('=').trim();
-      if (value.startsWith("'") || value.startsWith('"')) {
-        value = value.substring(1);
-      }
-      if (value.endsWith("'") || value.endsWith('"')) {
-        value = value.substring(0, value.length - 1);
-      }
-
-      result[normalizedName] = value;
-    }
-
-    return result;
-  }
-
   /// Parses multipart form data from a stream.
   ///
   /// Takes a [boundary] string and a [stream] of bytes containing multipart
@@ -285,7 +264,7 @@ class FormData extends EntryStore<FormDataEntry> {
 
     await for (final part in transformer) {
       final disposition = part.headers['content-disposition'];
-      final params = _getHeaderParams(disposition);
+      final params = parseHeaderParams(disposition);
       final name = params['name'];
       if (name == null) continue;
 
@@ -360,5 +339,26 @@ class FormData extends EntryStore<FormDataEntry> {
     yield separator;
     yield utf8.encode('--');
     yield lineTerminator;
+  }
+}
+
+abstract mixin class FormDataHelper {
+  Headers get headers;
+  Stream<Uint8List> get body;
+
+  Future<FormData> formData() {
+    final contentType = headers.get("content-type");
+    if (contentType == null ||
+        !contentType.toLowerCase().startsWith('multipart/form-data')) {
+      throw FormatException('Invalid content type');
+    }
+
+    final params = parseHeaderParams(contentType);
+    final boundary = params['boundary'];
+    if (boundary == null || boundary.isEmpty) {
+      throw FormatException('Missing boundary parameter');
+    }
+
+    return FormData.parse(boundary, body);
   }
 }
