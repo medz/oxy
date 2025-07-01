@@ -444,7 +444,7 @@ class Request implements Body {
       redirect: redirect,
       referrer: referrer,
       referrerPolicy: referrerPolicy,
-      signal: signal.aborted ? AbortSignal() : signal,
+      signal: signal,
       integrity: integrity,
       keepalive: keepalive,
       mode: mode,
