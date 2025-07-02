@@ -1,5 +1,5 @@
 name: oxy_http
-description: HTTP adapter for Oxy that uses Dart's http package as the underlying HTTP implementation.
+description: A HTTP adapter for Oxy that uses Dart's http package as the underlying HTTP implementation.
 version: 0.0.1
 repository: https://github.com/medz/oxy
 homepage: https://github.com/medz/oxy/tree/main/pub/oxy_http

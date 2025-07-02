@@ -1,10 +1,9 @@
 # Oxy HTTP
 
-A simple HTTP adapter for [Oxy](https://pub.dev/packages/oxy) that uses Dart's `http` package as the underlying HTTP implementation.
+A adapter for [Oxy](https://github.com/medz/oxy) that uses Dart's [`http` package](https://pub.dev/packages/http) as the underlying HTTP implementation.
 
 [![Pub Version](https://img.shields.io/pub/v/oxy_http)](https://pub.dev/packages/oxy_http)
-[![Dart Version](https://img.shields.io/badge/Dart-%5E3.8.1-blue)](https://dart.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Overview
 
@@ -16,8 +15,8 @@ Add `oxy_http` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  oxy: ^0.0.3
-  oxy_http: ^0.0.1
+  oxy: latest
+  oxy_http: latest
 ```
 
 ## Usage
@@ -31,7 +30,7 @@ import 'package:oxy_http/oxy_http.dart';
 void main() async {
   // Use the http package adapter
   final client = Oxy(adapter: OxyHttp());
-  
+
   // All Oxy features work as normal
   final response = await client.get('https://jsonplaceholder.typicode.com/posts/1');
   final data = await response.json();
@@ -54,4 +53,4 @@ void main() async {
 
 ## License
 
-MIT License - see the [LICENSE](../../LICENSE) file for details.
+MIT License - see the [LICENSE](LICENSE) file for details.

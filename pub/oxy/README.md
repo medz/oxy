@@ -4,6 +4,7 @@ A modern, feature-rich HTTP client for Dart with Web API compatibility. Built wi
 
 [![Oxy Test](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## Features
 
@@ -321,7 +322,3 @@ print(response.headers);       // Response headers
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for a list of changes and updates.
