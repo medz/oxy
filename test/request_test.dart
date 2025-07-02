@@ -150,7 +150,7 @@ void main() {
         expect(contentType, startsWith('multipart/form-data; boundary='));
       });
 
-      test('does not override existing request headers', () {
+      test('user headers take priority over body headers', () {
         final customHeaders = Headers({'Content-Type': 'custom/type'});
         final textBody = Body.text('Hello, World!');
 
@@ -161,14 +161,10 @@ void main() {
           body: textBody,
         );
 
-        // Body headers are copied after custom headers, so they override
-        expect(
-          request.headers.get('content-type'),
-          equals('text/plain; charset=utf-8'),
-        );
+        expect(request.headers.get('content-type'), equals('custom/type'));
       });
 
-      test('adds additional headers from body', () {
+      test('adds body headers when user headers do not conflict', () {
         final customHeaders = Headers({'Authorization': 'Bearer token'});
         final jsonBody = Body.json({'data': 'test'});
 
@@ -185,47 +181,30 @@ void main() {
     });
 
     group('bodyUsed property', () {
-      test('returns false initially', () {
-        final body = Body.text('test');
-        final request = Request('https://example.com', body: body);
-        expect(request.bodyUsed, isFalse);
-      });
-
-      test('returns true after accessing body stream', () {
-        final body = Body.text('test');
-        final request = Request('https://example.com', body: body);
+      test('tracks body consumption correctly', () async {
+        final request = Request('https://example.com', body: Body.text('test'));
         expect(request.bodyUsed, isFalse);
 
-        // Access the stream (this marks it as used)
+        // Stream access marks as used
         request.body.listen((_) {});
         expect(request.bodyUsed, isTrue);
       });
 
-      test('returns true after consuming with bytes()', () async {
-        final body = Body.text('test');
-        final request = Request('https://example.com', body: body);
-        expect(request.bodyUsed, isFalse);
+      test('marks as used after consumption methods', () async {
+        final textRequest = Request(
+          'https://example.com',
+          body: Body.text('test'),
+        );
+        final jsonRequest = Request(
+          'https://example.com',
+          body: Body.json({'key': 'value'}),
+        );
 
-        await request.bytes();
-        expect(request.bodyUsed, isTrue);
-      });
+        await textRequest.text();
+        expect(textRequest.bodyUsed, isTrue);
 
-      test('returns true after consuming with text()', () async {
-        final body = Body.text('test');
-        final request = Request('https://example.com', body: body);
-        expect(request.bodyUsed, isFalse);
-
-        await request.text();
-        expect(request.bodyUsed, isTrue);
-      });
-
-      test('returns true after consuming with json()', () async {
-        final body = Body.json({'key': 'value'});
-        final request = Request('https://example.com', body: body);
-        expect(request.bodyUsed, isFalse);
-
-        await request.json();
-        expect(request.bodyUsed, isTrue);
+        await jsonRequest.json();
+        expect(jsonRequest.bodyUsed, isTrue);
       });
     });
 

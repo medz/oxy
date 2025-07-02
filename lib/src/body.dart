@@ -112,6 +112,14 @@ class Body extends FormDataHelper implements DataHelpers {
   /// Internal constructor with headers.
   Body._(Stream<Uint8List> source, this.headers) : _source = MarkStream(source);
 
+  /// Creates an empty body without any default headers.
+  ///
+  /// This is useful when you need an empty body that doesn't automatically
+  /// add Content-Type headers.
+  factory Body.empty() {
+    return Body._(Stream.empty(), Headers());
+  }
+
   MarkStream<Uint8List> _source;
 
   /// The headers associated with this body.

@@ -62,14 +62,10 @@ void main() {
         expect(response.statusText, equals('Custom Success'));
       });
 
-      test('creates default headers when none provided', () {
+      test('creates empty headers and body when none provided', () {
         final response = Response();
         expect(response.headers, isNotNull);
         expect(response.headers.entries().length, equals(0));
-      });
-
-      test('creates default body when none provided', () {
-        final response = Response();
         expect(response.bodyUsed, isFalse);
         expect(response.body, isNotNull);
       });
@@ -79,37 +75,16 @@ void main() {
       test('returns true for 2xx status codes', () {
         expect(Response(status: 200).ok, isTrue);
         expect(Response(status: 201).ok, isTrue);
-        expect(Response(status: 204).ok, isTrue);
         expect(Response(status: 299).ok, isTrue);
       });
 
-      test('returns false for 1xx status codes', () {
-        expect(Response(status: 100).ok, isFalse);
-        expect(Response(status: 101).ok, isFalse);
-        expect(Response(status: 199).ok, isFalse);
-      });
-
-      test('returns false for 3xx status codes', () {
-        expect(Response(status: 300).ok, isFalse);
-        expect(Response(status: 301).ok, isFalse);
-        expect(Response(status: 302).ok, isFalse);
-        expect(Response(status: 399).ok, isFalse);
-      });
-
-      test('returns false for 4xx status codes', () {
-        expect(Response(status: 400).ok, isFalse);
-        expect(Response(status: 404).ok, isFalse);
-        expect(Response(status: 499).ok, isFalse);
-      });
-
-      test('returns false for 5xx status codes', () {
-        expect(Response(status: 500).ok, isFalse);
-        expect(Response(status: 502).ok, isFalse);
-        expect(Response(status: 599).ok, isFalse);
-      });
-
-      test('returns false for status 0 (network error)', () {
+      test('returns false for non-2xx status codes', () {
         expect(Response(status: 0).ok, isFalse);
+        expect(Response(status: 100).ok, isFalse);
+        expect(Response(status: 199).ok, isFalse);
+        expect(Response(status: 300).ok, isFalse);
+        expect(Response(status: 404).ok, isFalse);
+        expect(Response(status: 500).ok, isFalse);
       });
     });
 

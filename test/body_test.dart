@@ -30,57 +30,35 @@ void main() {
 
     group('factory constructors', () {
       group('Body.text()', () {
-        test('creates body with correct content-type header', () {
-          final body = Body.text('Hello, World!');
-          expect(
-            body.headers.get('content-type'),
-            equals('text/plain; charset=utf-8'),
-          );
-          expect(body.bodyUsed, isFalse);
-        });
+        test('creates body with correct content-type for all text types', () {
+          final regularBody = Body.text('Hello, World!');
+          final emptyBody = Body.text('');
+          final unicodeBody = Body.text('Hello 🌍');
 
-        test('creates body with empty text', () {
-          final body = Body.text('');
-          expect(
-            body.headers.get('content-type'),
-            equals('text/plain; charset=utf-8'),
-          );
-          expect(body.bodyUsed, isFalse);
-        });
-
-        test('creates body with unicode text', () {
-          final body = Body.text('Hello 🌍');
-          expect(
-            body.headers.get('content-type'),
-            equals('text/plain; charset=utf-8'),
-          );
-          expect(body.bodyUsed, isFalse);
+          for (final body in [regularBody, emptyBody, unicodeBody]) {
+            expect(
+              body.headers.get('content-type'),
+              equals('text/plain; charset=utf-8'),
+            );
+            expect(body.bodyUsed, isFalse);
+          }
         });
       });
 
       group('Body.json()', () {
-        test('creates body with correct content-type header', () {
-          final body = Body.json({'key': 'value'});
-          expect(body.headers.get('content-type'), equals('application/json'));
-          expect(body.bodyUsed, isFalse);
-        });
+        test('creates body with correct content-type for any data type', () {
+          final objectBody = Body.json({'key': 'value'});
+          final nullBody = Body.json(null);
+          final listBody = Body.json([1, 2, 3]);
+          final primitiveBody = Body.json(42);
 
-        test('creates body with null data', () {
-          final body = Body.json(null);
-          expect(body.headers.get('content-type'), equals('application/json'));
-          expect(body.bodyUsed, isFalse);
-        });
-
-        test('creates body with list data', () {
-          final body = Body.json([1, 2, 3]);
-          expect(body.headers.get('content-type'), equals('application/json'));
-          expect(body.bodyUsed, isFalse);
-        });
-
-        test('creates body with primitive data', () {
-          final body = Body.json(42);
-          expect(body.headers.get('content-type'), equals('application/json'));
-          expect(body.bodyUsed, isFalse);
+          for (final body in [objectBody, nullBody, listBody, primitiveBody]) {
+            expect(
+              body.headers.get('content-type'),
+              equals('application/json'),
+            );
+            expect(body.bodyUsed, isFalse);
+          }
         });
       });
 

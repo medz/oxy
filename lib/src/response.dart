@@ -83,9 +83,11 @@ class Response extends FormDataHelper implements Body {
     this.type = ResponseType.basic,
   }) : statusText = statusText ?? statusMap[status] ?? 'Unknown',
        headers = headers ?? Headers(),
-       _body = body ?? Body(Stream.empty()) {
+       _body = body ?? Body.empty() {
     for (final (name, value) in _body.headers.entries()) {
-      this.headers.append(name, value);
+      if (!this.headers.has(name)) {
+        this.headers.set(name, value);
+      }
     }
   }
 

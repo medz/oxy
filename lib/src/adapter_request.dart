@@ -22,12 +22,15 @@ class AdapterRequest extends FormDataHelper implements Body {
     this.referrer = "about:client",
     this.referrerPolicy = ReferrerPolicy.empty,
     this.credentials = RequestCredentials.sameOrigin,
-  }) : _body = body ?? Body(Stream.empty()),
+  }) : _body = body ?? Body.empty(),
        method = method.toUpperCase(),
        headers = headers ?? Headers(),
        signal = signal ?? AbortController().signal {
-    for (final (name, value) in _body.headers.entries()) {
-      this.headers.set(name, value);
+    final bodyHeaders = _body.headers.entries().toList();
+    for (final (name, value) in bodyHeaders) {
+      if (!this.headers.has(name)) {
+        this.headers.set(name, value);
+      }
     }
   }
 
