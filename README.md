@@ -2,6 +2,9 @@
 
 A modern, feature-rich HTTP client for Dart with Web API compatibility, supporting fetch-like syntax, request/response handling, and cross-platform adapters.
 
+[![Oxy Test](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml)
+[![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
+
 ## Features
 
 - 🌐 **Web API Compatible**: Implements familiar web standards like Fetch API, Headers, Request, and Response
