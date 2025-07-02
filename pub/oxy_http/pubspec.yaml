@@ -20,7 +20,5 @@ environment:
   sdk: ^3.8.1
 
 dependencies:
-  oxy: ^0.0.1
+  oxy: ^0.0.3
   http: ^1.4.0
-dev_dependencies:
-  freeport: ^0.0.2
