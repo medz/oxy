@@ -1,0 +1,1 @@
+export 'src/adapter.dart';

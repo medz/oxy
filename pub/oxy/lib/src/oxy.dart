@@ -55,6 +55,7 @@ class Oxy {
   ///
   /// Returns a [Future] that completes with the HTTP response.
   Future<Response> call(Request request) {
+    request.signal.throwIfAborted();
     final adapter = isWebPlatform
         ? (this.adapter.isSupportWeb ? this.adapter : const DefaultAdapter())
         : this.adapter;
