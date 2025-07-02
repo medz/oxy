@@ -17,7 +17,6 @@ Future<Response> fetch(Uri url, AdapterRequest request) async {
     httpRequest.headers.add(name, value);
   }
 
-  httpRequest.headers.removeAll("content-length");
   httpRequest.followRedirects = request.redirect == RequestRedirect.follow;
   httpRequest.persistentConnection = request.keepalive;
   httpRequest.maxRedirects = request.redirect == RequestRedirect.manual ? 0 : 5;
