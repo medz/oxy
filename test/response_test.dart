@@ -1,10 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import 'package:oxy/src/response.dart';
-import 'package:oxy/src/headers.dart';
-import 'package:oxy/src/body.dart';
-import 'package:oxy/src/formdata.dart';
+import 'package:oxy/oxy.dart';
 
 void main() {
   group('Response', () {

@@ -1,3 +1,5 @@
+import 'package:meta/meta.dart';
+
 /// An interface for signaling the abortion of asynchronous operations.
 ///
 /// AbortSignal provides a way to communicate with an asynchronous operation
@@ -63,6 +65,9 @@ abstract interface class AbortSignal {
   /// }
   /// ```
   void throwIfAborted();
+
+  @internal
+  void abort([Object? reason]);
 }
 
 /// Internal implementation of AbortSignal.
@@ -93,6 +98,7 @@ class _AbortSignalImpl implements AbortSignal {
   /// Once aborted, all registered callbacks will be executed and the signal
   /// will remain in the aborted state. Subsequent calls to this method
   /// will be ignored.
+  @override
   void abort([Object? reason]) {
     if (_aborted) return;
 

@@ -1,11 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import 'package:oxy/src/request.dart';
-import 'package:oxy/src/headers.dart';
-import 'package:oxy/src/body.dart';
-import 'package:oxy/src/formdata.dart';
-import 'package:oxy/src/abort.dart';
+import 'package:oxy/oxy.dart';
 
 void main() {
   group('Request', () {
@@ -81,12 +77,7 @@ void main() {
       test('creates default headers when none provided', () {
         final request = Request('https://example.com');
         expect(request.headers, isNotNull);
-        // Default Body has Content-Type: application/octet-stream
-        expect(request.headers.entries().length, equals(1));
-        expect(
-          request.headers.get('content-type'),
-          equals('application/octet-stream'),
-        );
+        expect(request.headers.entries().length, equals(0));
       });
 
       test('creates default body when none provided', () {
@@ -439,14 +430,8 @@ void main() {
         final request = Request('https://example.com', headers: headers);
 
         // Body headers override request headers, so it will be octet-stream from default Body
-        expect(
-          request.headers.get('content-type'),
-          equals('application/octet-stream'),
-        );
-        expect(
-          request.headers.get('CONTENT-TYPE'),
-          equals('application/octet-stream'),
-        );
+        expect(request.headers.get('content-type'), equals('application/json'));
+        expect(request.headers.get('CONTENT-TYPE'), equals('application/json'));
         expect(request.headers.get('authorization'), equals('Bearer token'));
         expect(request.headers.get('AUTHORIZATION'), equals('Bearer token'));
       });

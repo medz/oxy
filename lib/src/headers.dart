@@ -45,58 +45,6 @@ class Headers extends EntryStore<String> {
     }
   }
 
-  /// Returns the first value of the specified header [name].
-  ///
-  /// Header names are case-insensitive. Returns `null` if the header doesn't
-  /// exist or if the header name is 'set-cookie' (use [getSetCookie] instead).
-  ///
-  /// For headers that can have multiple values, this method returns only the
-  /// first value. Use [getAll] to retrieve all values.
-  ///
-  /// Example:
-  /// ```dart
-  /// headers.append('Accept', 'text/html');
-  /// headers.append('Accept', 'application/json');
-  ///
-  /// final firstAccept = headers.get('Accept'); // Returns 'text/html'
-  /// final contentType = headers.get('Content-Type'); // Returns null if not set
-  /// ```
-  @override
-  String? get(String name) {
-    final normalized = name.toLowerCase();
-    if ('set-cookie' == normalized) {
-      return null;
-    }
-
-    return super.get(name);
-  }
-
-  /// Returns all values for the specified header [name].
-  ///
-  /// Header names are case-insensitive. Returns an empty iterable if the header
-  /// doesn't exist or if the header name is 'set-cookie' (use [getSetCookie] instead).
-  ///
-  /// This method is useful for headers that can legally appear multiple times
-  /// in an HTTP message, such as 'Accept' or 'Cache-Control'.
-  ///
-  /// Example:
-  /// ```dart
-  /// headers.append('Accept', 'text/html');
-  /// headers.append('Accept', 'application/json');
-  ///
-  /// final accepts = headers.getAll('Accept');
-  /// // Returns ['text/html', 'application/json']
-  /// ```
-  @override
-  Iterable<String> getAll(String name) {
-    final normalized = name.toLowerCase();
-    if ('set-cookie' == normalized) {
-      return [];
-    }
-
-    return super.getAll(name);
-  }
-
   /// Returns all 'Set-Cookie' header values.
   ///
   /// Set-Cookie headers are treated specially in web standards and cannot be
@@ -118,5 +66,5 @@ class Headers extends EntryStore<String> {
   /// headers.get('Set-Cookie'); // Returns null
   /// headers.getAll('Set-Cookie'); // Returns []
   /// ```
-  Iterable<String> getSetCookie() => super.getAll('set-cookie');
+  Iterable<String> getSetCookie() => getAll('set-cookie');
 }

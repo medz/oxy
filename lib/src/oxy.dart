@@ -1,19 +1,33 @@
 import 'abort.dart';
 import 'body.dart';
-import 'dirver.dart';
+import 'adapter.dart';
+import 'default_adapter.dart';
 import 'headers.dart';
 import 'request.dart';
+import 'request_common.dart';
+import 'response.dart';
+
+import '_internal/is_web_platform.native.dart'
+    if (dart.library.js_interop) '_internal/is_web_platform.web.dart';
 
 class Oxy {
-  Oxy({required this.dirver});
+  Oxy({this.adapter = const DefaultAdapter(), this.baseURL});
 
-  final Dirver dirver;
+  final Adapter adapter;
+  final Uri? baseURL;
 
-  Future call(Request request) => dirver.request(request);
+  Future<Response> call(Request request) {
+    final adapter = this.adapter.isSupportWeb && isWebPlatform
+        ? this.adapter
+        : const DefaultAdapter();
+    final url = baseURL?.resolve(request.url) ?? Uri.parse(request.url);
+
+    return adapter.fetch(url, request);
+  }
 }
 
 extension OxyRequestMethods on Oxy {
-  Future get(
+  Future<Response> get(
     String url, {
     Headers? headers,
     Body? body,
@@ -48,7 +62,7 @@ extension OxyRequestMethods on Oxy {
     );
   }
 
-  Future post(
+  Future<Response> post(
     String url, {
     Headers? headers,
     Body? body,
@@ -83,7 +97,7 @@ extension OxyRequestMethods on Oxy {
     );
   }
 
-  Future put(
+  Future<Response> put(
     String url, {
     Headers? headers,
     Body? body,
@@ -118,7 +132,7 @@ extension OxyRequestMethods on Oxy {
     );
   }
 
-  Future delete(
+  Future<Response> delete(
     String url, {
     Headers? headers,
     AbortSignal? signal,
@@ -151,7 +165,7 @@ extension OxyRequestMethods on Oxy {
     );
   }
 
-  Future patch(
+  Future<Response> patch(
     String url, {
     Headers? headers,
     AbortSignal? signal,

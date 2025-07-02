@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:test/test.dart';
-import 'package:oxy/src/abort.dart';
+import 'package:oxy/oxy.dart';
 
 void main() {
   group('AbortController', () {

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
-import 'package:oxy/src/formdata.dart';
+import 'package:oxy/oxy.dart';
 
 void main() {
   group('FormDataTextEntry', () {

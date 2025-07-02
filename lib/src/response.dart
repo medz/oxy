@@ -25,7 +25,17 @@ enum ResponseType {
   opaque,
 
   /// An opaque response from a cross-origin request to a different subdomain.
-  opaqueRedirect,
+  opaqueRedirect;
+
+  static ResponseType lookup(String value) {
+    return switch (value.trim().toLowerCase()) {
+      "cors" => cors,
+      'error' => error,
+      'opaque' => opaque,
+      'opaque-redirect' || 'opaqueredirect' => opaqueRedirect,
+      _ => basic,
+    };
+  }
 }
 
 /// Represents an HTTP response received from a server.
@@ -73,7 +83,11 @@ class Response extends FormDataHelper implements Body {
     this.type = ResponseType.basic,
   }) : statusText = statusText ?? statusMap[status] ?? 'Unknown',
        headers = headers ?? Headers(),
-       _body = body ?? Body(Stream.empty());
+       _body = body ?? Body(Stream.empty()) {
+    for (final (name, value) in _body.headers.entries()) {
+      this.headers.append(name, value);
+    }
+  }
 
   /// Creates a Response representing a network error.
   ///
@@ -143,11 +157,8 @@ class Response extends FormDataHelper implements Body {
     final body = Body.json(data);
     final responseHeaders = headers ?? Headers();
 
-    // Merge body headers with response headers (response headers take precedence)
     for (final (name, value) in body.headers.entries()) {
-      if (!responseHeaders.has(name)) {
-        responseHeaders.set(name, value);
-      }
+      responseHeaders.append(name, value);
     }
 
     return Response(

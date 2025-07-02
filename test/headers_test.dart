@@ -1,5 +1,5 @@
 import 'package:test/test.dart';
-import 'package:oxy/src/headers.dart';
+import 'package:oxy/oxy.dart';
 
 void main() {
   group('Headers', () {
@@ -160,14 +160,14 @@ void main() {
         expect(headers.get('Accept'), equals('first'));
       });
 
-      test('returns null for set-cookie header', () {
+      test('returns first value for set-cookie header', () {
         final headers = Headers();
         headers.append('Set-Cookie', 'sessionId=abc123');
         headers.append('Set-Cookie', 'theme=dark');
 
-        expect(headers.get('Set-Cookie'), isNull);
-        expect(headers.get('set-cookie'), isNull);
-        expect(headers.get('SET-COOKIE'), isNull);
+        expect(headers.get('Set-Cookie'), equals('sessionId=abc123'));
+        expect(headers.get('set-cookie'), equals('sessionId=abc123'));
+        expect(headers.get('SET-COOKIE'), equals('sessionId=abc123'));
       });
     });
 
@@ -197,14 +197,19 @@ void main() {
         expect(values.first, equals('application/json'));
       });
 
-      test('returns empty iterable for set-cookie header', () {
+      test('returns all values for set-cookie header', () {
         final headers = Headers();
         headers.append('Set-Cookie', 'sessionId=abc123');
         headers.append('Set-Cookie', 'theme=dark');
 
-        expect(headers.getAll('Set-Cookie'), isEmpty);
-        expect(headers.getAll('set-cookie'), isEmpty);
-        expect(headers.getAll('SET-COOKIE'), isEmpty);
+        final values = headers.getAll('Set-Cookie').toList();
+        expect(values, equals(['sessionId=abc123', 'theme=dark']));
+
+        final valuesLower = headers.getAll('set-cookie').toList();
+        expect(valuesLower, equals(['sessionId=abc123', 'theme=dark']));
+
+        final valuesUpper = headers.getAll('SET-COOKIE').toList();
+        expect(valuesUpper, equals(['sessionId=abc123', 'theme=dark']));
       });
     });
 

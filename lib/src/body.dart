@@ -36,10 +36,14 @@ class Body extends FormDataHelper implements DataHelpers {
   /// final content = await body.text();
   /// ```
   factory Body.text(String text) {
-    final bodyStream = Stream.value(Uint8List.fromList(utf8.encode(text)));
+    final bytes = utf8.encode(text);
+    final bodyStream = Stream.value(bytes);
     return Body._(
       bodyStream,
-      Headers({'Content-Type': 'text/plain; charset=utf-8'}),
+      Headers({
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Content-Length': bytes.lengthInBytes.toString(),
+      }),
     );
   }
 
@@ -54,11 +58,15 @@ class Body extends FormDataHelper implements DataHelpers {
   /// final data = await body.json();
   /// ```
   factory Body.json(Object? data) {
-    final jsonString = jsonEncode(data);
-    final bodyStream = Stream.value(
-      Uint8List.fromList(utf8.encode(jsonString)),
+    final text = jsonEncode(data);
+    final bytes = utf8.encode(text);
+    return Body._(
+      Stream.value(bytes),
+      Headers({
+        'Content-Type': 'application/json',
+        'Content-Length': bytes.lengthInBytes.toString(),
+      }),
     );
-    return Body._(bodyStream, Headers({'Content-Type': 'application/json'}));
   }
 
   /// Creates a Body from binary data.
@@ -75,7 +83,10 @@ class Body extends FormDataHelper implements DataHelpers {
     final bodyStream = Stream.value(bytes);
     return Body._(
       bodyStream,
-      Headers({'Content-Type': 'application/octet-stream'}),
+      Headers({
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': bytes.lengthInBytes.toString(),
+      }),
     );
   }
 
@@ -113,6 +124,7 @@ class Body extends FormDataHelper implements DataHelpers {
   /// final body = Body.json({'key': 'value'});
   /// print(body.headers.get('Content-Type')); // 'application/json'
   /// ```
+  @override
   final Headers headers;
 
   /// Indicates whether the body has been consumed.
