@@ -1,17 +1,17 @@
 # Oxy
 
-A modern, feature-rich HTTP client for Dart with Web API compatibility, supporting fetch-like syntax, request/response handling, and cross-platform adapters.
+A modern, feature-rich HTTP client for Dart with Web API compatibility. Built with a flexible adapter architecture and intuitive API design.
 
 [![Oxy Test](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
 ## Features
 
-- 🌐 **Web API Compatible**: Implements familiar web standards like Fetch API, Headers, Request, and Response
-- 🚀 **Fetch-like Syntax**: Intuitive API similar to browser's `fetch()` function
+- 🌐 **Web API Compatible**: Implements familiar web standards like Headers, Request, and Response
+- 🚀 **Modern Design**: Clean, intuitive API with method chaining support
 - 🔧 **Flexible Architecture**: Configurable adapters for different platforms and requirements
 - 📦 **Rich Body Support**: Handle text, JSON, binary data, and FormData seamlessly
-- 🎯 **Modern Dart**: Built with latest Dart features and best practices
+- 🎯 **TypeSafe**: Built with modern Dart features and strong typing
 - 🔄 **Request Cloning**: Clone requests and responses for reuse
 - ⚡ **Streaming Support**: Handle large payloads efficiently with streaming
 - 🎛️ **Fine-grained Control**: Configure caching, redirects, credentials, and more
@@ -22,7 +22,7 @@ Add to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  oxy: ^0.0.1
+  oxy: latest
 ```
 
 Then run:
@@ -39,14 +39,14 @@ dart pub get
 import 'package:oxy/oxy.dart';
 
 void main() async {
-  // Simple GET request
-  final response = await fetch('https://jsonplaceholder.typicode.com/posts/1');
+  // Make a GET request
+  final response = await oxy.get('https://jsonplaceholder.typicode.com/posts/1');
   final data = await response.json();
   print(data);
 }
 ```
 
-### Using the Oxy Client
+### With Base URL
 
 ```dart
 import 'package:oxy/oxy.dart';
@@ -55,63 +55,15 @@ void main() async {
   // Create a client with base URL
   final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
 
-  // Make requests using the client
-  final response = await client.get('/users');
-  final users = await response.json();
-  print(users);
+  // All requests will be relative to the base URL
+  final users = await client.get('/users');
+  final posts = await client.get('/posts');
 }
 ```
 
-## Examples
+## HTTP Methods
 
-### POST Request with JSON
-
-```dart
-final response = await fetch(
-  'https://api.example.com/users',
-  method: 'POST',
-  headers: Headers({'Content-Type': 'application/json'}),
-  body: Body.json({
-    'name': 'John Doe',
-    'email': 'john@example.com',
-  }),
-);
-
-if (response.ok) {
-  final user = await response.json();
-  print('Created user: $user');
-}
-```
-
-### Form Data Upload
-
-```dart
-final formData = FormData();
-formData.append('name', FormDataEntry.text('John'));
-formData.append('avatar', FormDataEntry.file(fileStream, filename: 'avatar.jpg'));
-
-final response = await fetch(
-  'https://api.example.com/upload',
-  method: 'POST',
-  body: Body.formData(formData),
-);
-```
-
-### Request with Custom Headers
-
-```dart
-final headers = Headers({
-  'Authorization': 'Bearer your-token',
-  'User-Agent': 'MyApp/1.0',
-});
-
-final response = await fetch(
-  'https://api.example.com/protected',
-  headers: headers,
-);
-```
-
-### Using HTTP Method Shortcuts
+Oxy provides convenient methods for all standard HTTP verbs:
 
 ```dart
 final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
@@ -119,52 +71,125 @@ final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
 // GET request
 final users = await client.get('/users');
 
-// POST request
+// POST request with JSON body
 final newUser = await client.post(
   '/users',
-  body: Body.json({'name': 'Jane', 'email': 'jane@example.com'}),
+  body: Body.json({
+    'name': 'John Doe',
+    'email': 'john@example.com',
+  }),
 );
 
 // PUT request
 final updatedUser = await client.put(
   '/users/123',
-  body: Body.json({'name': 'Jane Updated'}),
+  body: Body.json({'name': 'Jane Doe'}),
+);
+
+// PATCH request
+final patchedUser = await client.patch(
+  '/users/123',
+  body: Body.json({'email': 'jane@example.com'}),
 );
 
 // DELETE request
 final deleteResponse = await client.delete('/users/123');
 ```
 
-### Error Handling
+## Request Bodies
+
+Oxy supports various body types with a clean API:
 
 ```dart
-try {
-  final response = await fetch('https://api.example.com/data');
+// JSON body
+await oxy.post(
+  'https://api.example.com/data',
+  body: Body.json({'key': 'value'}),
+);
 
-  if (!response.ok) {
-    print('Request failed with status: ${response.status}');
-    return;
-  }
+// Text body
+await oxy.post(
+  'https://api.example.com/data',
+  body: Body.text('Hello, World!'),
+);
 
-  final data = await response.json();
-  print(data);
-} catch (e) {
-  print('Network error: $e');
-}
+// Binary body
+await oxy.post(
+  'https://api.example.com/data',
+  body: Body.bytes(Uint8List.fromList([1, 2, 3])),
+);
+
+// Form data
+final formData = FormData();
+formData.append('name', FormDataEntry.text('John'));
+formData.append('file', FormDataEntry.file(fileStream, filename: 'doc.pdf'));
+
+await oxy.post(
+  'https://api.example.com/upload',
+  body: Body.formData(formData),
+);
 ```
 
-### Request Cancellation
+## Headers
+
+Work with HTTP headers using the intuitive Headers class:
 
 ```dart
-final controller = AbortController();
+// Set custom headers
+final response = await oxy.get(
+  'https://api.example.com/data',
+  headers: Headers({
+    'Authorization': 'Bearer your-token',
+    'Content-Type': 'application/json',
+    'User-Agent': 'MyApp/1.0',
+  }),
+);
+
+// Access response headers
+final contentType = response.headers.get('content-type');
+final allHeaders = response.headers.entries();
+```
+
+## Response Handling
+
+```dart
+final response = await oxy.get('https://api.example.com/data');
+
+// Check response status
+if (response.ok) {
+  // Success (200-299)
+  print('Request successful: ${response.status}');
+} else {
+  // Error response
+  print('Request failed: ${response.status} ${response.statusText}');
+}
+
+// Parse response body
+final jsonData = await response.json();      // Parse as JSON
+final textData = await response.text();      // Parse as text
+final binaryData = await response.bytes();   // Get raw bytes
+final formData = await response.formData();  // Parse as form data
+
+// Clone response for multiple consumption
+final clonedResponse = response.clone();
+```
+
+## Request Cancellation
+
+Use AbortSignal to cancel requests:
+
+```dart
+import 'dart:async';
+
+final signal = AbortSignal();
 
 // Cancel the request after 5 seconds
-Timer(Duration(seconds: 5), () => controller.abort());
+Timer(Duration(seconds: 5), () => signal.abort('Timeout'));
 
 try {
-  final response = await fetch(
+  final response = await oxy.get(
     'https://api.example.com/slow-endpoint',
-    signal: controller.signal,
+    signal: signal,
   );
 
   final data = await response.text();
@@ -174,65 +199,73 @@ try {
 }
 ```
 
-## API Reference
-
-### Core Classes
-
-- **`Oxy`**: Main HTTP client class with configurable adapters and base URL
-- **`Request`**: Represents an HTTP request with all its properties
-- **`Response`**: Represents an HTTP response with methods to consume the body
-- **`Headers`**: Case-insensitive HTTP headers collection
-- **`Body`**: Request/response body with support for various content types
-- **`FormData`**: Multipart form data for file uploads and form submissions
-
-### Body Types
+## Advanced Configuration
 
 ```dart
-// Text body
-final textBody = Body.text('Hello, World!');
+final client = Oxy(
+  baseURL: Uri.parse('https://api.example.com'),
+  // Use custom adapter if needed
+  adapter: MyCustomAdapter(),
+);
 
-// JSON body
-final jsonBody = Body.json({'key': 'value'});
-
-// Binary body
-final binaryBody = Body.bytes(Uint8List.fromList([1, 2, 3]));
-
-// Form data body
-final formData = FormData();
-formData.append('field', FormDataEntry.text('value'));
-final formBody = Body.formData(formData);
-
-// Empty body
-final emptyBody = Body.empty();
+// Configure individual requests
+final response = await client.get(
+  '/data',
+  cache: RequestCache.noCache,
+  credentials: RequestCredentials.include,
+  mode: RequestMode.cors,
+  redirect: RequestRedirect.follow,
+);
 ```
 
-### Response Methods
+## Fetch Function
+
+For simple one-off requests, you can use the global `fetch` function:
 
 ```dart
+import 'package:oxy/oxy.dart';
+
+// Simple GET request
 final response = await fetch('https://api.example.com/data');
+final data = await response.json();
 
-// Check if successful
-if (response.ok) {
-  // Consume as text
-  final text = await response.text();
-
-  // Consume as JSON
-  final json = await response.json();
-
-  // Consume as bytes
-  final bytes = await response.bytes();
-
-  // Consume as FormData
-  final formData = await response.formData();
-}
-
-// Clone response for multiple consumption
-final cloned = response.clone();
+// POST request
+final postResponse = await fetch(
+  'https://api.example.com/users',
+  method: 'POST',
+  body: Body.json({'name': 'John'}),
+  headers: Headers({'Authorization': 'Bearer token'}),
+);
 ```
 
-## Configuration
+## Adapters
 
-### Custom Adapter
+Oxy supports multiple HTTP adapters to suit different needs and platforms. Choose the adapter that best fits your requirements:
+
+| Adapter | Version | Description |
+|---------|---------|-------------|
+| **Default** | Built-in | Native Dart implementation using `dart:io` HttpClient. Optimized for performance and included by default. |
+| **[oxy_http](https://pub.dev/packages/oxy_http)** | [![pub package](https://img.shields.io/pub/v/oxy_http.svg)](https://pub.dev/packages/oxy_http) | HTTP adapter that uses Dart's popular `http` package as the underlying HTTP implementation. |
+
+### Using Custom Adapters
+
+```dart
+import 'package:oxy/oxy.dart';
+import 'package:oxy_http/oxy_http.dart';
+
+// Use the http package adapter
+final client = Oxy(adapter: OxyHttp());
+
+// Use with base URL
+final apiClient = Oxy(
+  adapter: OxyHttp(),
+  baseURL: Uri.parse('https://api.example.com'),
+);
+```
+
+### Creating Custom Adapters
+
+You can create your own adapter by implementing the `Adapter` interface:
 
 ```dart
 class MyCustomAdapter implements Adapter {
@@ -249,20 +282,6 @@ class MyCustomAdapter implements Adapter {
 final client = Oxy(adapter: MyCustomAdapter());
 ```
 
-### Request Configuration
-
-```dart
-final response = await fetch(
-  'https://api.example.com/data',
-  method: 'GET',
-  cache: RequestCache.noCache,
-  credentials: RequestCredentials.include,
-  mode: RequestMode.cors,
-  redirect: RequestRedirect.follow,
-  referrerPolicy: ReferrerPolicy.noReferrer,
-);
-```
-
 ## Platform Support
 
 Oxy works on all Dart platforms:
@@ -275,9 +294,29 @@ Oxy works on all Dart platforms:
 
 The library automatically selects the appropriate adapter based on the platform for optimal performance.
 
-## Contributing
+## API Reference
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+### Core Classes
+
+- **`Oxy`**: Main HTTP client class with configurable adapters and base URL
+- **`Request`**: Represents an HTTP request with all its properties
+- **`Response`**: Represents an HTTP response with methods to consume the body
+- **`Headers`**: Case-insensitive HTTP headers collection
+- **`Body`**: Request/response body with support for various content types
+- **`FormData`**: Multipart form data for file uploads and form submissions
+
+### Response Properties
+
+```dart
+final response = await oxy.get('https://api.example.com/data');
+
+print(response.status);        // HTTP status code (e.g., 200)
+print(response.statusText);    // HTTP status text (e.g., "OK")
+print(response.ok);            // true if status 200-299
+print(response.redirected);    // true if response was redirected
+print(response.url);           // final URL after redirects
+print(response.headers);       // Response headers
+```
 
 ## License
 
