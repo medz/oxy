@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:oxy/oxy.dart';
@@ -21,7 +20,7 @@ class MockAdapter implements Adapter {
   @override
   Future<Response> fetch(Uri url, AdapterRequest request) {
     if (_fetchImpl != null) {
-      return _fetchImpl!(url, request);
+      return _fetchImpl(url, request);
     }
     // Default mock response
     return Future.value(
@@ -274,11 +273,7 @@ void main() {
         fetchImpl: (url, request) async {
           return Response(
             status: 200,
-            body: Body.json({
-              'method': request.method,
-              'url': url.toString(),
-              'hasBody': request.body != null,
-            }),
+            body: Body.json({'method': request.method, 'url': url.toString()}),
           );
         },
       );

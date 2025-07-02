@@ -22,7 +22,7 @@ Future<Response> fetch(Uri url, AdapterRequest request) async {
   httpRequest.persistentConnection = request.keepalive;
 
   if (request.method != "GET") {
-    httpRequest.addStream(request.body);
+    await httpRequest.addStream(request.body);
   }
 
   final httpResponse = await httpRequest.close();

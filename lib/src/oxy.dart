@@ -55,10 +55,13 @@ class Oxy {
   ///
   /// Returns a [Future] that completes with the HTTP response.
   Future<Response> call(Request request) {
-    final adapter = this.adapter.isSupportWeb && isWebPlatform
-        ? this.adapter
-        : const DefaultAdapter();
+    final adapter = isWebPlatform
+        ? (this.adapter.isSupportWeb ? this.adapter : const DefaultAdapter())
+        : this.adapter;
     final url = baseURL?.resolve(request.url) ?? Uri.parse(request.url);
+    if (!request.headers.has("user-agent") && !isWebPlatform) {
+      request.headers.set("user-agent", "Oxy/0.0");
+    }
 
     return adapter.fetch(url, request);
   }
