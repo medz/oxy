@@ -25,7 +25,7 @@ class AdapterRequest extends FormDataHelper implements Body {
   }) : _body = body ?? Body.empty(),
        method = method.toUpperCase(),
        headers = headers ?? Headers(),
-       signal = signal ?? AbortController().signal {
+       signal = signal ?? AbortSignal() {
     final bodyHeaders = _body.headers.entries().toList();
     for (final (name, value) in bodyHeaders) {
       if (!this.headers.has(name)) {

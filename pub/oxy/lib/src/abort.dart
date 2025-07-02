@@ -1,5 +1,3 @@
-import 'package:meta/meta.dart';
-
 /// An interface for signaling the abortion of asynchronous operations.
 ///
 /// AbortSignal provides a way to communicate with an asynchronous operation
@@ -20,7 +18,7 @@ import 'package:meta/meta.dart';
 /// controller.abort('User cancelled');
 /// ```
 abstract interface class AbortSignal {
-  const AbortSignal();
+  factory AbortSignal() = _AbortSignalImpl;
 
   /// Whether the signal has been aborted.
   ///
@@ -66,7 +64,7 @@ abstract interface class AbortSignal {
   /// ```
   void throwIfAborted();
 
-  @internal
+  /// Aborts the associated signal with an optional reason.
   void abort([Object? reason]);
 }
 
@@ -116,71 +114,4 @@ class _AbortSignalImpl implements AbortSignal {
     }
     _callbacks.clear();
   }
-}
-
-/// A controller for creating and managing AbortSignal instances.
-///
-/// AbortController provides a way to abort one or more asynchronous operations
-/// through its associated AbortSignal. This is commonly used to implement
-/// cancellation for HTTP requests, timers, and other async operations.
-///
-/// Example usage:
-/// ```dart
-/// // Create a controller
-/// final controller = AbortController();
-///
-/// // Pass the signal to an async operation
-/// try {
-///   final response = await httpClient.get(
-///     'https://api.example.com/data',
-///     signal: controller.signal,
-///   );
-///   print('Request completed: ${response.body}');
-/// } catch (e) {
-///   print('Request failed or was aborted: $e');
-/// }
-///
-/// // Later, abort the operation
-/// controller.abort('User requested cancellation');
-/// ```
-///
-/// Example with timeout:
-/// ```dart
-/// final controller = AbortController();
-///
-/// // Set up automatic abortion after 5 seconds
-/// Timer(Duration(seconds: 5), () {
-///   controller.abort('Request timeout');
-/// });
-///
-/// // Use the signal with your async operation
-/// await someAsyncOperation(controller.signal);
-/// ```
-class AbortController {
-  /// Creates a new AbortController with a fresh AbortSignal.
-  AbortController() : _signal = _AbortSignalImpl();
-
-  final _AbortSignalImpl _signal;
-
-  /// The AbortSignal associated with this controller.
-  ///
-  /// This signal can be passed to asynchronous operations to allow them
-  /// to be cancelled via this controller.
-  AbortSignal get signal => _signal;
-
-  /// Aborts the associated signal with an optional reason.
-  ///
-  /// Once called, the signal's [AbortSignal.aborted] property will be `true`
-  /// and all registered abort callbacks will be executed.
-  ///
-  /// The [reason] parameter allows you to specify why the operation was
-  /// aborted, which can be useful for debugging or providing user feedback.
-  ///
-  /// Example:
-  /// ```dart
-  /// controller.abort(); // Abort without reason
-  /// controller.abort('User cancelled'); // Abort with reason
-  /// controller.abort(TimeoutException('Request took too long'));
-  /// ```
-  void abort([Object? reason]) => _signal.abort(reason);
 }
