@@ -28,14 +28,14 @@ void main() {
       test('creates request with custom parameters', () {
         final customHeaders = Headers({'Authorization': 'Bearer token'});
         final customBody = Body.text('test data');
-        final controller = AbortController();
+        final signal = AbortSignal();
 
         final request = Request(
           'https://api.example.com/data',
           method: 'POST',
           headers: customHeaders,
           body: customBody,
-          signal: controller.signal,
+          signal: signal,
           cache: RequestCache.noCache,
           integrity: 'sha256-hash',
           keepalive: true,
@@ -50,7 +50,7 @@ void main() {
         expect(request.url, equals('https://api.example.com/data'));
         expect(request.method, equals('POST'));
         expect(request.headers, equals(customHeaders));
-        expect(request.signal, equals(controller.signal));
+        expect(request.signal, equals(signal));
         expect(request.cache, equals(RequestCache.noCache));
         expect(request.integrity, equals('sha256-hash'));
         expect(request.keepalive, isTrue);
@@ -220,7 +220,6 @@ void main() {
       });
 
       test('clones all properties correctly', () {
-        final controller = AbortController();
         final headers = Headers({'Authorization': 'Bearer token'});
 
         final original = Request(
@@ -228,7 +227,6 @@ void main() {
           method: 'POST',
           headers: headers,
           body: Body.text('test'),
-          signal: controller.signal,
           cache: RequestCache.noCache,
           integrity: 'hash',
           keepalive: true,

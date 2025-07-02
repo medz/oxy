@@ -11,6 +11,7 @@ workspace:
 
 dependencies:
   oxy: any
+  oxy_http: any
 
 dev_dependencies:
   lints: ^6.0.0
