@@ -1,7 +1,8 @@
-name: oxy
-description: A modern, feature-rich HTTP client for Dart with Web API compatibility, supporting fetch-like syntax, request/response handling, and cross-platform adapters.
+name: oxy_http
+description: A starting point for Dart libraries or applications.
 version: 0.0.1
 repository: https://github.com/medz/oxy
+homepage: https://github.com/medz/oxy/tree/main/pub/oxy_http
 
 topics:
   - http
@@ -16,8 +17,7 @@ funding:
 
 resolution: workspace
 environment:
-  sdk: ^3.8.0
+  sdk: ^3.8.1
 
 dependencies:
-  meta: ^1.17.0
-  mime: ^2.0.0
+  oxy: ^0.0.1
