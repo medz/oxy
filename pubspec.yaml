@@ -13,3 +13,14 @@ dependencies:
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.26.2
+
+topics:
+  - http
+  - fetch
+  - web
+  - request
+  - response
+
+funding:
+  - https://github.com/sponsors/medz
+  - https://opencollective.com/openodroe
