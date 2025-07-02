@@ -1,3 +1,8 @@
+## 0.0.3
+
+- Remove content-length header removal in native fetch
+- Add signal abort check before request processing
+
 ## 0.0.2
 
 ### Breaking Changes
