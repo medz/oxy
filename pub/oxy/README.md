@@ -2,7 +2,7 @@
 
 A modern, feature-rich HTTP client for Dart with Web API compatibility. Built with a flexible adapter architecture and intuitive API design.
 
-[![Oxy Test](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/webfetch/actions/workflows/oxy-test.yml)
+[![Oxy Test](https://github.com/medz/oxy/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/oxy-test.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
