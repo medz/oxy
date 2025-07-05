@@ -1,0 +1,12 @@
+name: oxy_dio
+description: A starting point for Dart libraries or applications.
+version: 0.0.1
+repository: https://github.com/medz/oxy
+homepage: https://github.com/medz/oxy/tree/main/pub/oxy_dio
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  oxy: 0.0.3
+  dio: ^5.8.0+1
