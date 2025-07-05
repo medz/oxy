@@ -8,6 +8,7 @@ environment:
 workspace:
   - pub/oxy
   - pub/oxy_http
+  - pub/oxy_dio
 
 dependencies:
   oxy: any

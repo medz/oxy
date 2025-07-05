@@ -3,7 +3,18 @@ description: A HTTP adapter for Oxy that uses Dart's dio package as the underlyi
 version: 0.0.1
 repository: https://github.com/medz/oxy
 homepage: https://github.com/medz/oxy/tree/main/pub/oxy_dio
+topics:
+  - http
+  - fetch
+  - web
+  - request
+  - response
 
+funding:
+  - https://github.com/sponsors/medz
+  - https://opencollective.com/openodroe
+
+resolution: workspace
 environment:
   sdk: ^3.8.0
 
