@@ -247,6 +247,7 @@ Oxy supports multiple HTTP adapters to suit different needs and platforms. Choos
 |---------|---------|-------------|
 | **Default** | Built-in | Native Dart implementation using `dart:io` HttpClient. Optimized for performance and included by default. |
 | **[oxy_http](https://pub.dev/packages/oxy_http)** | [![pub package](https://img.shields.io/pub/v/oxy_http.svg)](https://pub.dev/packages/oxy_http) | HTTP adapter that uses Dart's popular `http` package as the underlying HTTP implementation. |
+| **[oxy_dio](https://pub.dev/packages/oxy_dio)** | [![pub package](https://img.shields.io/pub/v/oxy_dio.svg)](https://pub.dev/packages/oxy_dio) | HTTP adapter that uses Dart's `dio` package as the underlying HTTP implementation. |
 
 ### Using Custom Adapters
 
