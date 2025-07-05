@@ -1,5 +1,5 @@
 name: oxy_dio
-description: A starting point for Dart libraries or applications.
+description: A HTTP adapter for Oxy that uses Dart's dio package as the underlying HTTP implementation.
 version: 0.0.1
 repository: https://github.com/medz/oxy
 homepage: https://github.com/medz/oxy/tree/main/pub/oxy_dio
