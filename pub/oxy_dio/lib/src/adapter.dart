@@ -21,21 +21,23 @@ class OxyDio implements oxy.Adapter {
 
   @override
   Future<oxy.Response> fetch(Uri url, oxy.AdapterRequest request) async {
-    final requestHeaders = <String, List<String>>{};
-    for (final (name, value) in request.headers.entries()) {
-      final values = requestHeaders[name] ??= [];
-      values.add(value);
+    final requestHeaders = <String, String>{};
+    for (final name in request.headers.keys()) {
+      final values = request.headers.getAll(name);
+      if (values.isNotEmpty) {
+        requestHeaders[name] = values.join(', ');
+      }
     }
 
     final options = RequestOptions(
       method: request.method,
       path: url.toString(),
-      contentType: request.headers.get("content-type"),
       responseType: ResponseType.stream,
       data: request.body,
       headers: requestHeaders,
       followRedirects: request.redirect == oxy.RequestRedirect.follow,
       maxRedirects: request.redirect == oxy.RequestRedirect.follow ? 5 : 0,
+      validateStatus: (_) => true,
     );
     final dioResponse = await dio.fetch<ResponseBody>(options).catchError((e) {
       request.signal.abort(e);
