@@ -4,11 +4,10 @@ version: 0.0.2
 repository: https://github.com/medz/oxy
 homepage: https://github.com/medz/oxy/tree/main/pub/oxy_dio
 topics:
+  - oxy
+  - dio
   - http
-  - fetch
-  - web
   - request
-  - response
 
 funding:
   - https://github.com/sponsors/medz
