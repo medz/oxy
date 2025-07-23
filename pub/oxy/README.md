@@ -5,6 +5,7 @@ A modern, feature-rich HTTP client for Dart with Web API compatibility. Built wi
 [![Oxy Test](https://github.com/medz/oxy/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/oxy-test.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/medz/oxy)
 
 ## Features
 
@@ -243,11 +244,11 @@ final postResponse = await fetch(
 
 Oxy supports multiple HTTP adapters to suit different needs and platforms. Choose the adapter that best fits your requirements:
 
-| Adapter | Version | Description |
-|---------|---------|-------------|
-| **Default** | Built-in | Native Dart implementation using `dart:io` HttpClient. Optimized for performance and included by default. |
-| **[oxy_http](https://pub.dev/packages/oxy_http)** | [![pub package](https://img.shields.io/pub/v/oxy_http.svg)](https://pub.dev/packages/oxy_http) | HTTP adapter that uses Dart's popular `http` package as the underlying HTTP implementation. |
-| **[oxy_dio](https://pub.dev/packages/oxy_dio)** | [![pub package](https://img.shields.io/pub/v/oxy_dio.svg)](https://pub.dev/packages/oxy_dio) | HTTP adapter that uses Dart's `dio` package as the underlying HTTP implementation. |
+| Adapter                                           | Version                                                                                        | Description                                                                                                                          |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Default**                                       | Built-in                                                                                       | Cross-platform adapter that uses `dart:io` HttpClient in native environments and Fetch API in web environments. Included by default. |
+| **[oxy_http](https://pub.dev/packages/oxy_http)** | [![pub package](https://img.shields.io/pub/v/oxy_http.svg)](https://pub.dev/packages/oxy_http) | HTTP adapter that uses Dart's popular `http` package as the underlying HTTP implementation.                                          |
+| **[oxy_dio](https://pub.dev/packages/oxy_dio)**   | [![pub package](https://img.shields.io/pub/v/oxy_dio.svg)](https://pub.dev/packages/oxy_dio)   | HTTP adapter that uses Dart's `dio` package as the underlying HTTP implementation.                                                   |
 
 ### Using Custom Adapters
 
