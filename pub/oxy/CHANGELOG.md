@@ -1,3 +1,7 @@
+## 0.0.4
+
+- Fix base URL resolution when baseURL is not null
+
 ## 0.0.3
 
 - Remove content-length header removal in native fetch
