@@ -18,5 +18,5 @@ environment:
   sdk: ^3.8.0
 
 dependencies:
-  oxy: ^0.0.3
+  oxy: ^0.0.4
   dio: ^5.8.0+1
