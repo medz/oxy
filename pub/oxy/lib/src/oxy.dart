@@ -59,7 +59,9 @@ class Oxy {
     final adapter = isWebPlatform
         ? (this.adapter.isSupportWeb ? this.adapter : const DefaultAdapter())
         : this.adapter;
-    final url = baseURL?.resolve(request.url) ?? Uri.parse(request.url);
+    final url = baseURL != null
+        ? baseURL!.resolve(request.url)
+        : Uri.parse(request.url);
     if (!request.headers.has("user-agent") && !isWebPlatform) {
       request.headers.set("user-agent", "Oxy/0.0");
     }
