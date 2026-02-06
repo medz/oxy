@@ -229,12 +229,12 @@ class CacheMiddleware implements OxyMiddleware {
     DateTime nowUtc, {
     required String? etag,
   }) {
-    if (cacheControl.maxAge != null) {
-      return nowUtc.add(Duration(seconds: cacheControl.maxAge!));
-    }
-
     if (cacheControl.noCache) {
       return nowUtc;
+    }
+
+    if (cacheControl.maxAge != null) {
+      return nowUtc.add(Duration(seconds: cacheControl.maxAge!));
     }
 
     if (etag != null) {

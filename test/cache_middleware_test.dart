@@ -138,6 +138,45 @@ void main() {
       expect(await second.text(), 'secret-v2');
     });
 
+    test('no-cache forces revalidation even when max-age exists', () async {
+      final middleware = CacheMiddleware(store: MemoryCacheStore());
+      final request = Request(Uri.parse('https://example.com/feed'));
+
+      var callCount = 0;
+      Request? revalidationRequest;
+
+      final first = await middleware.intercept(
+        request,
+        const RequestOptions(),
+        (req, opt) async {
+          callCount += 1;
+          return Response.text(
+            'v1',
+            headers: Headers({
+              'cache-control': 'no-cache, max-age=60',
+              'etag': '"v1"',
+            }),
+          );
+        },
+      );
+      expect(await first.text(), 'v1');
+
+      final second = await middleware.intercept(
+        request,
+        const RequestOptions(),
+        (req, opt) async {
+          callCount += 1;
+          revalidationRequest = req;
+          return Response(status: 304, headers: Headers({'etag': '"v1"'}));
+        },
+      );
+
+      expect(callCount, 2);
+      expect(revalidationRequest?.headers.get('if-none-match'), '"v1"');
+      expect(second.status, 200);
+      expect(await second.text(), 'v1');
+    });
+
     test('supports bypass flag via RequestOptions.extra', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
       final request = Request(Uri.parse('https://example.com/feed'));

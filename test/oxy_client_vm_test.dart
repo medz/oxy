@@ -223,6 +223,29 @@ void main() {
       expect(response.headers.get('location'), isNotNull);
     });
 
+    test('redirect error policy throws dedicated redirect error', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+
+      await expectLater(
+        client.get(
+          '/redirect',
+          options: const RequestOptions(
+            redirectPolicy: RedirectPolicy.error,
+            httpErrorPolicy: HttpErrorPolicy.returnResponse,
+          ),
+        ),
+        throwsA(
+          isA<OxyHttpException>()
+              .having(
+                (error) => error.message,
+                'message',
+                contains('Redirect blocked by RedirectPolicy.error'),
+              )
+              .having((error) => error.response.status, 'status', 302),
+        ),
+      );
+    });
+
     test('follow redirect marks response as redirected', () async {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.get('/redirect');

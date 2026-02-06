@@ -61,12 +61,20 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
     }
 
     final ioResponse = await httpRequest.close();
-    final headers = Headers();
-    ioResponse.headers.forEach((name, values) {
-      for (final value in values) {
-        headers.append(name, value);
-      }
-    });
+    final headers = _toHeaders(ioResponse.headers);
+
+    if (options.redirectPolicy == RedirectPolicy.error &&
+        _isRedirectStatus(ioResponse.statusCode)) {
+      throw OxyHttpException(
+        Response(
+          status: ioResponse.statusCode,
+          statusText: ioResponse.reasonPhrase,
+          headers: headers,
+          url: request.url,
+        ),
+        message: 'Redirect blocked by RedirectPolicy.error',
+      );
+    }
 
     final total = ioResponse.contentLength < 0
         ? null
@@ -120,4 +128,29 @@ void _bindAbort(AbortSignal? signal, HttpClientRequest request) {
       // Ignore abort errors from already-completed requests.
     }
   });
+}
+
+Headers _toHeaders(HttpHeaders ioHeaders) {
+  final headers = Headers();
+  ioHeaders.forEach((name, values) {
+    for (final value in values) {
+      headers.append(name, value);
+    }
+  });
+  return headers;
+}
+
+bool _isRedirectStatus(int statusCode) {
+  switch (statusCode) {
+    case HttpStatus.multipleChoices:
+    case HttpStatus.movedPermanently:
+    case HttpStatus.found:
+    case HttpStatus.seeOther:
+    case 305:
+    case HttpStatus.temporaryRedirect:
+    case HttpStatus.permanentRedirect:
+      return true;
+    default:
+      return false;
+  }
 }
