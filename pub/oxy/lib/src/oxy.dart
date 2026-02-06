@@ -1,386 +1,255 @@
-import 'abort.dart';
-import 'body.dart';
-import 'adapter.dart';
-import 'default_adapter.dart';
-import 'headers.dart';
-import 'request.dart';
-import 'request_common.dart';
-import 'response.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:ht/ht.dart';
+
+import 'options.dart';
 
 import '_internal/is_web_platform.native.dart'
     if (dart.library.js_interop) '_internal/is_web_platform.web.dart';
+import '_internal/transport.stub.dart'
+    if (dart.library.io) '_internal/transport.native.dart'
+    if (dart.library.js_interop) '_internal/transport.web.dart'
+    as transport;
 
-/// A configurable HTTP client that provides a high-level interface for making HTTP requests.
-///
-/// The Oxy class serves as the main entry point for HTTP operations, allowing you to configure
-/// adapters and base URLs for consistent request handling across your application.
-///
-/// Example:
-/// ```dart
-/// // Create a client with a base URL
-/// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-///
-/// // Make a request
-/// final request = Request('/users');
-/// final response = await client(request);
-/// ```
 class Oxy {
-  /// Creates a new Oxy HTTP client.
-  ///
-  /// Parameters:
-  /// - [adapter]: The adapter to use for making HTTP requests. Defaults to [DefaultAdapter].
-  /// - [baseURL]: Optional base URL that will be resolved against relative request URLs.
-  const Oxy({this.adapter = const DefaultAdapter(), this.baseURL});
+  Oxy({this.baseURL, Headers? defaultHeaders, this.userAgent = 'oxy/0.1.0'})
+    : defaultHeaders = defaultHeaders?.clone() ?? Headers();
 
-  /// The adapter used for making HTTP requests.
-  ///
-  /// The adapter handles the actual HTTP communication and can be customized
-  /// for different platforms or requirements.
-  final Adapter adapter;
-
-  /// Optional base URL for resolving relative request URLs.
-  ///
-  /// When provided, relative URLs in requests will be resolved against this base URL.
-  /// For example, if [baseURL] is `https://api.example.com` and a request is made to
-  /// `/users`, the final URL will be `https://api.example.com/users`.
   final Uri? baseURL;
+  final Headers defaultHeaders;
+  final String userAgent;
 
-  /// Executes an HTTP request and returns the response.
-  ///
-  /// This method automatically selects the appropriate adapter based on the platform
-  /// and resolves the request URL against the [baseURL] if provided.
-  ///
-  /// Parameters:
-  /// - [request]: The HTTP request to execute.
-  ///
-  /// Returns a [Future] that completes with the HTTP response.
-  Future<Response> call(Request request) {
-    request.signal.throwIfAborted();
-    final adapter = isWebPlatform
-        ? (this.adapter.isSupportWeb ? this.adapter : const DefaultAdapter())
-        : this.adapter;
-    final url = baseURL != null
-        ? baseURL!.resolve(request.url)
-        : Uri.parse(request.url);
-    if (!request.headers.has("user-agent") && !isWebPlatform) {
-      request.headers.set("user-agent", "Oxy/0.0");
+  Future<Response> call(
+    Request request, {
+    FetchOptions options = const FetchOptions(),
+  }) {
+    options.signal?.throwIfAborted();
+
+    final mergedHeaders = _mergeHeaders(request.headers);
+    if (!isWebPlatform &&
+        !mergedHeaders.has('user-agent') &&
+        userAgent.isNotEmpty) {
+      mergedHeaders.set('user-agent', userAgent);
     }
 
-    return adapter.fetch(url, request);
+    final resolvedRequest = request.copyWith(
+      url: _resolveUrl(request.url),
+      headers: mergedHeaders,
+    );
+
+    Future<Response> future = transport.fetchTransport(
+      resolvedRequest,
+      options,
+    );
+    if (options.timeout != null) {
+      future = future.timeout(
+        options.timeout!,
+        onTimeout: () {
+          final timeout = TimeoutException(
+            'Request timeout after ${options.timeout}',
+            options.timeout,
+          );
+          options.signal?.abort(timeout);
+          throw timeout;
+        },
+      );
+    }
+
+    return future;
+  }
+
+  Future<Response> request(
+    String url, {
+    String method = 'GET',
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    final requestHeaders = headers?.clone() ?? Headers();
+    final requestBody = _normalizeBody(
+      body: body,
+      json: json,
+      headers: requestHeaders,
+    );
+
+    final request = Request(
+      Uri.parse(url),
+      method: method,
+      headers: requestHeaders,
+      body: requestBody,
+    );
+
+    return call(request, options: options);
+  }
+
+  Future<Response> get(
+    String url, {
+    Headers? headers,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(url, method: 'GET', headers: headers, options: options);
+  }
+
+  Future<Response> post(
+    String url, {
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(
+      url,
+      method: 'POST',
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Future<Response> put(
+    String url, {
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(
+      url,
+      method: 'PUT',
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Future<Response> patch(
+    String url, {
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(
+      url,
+      method: 'PATCH',
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Future<Response> delete(
+    String url, {
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(
+      url,
+      method: 'DELETE',
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Future<Response> head(
+    String url, {
+    Headers? headers,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(url, method: 'HEAD', headers: headers, options: options);
+  }
+
+  Future<Response> options(
+    String url, {
+    Headers? headers,
+    Object? body,
+    Object? json,
+    FetchOptions options = const FetchOptions(),
+  }) {
+    return request(
+      url,
+      method: 'OPTIONS',
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Uri _resolveUrl(Uri url) {
+    if (url.hasScheme) {
+      return url;
+    }
+
+    if (baseURL != null) {
+      return baseURL!.resolveUri(url);
+    }
+
+    throw ArgumentError.value(
+      url.toString(),
+      'request.url',
+      'Relative URLs require Oxy(baseURL: ...).',
+    );
+  }
+
+  Headers _mergeHeaders(Headers requestHeaders) {
+    final merged = defaultHeaders.clone();
+
+    for (final name in requestHeaders.names()) {
+      merged.delete(name);
+      for (final value in requestHeaders.getAll(name)) {
+        merged.append(name, value);
+      }
+    }
+
+    return merged;
+  }
+
+  static Object? _normalizeBody({
+    required Object? body,
+    required Object? json,
+    required Headers headers,
+  }) {
+    if (body != null && json != null) {
+      throw ArgumentError('Use either body or json, not both.');
+    }
+
+    if (json != null) {
+      if (!headers.has('content-type')) {
+        headers.set('content-type', 'application/json; charset=utf-8');
+      }
+      return jsonEncode(json);
+    }
+
+    return body;
   }
 }
 
-/// Default Oxy HTTP client instance.
-///
-/// This is a convenient, pre-configured instance of [Oxy] that can be used
-/// for simple HTTP requests without needing to create your own client instance.
-///
-/// Example:
-/// ```dart
-/// final response = await oxy(Request('https://api.example.com/data'));
-/// ```
-const oxy = Oxy();
+final Oxy oxy = Oxy();
 
-/// Makes an HTTP request using the default Oxy client.
-///
-/// This is a convenience function that creates a [Request] object and executes it
-/// using the default [oxy] client instance. It provides a simple, fetch-like API
-/// similar to the web platform's fetch() function.
-///
-/// Parameters:
-/// - [url]: The URL to request
-/// - [method]: HTTP method (defaults to "GET")
-/// - [headers]: Optional HTTP headers
-/// - [body]: Optional request body
-/// - [signal]: Optional abort signal for canceling the request
-/// - [cache]: Cache behavior (defaults to [RequestCache.defaults])
-/// - [integrity]: Subresource integrity value
-/// - [keepalive]: Whether to keep the connection alive
-/// - [mode]: CORS mode (defaults to [RequestMode.cors])
-/// - [priority]: Request priority (defaults to [RequestPriority.auto])
-/// - [redirect]: Redirect behavior (defaults to [RequestRedirect.follow])
-/// - [referrer]: Referrer URL or policy
-/// - [referrerPolicy]: Referrer policy (defaults to [ReferrerPolicy.empty])
-/// - [credentials]: Credentials behavior (defaults to [RequestCredentials.sameOrigin])
-///
-/// Returns a [Future] that completes with the HTTP response.
-///
-/// Example:
-/// ```dart
-/// // Simple GET request
-/// final response = await fetch('https://api.example.com/data');
-///
-/// // POST request with JSON body
-/// final response = await fetch(
-///   'https://api.example.com/users',
-///   method: 'POST',
-///   headers: Headers({'Content-Type': 'application/json'}),
-///   body: Body.json({'name': 'John', 'email': 'john@example.com'}),
-/// );
-/// ```
 Future<Response> fetch(
   String url, {
-  String method = "GET",
+  String method = 'GET',
   Headers? headers,
-  Body? body,
-  AbortSignal? signal,
-  RequestCache cache = RequestCache.defaults,
-  String integrity = "",
-  bool keepalive = false,
-  RequestMode mode = RequestMode.cors,
-  RequestPriority priority = RequestPriority.auto,
-  RequestRedirect redirect = RequestRedirect.follow,
-  String referrer = "about:client",
-  ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-  RequestCredentials credentials = RequestCredentials.sameOrigin,
+  Object? body,
+  Object? json,
+  FetchOptions options = const FetchOptions(),
 }) {
-  final request = Request(
+  return oxy.request(
     url,
     method: method,
     headers: headers,
     body: body,
-    signal: signal,
-    cache: cache,
-    integrity: integrity,
-    keepalive: keepalive,
-    mode: mode,
-    priority: priority,
-    redirect: redirect,
-    referrer: referrer,
-    referrerPolicy: referrerPolicy,
-    credentials: credentials,
+    json: json,
+    options: options,
   );
-
-  return oxy(request);
-}
-
-/// Extension that adds convenient HTTP method shortcuts to the Oxy class.
-///
-/// This extension provides methods like [get], [post], [put], [delete], and [patch]
-/// that simplify making requests with specific HTTP methods.
-extension OxyRequestMethods on Oxy {
-  /// Makes a GET request to the specified URL.
-  ///
-  /// This is a convenience method that automatically sets the HTTP method to "GET".
-  /// All other parameters are the same as the [fetch] function.
-  ///
-  /// Example:
-  /// ```dart
-  /// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-  /// final response = await client.get('/users');
-  /// ```
-  Future<Response> get(
-    String url, {
-    Headers? headers,
-    Body? body,
-    AbortSignal? signal,
-    RequestCache cache = RequestCache.defaults,
-    String integrity = "",
-    bool keepalive = false,
-    RequestMode mode = RequestMode.cors,
-    RequestPriority priority = RequestPriority.auto,
-    RequestRedirect redirect = RequestRedirect.follow,
-    String referrer = "about:client",
-    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-    RequestCredentials credentials = RequestCredentials.sameOrigin,
-  }) {
-    final request = Request(
-      url,
-      method: "GET",
-      headers: headers,
-      body: body,
-      signal: signal,
-      cache: cache,
-      integrity: integrity,
-      keepalive: keepalive,
-      mode: mode,
-      priority: priority,
-      redirect: redirect,
-      referrer: referrer,
-      referrerPolicy: referrerPolicy,
-      credentials: credentials,
-    );
-    return this(request);
-  }
-
-  /// Makes a POST request to the specified URL.
-  ///
-  /// This is a convenience method that automatically sets the HTTP method to "POST".
-  /// Commonly used for creating new resources or submitting form data.
-  ///
-  /// Example:
-  /// ```dart
-  /// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-  /// final response = await client.post(
-  ///   '/users',
-  ///   body: Body.json({'name': 'John', 'email': 'john@example.com'}),
-  /// );
-  /// ```
-  Future<Response> post(
-    String url, {
-    Headers? headers,
-    Body? body,
-    AbortSignal? signal,
-    RequestCache cache = RequestCache.defaults,
-    String integrity = "",
-    bool keepalive = false,
-    RequestMode mode = RequestMode.cors,
-    RequestPriority priority = RequestPriority.auto,
-    RequestRedirect redirect = RequestRedirect.follow,
-    String referrer = "about:client",
-    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-    RequestCredentials credentials = RequestCredentials.sameOrigin,
-  }) {
-    final request = Request(
-      url,
-      method: "POST",
-      headers: headers,
-      body: body,
-      signal: signal,
-      cache: cache,
-      integrity: integrity,
-      keepalive: keepalive,
-      mode: mode,
-      priority: priority,
-      redirect: redirect,
-      referrer: referrer,
-      referrerPolicy: referrerPolicy,
-      credentials: credentials,
-    );
-    return this(request);
-  }
-
-  /// Makes a PUT request to the specified URL.
-  ///
-  /// This is a convenience method that automatically sets the HTTP method to "PUT".
-  /// Commonly used for updating existing resources or creating resources with a specific ID.
-  ///
-  /// Example:
-  /// ```dart
-  /// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-  /// final response = await client.put(
-  ///   '/users/123',
-  ///   body: Body.json({'name': 'John Updated', 'email': 'john.new@example.com'}),
-  /// );
-  /// ```
-  Future<Response> put(
-    String url, {
-    Headers? headers,
-    Body? body,
-    AbortSignal? signal,
-    RequestCache cache = RequestCache.defaults,
-    String integrity = "",
-    bool keepalive = false,
-    RequestMode mode = RequestMode.cors,
-    RequestPriority priority = RequestPriority.auto,
-    RequestRedirect redirect = RequestRedirect.follow,
-    String referrer = "about:client",
-    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-    RequestCredentials credentials = RequestCredentials.sameOrigin,
-  }) {
-    final request = Request(
-      url,
-      method: "PUT",
-      headers: headers,
-      body: body,
-      signal: signal,
-      cache: cache,
-      integrity: integrity,
-      keepalive: keepalive,
-      mode: mode,
-      priority: priority,
-      redirect: redirect,
-      referrer: referrer,
-      referrerPolicy: referrerPolicy,
-      credentials: credentials,
-    );
-    return this(request);
-  }
-
-  /// Makes a DELETE request to the specified URL.
-  ///
-  /// This is a convenience method that automatically sets the HTTP method to "DELETE".
-  /// Commonly used for deleting existing resources. Note that DELETE requests typically
-  /// don't include a body, so this method doesn't have a body parameter.
-  ///
-  /// Example:
-  /// ```dart
-  /// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-  /// final response = await client.delete('/users/123');
-  /// ```
-  Future<Response> delete(
-    String url, {
-    Headers? headers,
-    AbortSignal? signal,
-    RequestCache cache = RequestCache.defaults,
-    String integrity = "",
-    bool keepalive = false,
-    RequestMode mode = RequestMode.cors,
-    RequestPriority priority = RequestPriority.auto,
-    RequestRedirect redirect = RequestRedirect.follow,
-    String referrer = "about:client",
-    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-    RequestCredentials credentials = RequestCredentials.sameOrigin,
-  }) {
-    final request = Request(
-      url,
-      method: "DELETE",
-      headers: headers,
-      signal: signal,
-      cache: cache,
-      integrity: integrity,
-      keepalive: keepalive,
-      mode: mode,
-      priority: priority,
-      redirect: redirect,
-      referrer: referrer,
-      referrerPolicy: referrerPolicy,
-      credentials: credentials,
-    );
-    return this(request);
-  }
-
-  /// Makes a PATCH request to the specified URL.
-  ///
-  /// This is a convenience method that automatically sets the HTTP method to "PATCH".
-  /// Commonly used for partial updates to existing resources. Note that PATCH requests
-  /// typically don't include a body, so this method doesn't have a body parameter.
-  /// If you need to send a body with a PATCH request, use the [fetch] function directly.
-  ///
-  /// Example:
-  /// ```dart
-  /// final client = Oxy(baseURL: Uri.parse('https://api.example.com'));
-  /// final response = await client.patch('/users/123/status');
-  /// ```
-  Future<Response> patch(
-    String url, {
-    Headers? headers,
-    AbortSignal? signal,
-    RequestCache cache = RequestCache.defaults,
-    String integrity = "",
-    bool keepalive = false,
-    RequestMode mode = RequestMode.cors,
-    RequestPriority priority = RequestPriority.auto,
-    RequestRedirect redirect = RequestRedirect.follow,
-    String referrer = "about:client",
-    ReferrerPolicy referrerPolicy = ReferrerPolicy.empty,
-    RequestCredentials credentials = RequestCredentials.sameOrigin,
-  }) {
-    final request = Request(
-      url,
-      method: "PATCH",
-      headers: headers,
-      signal: signal,
-      cache: cache,
-      integrity: integrity,
-      keepalive: keepalive,
-      mode: mode,
-      priority: priority,
-      redirect: redirect,
-      referrer: referrer,
-      referrerPolicy: referrerPolicy,
-      credentials: credentials,
-    );
-    return this(request);
-  }
 }
