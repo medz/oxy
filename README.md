@@ -88,6 +88,37 @@ Future<void> main() async {
 }
 ```
 
+## Official Preset
+
+Use the official preset to get the recommended stack quickly:
+
+```dart
+import 'package:oxy/oxy.dart';
+
+Future<void> main() async {
+  final client = Oxy(
+    OxyConfig(
+      baseUrl: Uri.parse('https://api.example.com'),
+      middleware: OxyPresets.standard(
+        authMiddleware: AuthMiddleware.staticToken('token'),
+        cookieJar: MemoryCookieJar(),
+      ),
+    ),
+  );
+
+  await client.get('/feed');
+}
+```
+
+You can also toggle built-ins or override middlewares:
+
+```dart
+final middleware = OxyPresets.standard(
+  includeLogging: false,
+  cacheMiddleware: CacheMiddleware(store: MemoryCacheStore()),
+);
+```
+
 ## Advanced `Request/send` API
 
 ```dart
