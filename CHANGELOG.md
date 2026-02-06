@@ -9,6 +9,8 @@
   `OxyConfig.withPreset/withStandardPreset` and
   `Oxy.withPreset/withStandardPreset`.
 - Decoupled cookie read/write from core send path into dedicated middleware.
+- Switched cookie model to `ocookie.Cookie` directly and removed
+  `OxyCookie` wrapper type.
 - Added safe API layer:
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
   plus decoded variants and top-level `safeFetch*` helpers.
