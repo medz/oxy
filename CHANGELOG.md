@@ -5,6 +5,9 @@
   `CacheMiddleware`, `LoggingMiddleware`, `RequestIdMiddleware`.
 - Added `OxyPresets.standard(...)` for recommended middleware composition,
   with optional toggles and middleware overrides.
+- Added fluent preset helpers:
+  `OxyConfig.withPreset/withStandardPreset` and
+  `Oxy.withPreset/withStandardPreset`.
 - Decoupled cookie read/write from core send path into dedicated middleware.
 - Added safe API layer:
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,

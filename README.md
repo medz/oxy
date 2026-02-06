@@ -119,6 +119,14 @@ final middleware = OxyPresets.standard(
 );
 ```
 
+Or apply presets via fluent helpers:
+
+```dart
+final client = Oxy()
+    .withStandardPreset(includeLogging: false)
+    .withPreset([AuthMiddleware.staticToken('token')]);
+```
+
 ## Advanced `Request/send` API
 
 ```dart
