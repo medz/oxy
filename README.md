@@ -65,6 +65,8 @@ Future<void> main() async {
 }
 ```
 
+`OxyResult` also provides helpers: `fold(...)`, `map(...)`, `getOrThrow()`.
+
 ## HTTP Error Policy
 
 By default, non-2xx responses throw `OxyHttpException`.

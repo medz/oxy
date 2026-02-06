@@ -7,6 +7,42 @@ sealed class OxyResult<T> {
   T? get value;
   Object? get error;
   StackTrace? get trace;
+
+  R fold<R>({
+    required R Function(T value) onSuccess,
+    required R Function(Object error, StackTrace trace) onFailure,
+  }) {
+    if (this is OxySuccess<T>) {
+      final success = this as OxySuccess<T>;
+      return onSuccess(success.data);
+    }
+
+    final failure = this as OxyFailure<T>;
+    return onFailure(failure.cause, failure.stack);
+  }
+
+  OxyResult<R> map<R>(R Function(T value) transform) {
+    if (this is OxySuccess<T>) {
+      final success = this as OxySuccess<T>;
+      try {
+        return OxySuccess<R>(transform(success.data));
+      } catch (error, trace) {
+        return OxyFailure<R>(error, trace);
+      }
+    }
+
+    final failure = this as OxyFailure<T>;
+    return OxyFailure<R>(failure.cause, failure.stack);
+  }
+
+  T getOrThrow() {
+    if (this is OxySuccess<T>) {
+      return (this as OxySuccess<T>).data;
+    }
+
+    final failure = this as OxyFailure<T>;
+    Error.throwWithStackTrace(failure.cause, failure.stack);
+  }
 }
 
 class OxySuccess<T> extends OxyResult<T> {
