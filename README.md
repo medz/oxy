@@ -1,16 +1,18 @@
 # Oxy
 
-`oxy` is a fetch-style HTTP client for Dart/Flutter built on top of [`ht`](https://pub.dev/packages/ht).
+`oxy` is a fetch-style HTTP client for Dart/Flutter, built on top of [`ht`](https://pub.dev/packages/ht).
 
 [![Oxy Test](https://github.com/medz/oxy/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/oxy-test.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
 ## Why Oxy
 
-- Uses `ht` as the unified HTTP type layer (`Request`, `Response`, `Headers`, `FormData`, `Blob`, ...)
+- Unified `ht` type layer (`Request`, `Response`, `Headers`, `FormData`, `Blob`, ...)
 - No adapter abstraction
-- Works on Dart VM and Web with one API
-- Includes request timeout, redirect policy, keep-alive, and abort signal support
+- One API for Dart VM and Web
+- Two usage layers: simple `get/post/...` and advanced `request/send`
+- Middleware-first extensibility (auth, cookies, cache, logging, trace)
+- Built-in retry/timeout/abort/error model with `throw` and `safe*` APIs
 
 ## Installation
 
@@ -34,49 +36,91 @@ Future<void> main() async {
     json: {'name': 'oxy'},
   );
 
-  final data = await response.json<Map<String, dynamic>>();
-  print(data['json']);
+  final payload = await response.decode<Map<String, Object?>>();
+  print(payload['json']);
 }
 ```
 
-## Use `ht` Types Directly
+## Safe API (No Throw)
 
 ```dart
 import 'package:oxy/oxy.dart';
 
 Future<void> main() async {
+  final client = Oxy(
+    OxyConfig(baseUrl: Uri.parse('https://api.example.com')),
+  );
+
+  final result = await client.safeGetDecoded<bool>(
+    '/health',
+    decoder: (value) => (value as Map<String, Object?>)['ok'] as bool,
+  );
+
+  if (result.isFailure) {
+    print('request failed: ${result.error}');
+    return;
+  }
+
+  print('healthy: ${result.value}');
+}
+```
+
+## Middleware Composition
+
+```dart
+import 'package:oxy/oxy.dart';
+
+Future<void> main() async {
+  final client = Oxy(
+    OxyConfig(
+      baseUrl: Uri.parse('https://api.example.com'),
+      cookieJar: MemoryCookieJar(),
+      middleware: <OxyMiddleware>[
+        RequestIdMiddleware(),
+        AuthMiddleware.staticToken('token'),
+        CacheMiddleware(store: MemoryCacheStore()),
+        LoggingMiddleware(),
+      ],
+    ),
+  );
+
+  await client.get('/feed');
+}
+```
+
+## Advanced `Request/send` API
+
+```dart
+import 'package:oxy/oxy.dart';
+
+Future<void> main() async {
+  final client = Oxy();
+
   final request = Request(
     Uri.parse('https://httpbin.org/get'),
     headers: Headers({'x-from': 'oxy'}),
   );
 
-  final response = await oxy(request);
+  final response = await client.send(
+    request,
+    options: const RequestOptions(
+      requestTimeout: Duration(seconds: 5),
+      retryPolicy: RetryPolicy(maxRetries: 2),
+    ),
+  );
+
   print(response.status);
 }
 ```
 
-## Redirect / Timeout / Abort
+## Top-level Helpers
 
-```dart
-import 'dart:async';
+Use the global client helpers for quick scripts:
 
-import 'package:oxy/oxy.dart';
-
-Future<void> main() async {
-  final signal = AbortSignal();
-  Timer(const Duration(milliseconds: 200), () => signal.abort('cancelled'));
-
-  await oxy.get(
-    'https://httpbin.org/delay/3',
-    options: RequestOptions(
-      signal: signal,
-      requestTimeout: const Duration(seconds: 1),
-      redirectPolicy: RedirectPolicy.follow,
-      keepAlive: true,
-    ),
-  );
-}
-```
+- `fetch(...)`
+- `safeFetch(...)`
+- `fetchDecoded<T>(...)`
+- `safeFetchDecoded<T>(...)`
 
 ## License
 
