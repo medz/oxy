@@ -41,7 +41,10 @@ class Oxy {
 
   Future<Response> send(Request request, {RequestOptions? options}) async {
     final resolvedOptions = _resolveOptions(options);
-    resolvedOptions.signal?.throwIfAborted();
+    final signal = resolvedOptions.signal;
+    if (signal?.aborted ?? false) {
+      throw OxyCancelledException(reason: signal?.reason);
+    }
 
     final resolvedRequest = _prepareRequest(request, resolvedOptions);
     final response = await _sendWithRetry(resolvedRequest, resolvedOptions);
