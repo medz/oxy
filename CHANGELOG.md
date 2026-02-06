@@ -18,6 +18,8 @@
   Cookie support is now explicit via `CookieMiddleware` or presets.
 - Replaced `throwOnHttpError` bool with `HttpErrorPolicy` enum
   (`throwException` / `returnResponse`).
+- Fixed transport error classification when middleware is present,
+  so retry keeps `OxyNetworkException` semantics.
 - Added safe API layer:
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
   plus decoded variants and top-level `safeFetch*` helpers.

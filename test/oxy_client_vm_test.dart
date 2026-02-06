@@ -366,5 +366,40 @@ void main() {
 
       expect(client.get('/flaky'), throwsA(isA<OxyRetryExhaustedException>()));
     });
+
+    test(
+      'retries network errors with middleware and keeps network error type',
+      () async {
+        final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+        final unavailablePort = probe.port;
+        await probe.close();
+
+        final unavailableBaseUrl = Uri.parse(
+          'http://${InternetAddress.loopbackIPv4.host}:$unavailablePort',
+        );
+        final client = Oxy(
+          OxyConfig(
+            baseUrl: unavailableBaseUrl,
+            retryPolicy: const RetryPolicy(
+              maxRetries: 1,
+              baseDelay: Duration.zero,
+              maxDelay: Duration.zero,
+            ),
+            middleware: <OxyMiddleware>[AddHeaderMiddleware()],
+          ),
+        );
+
+        expect(
+          client.get('/network-failure'),
+          throwsA(
+            isA<OxyRetryExhaustedException>().having(
+              (error) => error.lastError,
+              'lastError',
+              isA<OxyNetworkException>(),
+            ),
+          ),
+        );
+      },
+    );
   });
 }

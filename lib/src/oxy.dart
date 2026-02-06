@@ -840,7 +840,13 @@ class Oxy {
   }
 
   Next _buildPipeline(List<OxyMiddleware> middleware) {
-    Next runner = transport.fetchTransport;
+    Next runner = (request, options) async {
+      try {
+        return await transport.fetchTransport(request, options);
+      } catch (error, trace) {
+        throw _normalizeError(error, trace, options);
+      }
+    };
 
     for (var i = middleware.length - 1; i >= 0; i--) {
       final current = middleware[i];
