@@ -202,6 +202,25 @@ void main() {
       );
     });
 
+    test('request id middleware injects request id header', () async {
+      final client = Oxy(
+        OxyConfig(
+          baseUrl: baseUri,
+          middleware: <OxyMiddleware>[
+            RequestIdMiddleware(requestIdProvider: (_, _) => 'trace-001'),
+          ],
+        ),
+      );
+
+      final response = await client.get('/echo');
+      final payload = await response.json<Map<String, dynamic>>();
+
+      expect(
+        (payload['headers'] as Map<String, dynamic>)['x-request-id'],
+        equals('trace-001'),
+      );
+    });
+
     test(
       'auto injects CookieMiddleware when cookieJar is configured',
       () async {
