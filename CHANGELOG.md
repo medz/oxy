@@ -1,31 +1,7 @@
 ## Unreleased
 
-- Redesigned core request pipeline with clearer error model and retry flow.
-- Added official middleware set: `AuthMiddleware`, `CookieMiddleware`,
-  `CacheMiddleware`, `LoggingMiddleware`, `RequestIdMiddleware`.
-- Added `OxyPresets.standard(...)` for recommended middleware composition,
-  with optional toggles and middleware overrides.
-- Added `OxyPresets.minimal(...)` and `OxyPresets.full(...)` for
-  low/high complexity middleware composition.
-- Added fluent preset helpers:
-  `OxyConfig.withPreset/withMinimalPreset/withStandardPreset/withFullPreset`
-  and
-  `Oxy.withPreset/withMinimalPreset/withStandardPreset/withFullPreset`.
-- Decoupled cookie read/write from core send path into dedicated middleware.
-- Switched cookie model to `ocookie.Cookie` directly and removed
-  `OxyCookie` wrapper type.
-- Removed `OxyConfig.cookieJar` and implicit cookie middleware injection.
-  Cookie support is now explicit via `CookieMiddleware` or presets.
-- Replaced `throwOnHttpError` bool with `HttpErrorPolicy` enum
-  (`throwException` / `returnResponse`).
-- Fixed transport error classification when middleware is present,
-  so retry keeps `OxyNetworkException` semantics.
-- Added safe API layer:
-  `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
-  plus decoded variants and top-level `safeFetch*` helpers.
-- Added `Response.decode<T>()` extension and unified typed decode behavior.
-- Expanded test coverage for middleware composition, cookie middleware behavior,
-  safe API behavior, and upload/download progress callbacks.
+- Rewrite in progress; release notes will be finalized at publish time.
+- This section does not belong to `0.0.4`.
 
 ## 0.0.4
 
