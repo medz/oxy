@@ -122,11 +122,11 @@ class CacheMiddleware implements OxyMiddleware {
 
     final key = keyBuilder(request, options);
     final cached = await _store.read(key);
-    final now = DateTime.now().toUtc();
+    final requestTime = DateTime.now().toUtc();
 
     Request nextRequest = request;
 
-    if (cached != null && cached.isFresh(now)) {
+    if (cached != null && cached.isFresh(requestTime)) {
       return cached.response.clone();
     }
 
@@ -135,10 +135,15 @@ class CacheMiddleware implements OxyMiddleware {
     }
 
     final response = await next(nextRequest, options);
+    final responseTime = DateTime.now().toUtc();
 
     if (response.status == 304 && cached != null) {
       final merged = _mergeNotModified(cached.response, response);
-      final renewed = _buildCacheEntry(merged, now, fallbackEtag: cached.etag);
+      final renewed = _buildCacheEntry(
+        merged,
+        responseTime,
+        fallbackEtag: cached.etag,
+      );
       if (renewed != null) {
         await _store.write(key, renewed);
       } else {
@@ -155,7 +160,7 @@ class CacheMiddleware implements OxyMiddleware {
       return response;
     }
 
-    final entry = _buildCacheEntry(response, now);
+    final entry = _buildCacheEntry(response, responseTime);
     if (entry != null) {
       await _store.write(key, entry);
     }
@@ -186,7 +191,19 @@ class CacheMiddleware implements OxyMiddleware {
   Response _mergeNotModified(Response cached, Response notModified) {
     final base = cached.clone();
     final headers = base.headers.clone();
-    _overrideHeaders(headers, notModified.headers);
+
+    final override = Headers();
+    for (final name in notModified.headers.names()) {
+      if (_isUnsafe304MergeHeader(name)) {
+        continue;
+      }
+
+      for (final value in notModified.headers.getAll(name)) {
+        override.append(name, value);
+      }
+    }
+
+    _overrideHeaders(headers, override);
 
     return base.copyWith(headers: headers);
   }
@@ -252,6 +269,21 @@ class CacheMiddleware implements OxyMiddleware {
       for (final value in source.getAll(name)) {
         target.append(name, value);
       }
+    }
+  }
+
+  static bool _isUnsafe304MergeHeader(String name) {
+    switch (name.toLowerCase()) {
+      case 'content-length':
+      case 'content-encoding':
+      case 'content-language':
+      case 'content-location':
+      case 'content-range':
+      case 'content-type':
+      case 'transfer-encoding':
+        return true;
+      default:
+        return false;
     }
   }
 

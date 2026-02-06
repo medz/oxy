@@ -21,10 +21,26 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
         : await openFuture.timeout(
             connectTimeout,
             onTimeout: () {
-              throw OxyTimeoutException(
+              final timeoutError = OxyTimeoutException(
                 phase: TimeoutPhase.connect,
                 duration: connectTimeout,
               );
+              // Future.timeout does not cancel the original future.
+              // If openUrl eventually resolves, abort the late request to
+              // release any underlying resources.
+              openFuture
+                  .then<void>((request) {
+                    try {
+                      request.abort(timeoutError);
+                    } catch (_) {
+                      // Ignore abort errors for already-finished requests.
+                    }
+                  })
+                  .catchError((_) {
+                    // Ignore late openUrl errors after timeout.
+                  });
+
+              throw timeoutError;
             },
           );
 
