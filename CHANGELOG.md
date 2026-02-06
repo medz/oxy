@@ -3,6 +3,8 @@
 - Redesigned core request pipeline with clearer error model and retry flow.
 - Added official middleware set: `AuthMiddleware`, `CookieMiddleware`,
   `CacheMiddleware`, `LoggingMiddleware`, `RequestIdMiddleware`.
+- Added `OxyPresets.standard(...)` for recommended middleware composition,
+  with optional toggles and middleware overrides.
 - Decoupled cookie read/write from core send path into dedicated middleware.
 - Added safe API layer:
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
