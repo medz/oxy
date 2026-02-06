@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:ht/ht.dart';
 
+import 'decode.dart';
 import 'errors.dart';
 import 'middleware/cookie_middleware.dart';
 import 'options.dart';
@@ -147,27 +148,7 @@ class Oxy {
       json: json,
       options: options,
     );
-
-    Object? payload;
-    try {
-      payload = await response.json<Object?>();
-    } catch (error, trace) {
-      throw OxyDecodeException(
-        'Failed to decode response body as JSON',
-        cause: error,
-        trace: trace,
-      );
-    }
-
-    try {
-      return decoder != null ? decoder(payload) : payload as T;
-    } catch (error, trace) {
-      throw OxyDecodeException(
-        'Failed to map decoded payload to `$T`',
-        cause: error,
-        trace: trace,
-      );
-    }
+    return response.decode<T>(decoder: decoder);
   }
 
   Future<OxyResult<T>> safeRequestDecoded<T>(
