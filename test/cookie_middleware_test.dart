@@ -8,12 +8,7 @@ void main() {
       final uri = Uri.parse('https://example.com/profile');
 
       await jar.save(uri, [
-        const OxyCookie(
-          name: 'sid',
-          value: '123',
-          domain: 'example.com',
-          path: '/',
-        ),
+        const Cookie('sid', '123', domain: 'example.com', path: '/'),
       ]);
 
       final middleware = CookieMiddleware(jar);
@@ -35,12 +30,7 @@ void main() {
       final uri = Uri.parse('https://example.com/profile');
 
       await jar.save(uri, [
-        const OxyCookie(
-          name: 'sid',
-          value: '456',
-          domain: 'example.com',
-          path: '/',
-        ),
+        const Cookie('sid', '456', domain: 'example.com', path: '/'),
       ]);
 
       final middleware = CookieMiddleware(jar);

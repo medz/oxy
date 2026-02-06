@@ -322,20 +322,10 @@ void main() {
         final requestJar = MemoryCookieJar();
 
         await globalJar.save(baseUri, [
-          OxyCookie(
-            name: 'global',
-            value: '1',
-            domain: baseUri.host,
-            path: '/',
-          ),
+          Cookie('global', '1', domain: baseUri.host, path: '/'),
         ]);
         await requestJar.save(baseUri, [
-          OxyCookie(
-            name: 'request',
-            value: '2',
-            domain: baseUri.host,
-            path: '/',
-          ),
+          Cookie('request', '2', domain: baseUri.host, path: '/'),
         ]);
 
         final client = Oxy(OxyConfig(baseUrl: baseUri, cookieJar: globalJar));

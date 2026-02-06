@@ -2,10 +2,10 @@ import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
 void main() {
-  group('OxyCookie', () {
+  group('Cookie', () {
     test('parseSetCookie defaults domain/path from request url', () {
       final uri = Uri.parse('https://api.example.com/users/list');
-      final cookie = OxyCookie.parseSetCookie('sid=abc123; HttpOnly', uri);
+      final cookie = parseSetCookie('sid=abc123; HttpOnly', uri);
 
       expect(cookie.name, 'sid');
       expect(cookie.value, 'abc123');
@@ -16,7 +16,7 @@ void main() {
 
     test('parseSetCookie parses expires and max-age', () {
       final uri = Uri.parse('https://example.com/login');
-      final cookie = OxyCookie.parseSetCookie(
+      final cookie = parseSetCookie(
         'sid=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Max-Age=120',
         uri,
       );
@@ -26,12 +26,7 @@ void main() {
     });
 
     test('toRequestCookie serializes as name=value pair', () {
-      const cookie = OxyCookie(
-        name: 'sid',
-        value: 'abc',
-        domain: 'example.com',
-        path: '/',
-      );
+      const cookie = Cookie('sid', 'abc');
 
       expect(cookie.toRequestCookie(), 'sid=abc');
     });

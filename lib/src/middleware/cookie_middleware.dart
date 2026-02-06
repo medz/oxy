@@ -47,10 +47,10 @@ class CookieMiddleware implements OxyMiddleware {
       return;
     }
 
-    final parsed = <OxyCookie>[];
+    final parsed = <Cookie>[];
     for (final setCookie in setCookies) {
       try {
-        parsed.add(OxyCookie.parseSetCookie(setCookie, requestUrl));
+        parsed.add(parseSetCookie(setCookie, requestUrl));
       } catch (_) {
         // Ignore malformed cookies.
       }
