@@ -215,7 +215,7 @@ void main() {
         '/redirect',
         options: const RequestOptions(
           redirectPolicy: RedirectPolicy.manual,
-          throwOnHttpError: false,
+          httpErrorPolicy: HttpErrorPolicy.returnResponse,
         ),
       );
 
@@ -248,11 +248,13 @@ void main() {
       expect(result.error, isA<OxyHttpException>());
     });
 
-    test('can disable throwOnHttpError per request', () async {
+    test('can return non-2xx response per request', () async {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.get(
         '/status/404',
-        options: const RequestOptions(throwOnHttpError: false),
+        options: const RequestOptions(
+          httpErrorPolicy: HttpErrorPolicy.returnResponse,
+        ),
       );
 
       expect(response.status, 404);

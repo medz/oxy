@@ -65,6 +65,32 @@ Future<void> main() async {
 }
 ```
 
+## HTTP Error Policy
+
+By default, non-2xx responses throw `OxyHttpException`.
+Use `HttpErrorPolicy.returnResponse` when you want to handle status codes manually:
+
+```dart
+import 'package:oxy/oxy.dart';
+
+Future<void> main() async {
+  final client = Oxy(
+    OxyConfig(baseUrl: Uri.parse('https://api.example.com')),
+  );
+
+  final response = await client.get(
+    '/users/404',
+    options: const RequestOptions(
+      httpErrorPolicy: HttpErrorPolicy.returnResponse,
+    ),
+  );
+
+  if (response.status == 404) {
+    // handle as regular response
+  }
+}
+```
+
 ## Middleware Composition
 
 ```dart

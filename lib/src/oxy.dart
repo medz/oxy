@@ -56,7 +56,8 @@ class Oxy {
       );
     }
 
-    if ((resolvedOptions.throwOnHttpError ?? true) && !response.ok) {
+    if (resolvedOptions.httpErrorPolicy == HttpErrorPolicy.throwException &&
+        !response.ok) {
       throw OxyHttpException(response);
     }
 
@@ -731,7 +732,7 @@ class Oxy {
       maxRedirects: incoming.maxRedirects ?? _config.maxRedirects,
       keepAlive: incoming.keepAlive ?? _config.keepAlive,
       retryPolicy: incoming.retryPolicy ?? _config.retryPolicy,
-      throwOnHttpError: incoming.throwOnHttpError ?? _config.throwOnHttpError,
+      httpErrorPolicy: incoming.httpErrorPolicy ?? _config.httpErrorPolicy,
       middleware: middleware,
       onSendProgress: incoming.onSendProgress,
       onReceiveProgress: incoming.onReceiveProgress,

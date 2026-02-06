@@ -11,6 +11,8 @@ typedef ProgressCallback = void Function(TransferProgress progress);
 
 enum RedirectPolicy { follow, manual, error }
 
+enum HttpErrorPolicy { throwException, returnResponse }
+
 class RetryPolicy {
   const RetryPolicy({
     this.maxRetries = 2,
@@ -81,7 +83,7 @@ class RequestOptions {
     this.maxRedirects,
     this.keepAlive,
     this.retryPolicy,
-    this.throwOnHttpError,
+    this.httpErrorPolicy,
     this.middleware = const [],
     this.onSendProgress,
     this.onReceiveProgress,
@@ -97,7 +99,7 @@ class RequestOptions {
   final int? maxRedirects;
   final bool? keepAlive;
   final RetryPolicy? retryPolicy;
-  final bool? throwOnHttpError;
+  final HttpErrorPolicy? httpErrorPolicy;
   final List<OxyMiddleware> middleware;
   final ProgressCallback? onSendProgress;
   final ProgressCallback? onReceiveProgress;
@@ -113,7 +115,7 @@ class RequestOptions {
     int? maxRedirects,
     bool? keepAlive,
     RetryPolicy? retryPolicy,
-    bool? throwOnHttpError,
+    HttpErrorPolicy? httpErrorPolicy,
     List<OxyMiddleware>? middleware,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -129,7 +131,7 @@ class RequestOptions {
       maxRedirects: maxRedirects ?? this.maxRedirects,
       keepAlive: keepAlive ?? this.keepAlive,
       retryPolicy: retryPolicy ?? this.retryPolicy,
-      throwOnHttpError: throwOnHttpError ?? this.throwOnHttpError,
+      httpErrorPolicy: httpErrorPolicy ?? this.httpErrorPolicy,
       middleware: middleware ?? this.middleware,
       onSendProgress: onSendProgress ?? this.onSendProgress,
       onReceiveProgress: onReceiveProgress ?? this.onReceiveProgress,
@@ -148,7 +150,7 @@ class OxyConfig {
     this.maxRedirects = 5,
     this.keepAlive = false,
     this.retryPolicy = const RetryPolicy(),
-    this.throwOnHttpError = true,
+    this.httpErrorPolicy = HttpErrorPolicy.throwException,
     this.middleware = const [],
     this.userAgent = 'oxy/0.1.0',
   }) : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
@@ -161,7 +163,7 @@ class OxyConfig {
   final int maxRedirects;
   final bool keepAlive;
   final RetryPolicy retryPolicy;
-  final bool throwOnHttpError;
+  final HttpErrorPolicy httpErrorPolicy;
   final List<OxyMiddleware> middleware;
   final String userAgent;
 
@@ -174,7 +176,7 @@ class OxyConfig {
     int? maxRedirects,
     bool? keepAlive,
     RetryPolicy? retryPolicy,
-    bool? throwOnHttpError,
+    HttpErrorPolicy? httpErrorPolicy,
     List<OxyMiddleware>? middleware,
     String? userAgent,
   }) {
@@ -187,7 +189,7 @@ class OxyConfig {
       maxRedirects: maxRedirects ?? this.maxRedirects,
       keepAlive: keepAlive ?? this.keepAlive,
       retryPolicy: retryPolicy ?? this.retryPolicy,
-      throwOnHttpError: throwOnHttpError ?? this.throwOnHttpError,
+      httpErrorPolicy: httpErrorPolicy ?? this.httpErrorPolicy,
       middleware: middleware ?? this.middleware,
       userAgent: userAgent ?? this.userAgent,
     );

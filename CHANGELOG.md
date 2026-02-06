@@ -16,6 +16,8 @@
   `OxyCookie` wrapper type.
 - Removed `OxyConfig.cookieJar` and implicit cookie middleware injection.
   Cookie support is now explicit via `CookieMiddleware` or presets.
+- Replaced `throwOnHttpError` bool with `HttpErrorPolicy` enum
+  (`throwException` / `returnResponse`).
 - Added safe API layer:
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
   plus decoded variants and top-level `safeFetch*` helpers.
