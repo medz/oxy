@@ -1,19 +1,26 @@
-name: workspace
-publish_to: none
+name: oxy
+description: A fetch-style HTTP client for Dart and Flutter built on top of ht types.
+version: 0.1.0
 repository: https://github.com/medz/oxy
+
+topics:
+  - http
+  - fetch
+  - web
+  - request
+  - response
+
+funding:
+  - https://github.com/sponsors/medz
+  - https://opencollective.com/openodroe
 
 environment:
   sdk: ^3.8.0
 
-workspace:
-  - pub/oxy
-  - pub/oxy_http
-  - pub/oxy_dio
+dependencies:
+  ht: ^0.1.0
+  ocookie: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0
   test: ^1.26.2
-
-  oxy: any
-  oxy_dio: any
-  oxy_http: any
