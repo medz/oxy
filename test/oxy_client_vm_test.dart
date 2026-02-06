@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
@@ -43,6 +44,15 @@ void main() {
               case '/json':
                 request.response.headers.contentType = ContentType.json;
                 request.response.write(jsonEncode({'ok': true}));
+                break;
+
+              case '/download':
+                final payload = utf8.encode('x' * 512);
+                request.response
+                  ..statusCode = 200
+                  ..headers.contentType = ContentType.text
+                  ..headers.contentLength = payload.length
+                  ..add(payload);
                 break;
 
               case '/echo':
@@ -163,6 +173,40 @@ void main() {
         (payload['headers'] as Map<String, dynamic>)['content-type'],
         contains('application/json'),
       );
+    });
+
+    test('reports upload progress when request has body stream', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final sent = utf8.encode('upload-progress-body');
+      final progressEvents = <TransferProgress>[];
+
+      final response = await client.post(
+        '/echo',
+        body: Stream<Uint8List>.fromIterable([Uint8List.fromList(sent)]),
+        headers: Headers({'content-length': sent.length.toString()}),
+        onSendProgress: progressEvents.add,
+      );
+      await response.text();
+
+      expect(progressEvents, isNotEmpty);
+      expect(progressEvents.last.transferred, sent.length);
+      expect(progressEvents.last.total, sent.length);
+    });
+
+    test('reports download progress when reading response body', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final progressEvents = <TransferProgress>[];
+
+      final response = await client.get(
+        '/download',
+        onReceiveProgress: progressEvents.add,
+      );
+      final text = await response.text();
+
+      expect(text.length, 512);
+      expect(progressEvents, isNotEmpty);
+      expect(progressEvents.last.transferred, 512);
+      expect(progressEvents.last.total, 512);
     });
 
     test('manual redirect policy', () async {
