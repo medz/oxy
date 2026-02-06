@@ -9,9 +9,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
+      - uses: browser-actions/setup-chrome@v2
       - uses: dart-lang/setup-dart@v1
         with:
           sdk: ${{ matrix.sdk }}
       - run: dart pub get
       - run: dart test -p vm
       - run: dart test -p node
+      - run: dart test -p chrome
