@@ -2,6 +2,7 @@ import 'dart:js_interop';
 
 import 'package:ht/ht.dart';
 
+import '../errors.dart';
 import '../options.dart';
 import 'web_stream_utils.dart';
 
@@ -68,13 +69,17 @@ extension type WebResponse._(JSObject _) implements JSObject {
 @JS('fetch')
 external JSPromise<WebResponse> webFetch(WebRequest request);
 
-Future<Response> fetchTransport(Request request, FetchOptions options) async {
+Future<Response> fetchTransport(Request request, RequestOptions options) async {
   options.signal?.throwIfAborted();
 
   final headers = WebHeaders();
   for (final entry in request.headers) {
     headers.append(entry.key, entry.value);
   }
+
+  options.onSendProgress?.call(
+    const TransferProgress(transferred: 0, total: null),
+  );
 
   final controller = AbortController();
   _bindAbort(controller, options);
@@ -83,7 +88,7 @@ Future<Response> fetchTransport(Request request, FetchOptions options) async {
     method: request.method,
     headers: headers,
     keepalive: options.keepAlive,
-    redirect: _mapRedirect(options.redirect),
+    redirect: _mapRedirect(options.redirectPolicy ?? RedirectPolicy.follow),
     signal: controller.signal,
   );
 
@@ -99,6 +104,7 @@ Future<Response> fetchTransport(Request request, FetchOptions options) async {
 
     final responseHeaders = Headers();
     final iterator = webResponse.headers.entries();
+
     while (true) {
       final result = iterator.next();
       if (result.done) {
@@ -120,30 +126,48 @@ Future<Response> fetchTransport(Request request, FetchOptions options) async {
       responseHeaders.append(pair[0].toDart, pair[1].toDart);
     }
 
-    final response = Response(
-      body: webResponse.body == null ? null : toDartStream(webResponse.body!),
+    final total = int.tryParse(responseHeaders.get('content-length') ?? '');
+
+    final body = webResponse.body == null
+        ? null
+        : toDartStream(
+            webResponse.body!,
+            onProgress: options.onReceiveProgress,
+            total: total,
+          );
+
+    if (body == null && options.onReceiveProgress != null) {
+      options.onReceiveProgress!(
+        const TransferProgress(transferred: 0, total: 0),
+      );
+    }
+
+    options.onSendProgress?.call(
+      const TransferProgress(transferred: 1, total: 1),
+    );
+
+    return Response(
+      body: body,
       status: webResponse.status,
       statusText: webResponse.statusText,
       headers: responseHeaders,
       redirected: webResponse.redirected,
       url: Uri.tryParse(webResponse.url),
     );
-
-    if (options.redirect == RedirectPolicy.error && response.redirected) {
-      throw response;
-    }
-
-    return response;
-  } catch (error) {
+  } catch (error, trace) {
     if (options.signal?.aborted == true) {
-      options.signal!.throwIfAborted();
+      throw OxyCancelledException(reason: options.signal?.reason, trace: trace);
     }
 
-    rethrow;
+    if (error is OxyException) {
+      rethrow;
+    }
+
+    throw OxyNetworkException(error.toString(), cause: error, trace: trace);
   }
 }
 
-void _bindAbort(AbortController controller, FetchOptions options) {
+void _bindAbort(AbortController controller, RequestOptions options) {
   final signal = options.signal;
   if (signal == null) {
     return;

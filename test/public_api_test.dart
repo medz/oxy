@@ -18,16 +18,26 @@ void main() {
     expect(await response.json<Map<String, dynamic>>(), {'ok': true});
   });
 
-  test('fetch options copyWith', () {
+  test('request options copyWith', () {
     final signal = AbortSignal();
-    const options = FetchOptions(timeout: Duration(seconds: 1));
+    const options = RequestOptions(requestTimeout: Duration(seconds: 1));
     final next = options.copyWith(
       signal: signal,
-      redirect: RedirectPolicy.manual,
+      redirectPolicy: RedirectPolicy.manual,
+      retryPolicy: const RetryPolicy(maxRetries: 5),
     );
 
     expect(next.signal, same(signal));
-    expect(next.redirect, RedirectPolicy.manual);
-    expect(next.timeout, const Duration(seconds: 1));
+    expect(next.redirectPolicy, RedirectPolicy.manual);
+    expect(next.requestTimeout, const Duration(seconds: 1));
+    expect(next.retryPolicy?.maxRetries, 5);
+  });
+
+  test('safeRequest returns OxyFailure instead of throw', () async {
+    final client = Oxy();
+    final result = await client.safeRequest('GET', '/relative-without-base');
+
+    expect(result.isFailure, isTrue);
+    expect(result.error, isA<ArgumentError>());
   });
 }

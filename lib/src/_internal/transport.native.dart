@@ -4,15 +4,30 @@ import 'dart:typed_data';
 import 'package:ht/ht.dart';
 
 import '../abort.dart';
+import '../errors.dart';
 import '../options.dart';
 
 final HttpClient _client = HttpClient();
 
-Future<Response> fetchTransport(Request request, FetchOptions options) async {
+Future<Response> fetchTransport(Request request, RequestOptions options) async {
   options.signal?.throwIfAborted();
 
   try {
-    final httpRequest = await _client.openUrl(request.method, request.url);
+    final openFuture = _client.openUrl(request.method, request.url);
+
+    final connectTimeout = options.connectTimeout;
+    final httpRequest = connectTimeout == null
+        ? await openFuture
+        : await openFuture.timeout(
+            connectTimeout,
+            onTimeout: () {
+              throw OxyTimeoutException(
+                phase: TimeoutPhase.connect,
+                duration: connectTimeout,
+              );
+            },
+          );
+
     _bindAbort(options.signal, httpRequest);
 
     for (final name in request.headers.names()) {
@@ -22,14 +37,27 @@ Future<Response> fetchTransport(Request request, FetchOptions options) async {
       }
     }
 
-    final followRedirects = options.redirect != RedirectPolicy.manual;
+    final followRedirects = options.redirectPolicy == RedirectPolicy.follow;
     httpRequest.followRedirects = followRedirects;
-    httpRequest.maxRedirects = followRedirects ? options.maxRedirects : 0;
-    httpRequest.persistentConnection = options.keepAlive;
+    httpRequest.maxRedirects = followRedirects
+        ? (options.maxRedirects ?? 5)
+        : 0;
+    httpRequest.persistentConnection = options.keepAlive ?? false;
 
-    final requestBody = request.body;
-    if (requestBody != null) {
-      await httpRequest.addStream(requestBody);
+    final body = request.body;
+    if (body != null) {
+      final total = int.tryParse(request.headers.get('content-length') ?? '');
+      var transferred = 0;
+      await for (final chunk in body) {
+        options.signal?.throwIfAborted();
+        transferred += chunk.length;
+        httpRequest.add(chunk);
+        options.onSendProgress?.call(
+          TransferProgress(transferred: transferred, total: total),
+        );
+      }
+    } else if (options.onSendProgress != null) {
+      options.onSendProgress!(const TransferProgress(transferred: 0, total: 0));
     }
 
     final ioResponse = await httpRequest.close();
@@ -40,31 +68,43 @@ Future<Response> fetchTransport(Request request, FetchOptions options) async {
       }
     });
 
-    final response = Response(
-      body: ioResponse.map((chunk) {
-        if (chunk is Uint8List) {
-          return chunk;
-        }
+    final total = ioResponse.contentLength < 0
+        ? null
+        : ioResponse.contentLength;
+    var transferred = 0;
+    final bodyStream = ioResponse.map((chunk) {
+      final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+      transferred += bytes.length;
+      options.onReceiveProgress?.call(
+        TransferProgress(transferred: transferred, total: total),
+      );
+      return bytes;
+    });
 
-        return Uint8List.fromList(chunk);
-      }),
+    if (options.onReceiveProgress != null && ioResponse.contentLength == 0) {
+      options.onReceiveProgress!(
+        const TransferProgress(transferred: 0, total: 0),
+      );
+    }
+
+    return Response(
+      body: bodyStream,
       status: ioResponse.statusCode,
       statusText: ioResponse.reasonPhrase,
       headers: headers,
       redirected: ioResponse.isRedirect,
       url: request.url,
     );
-
-    if (options.redirect == RedirectPolicy.error && response.redirected) {
-      throw response;
-    }
-
-    return response;
-  } catch (error) {
+  } catch (error, trace) {
     if (options.signal?.aborted == true) {
-      options.signal!.throwIfAborted();
+      throw OxyCancelledException(reason: options.signal?.reason, trace: trace);
     }
-    rethrow;
+
+    if (error is OxyException) {
+      rethrow;
+    }
+
+    throw OxyNetworkException(error.toString(), cause: error, trace: trace);
   }
 }
 

@@ -8,10 +8,23 @@ import 'dart:io';
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+class AddHeaderMiddleware implements OxyMiddleware {
+  @override
+  Future<Response> intercept(
+    Request request,
+    RequestOptions options,
+    Next next,
+  ) {
+    final headers = request.headers.clone()..set('x-middleware', 'enabled');
+    return next(request.copyWith(headers: headers), options);
+  }
+}
+
 void main() {
   group('Oxy client (vm)', () {
     late HttpServer server;
     late Uri baseUri;
+    var flakyAttempts = 0;
 
     setUpAll(() async {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -48,6 +61,12 @@ void main() {
                 );
                 break;
 
+              case '/status/404':
+                request.response
+                  ..statusCode = 404
+                  ..write('not found');
+                break;
+
               case '/redirect':
                 request.response
                   ..statusCode = 302
@@ -62,6 +81,19 @@ void main() {
                 request.response
                   ..statusCode = 200
                   ..write('slow done');
+                break;
+
+              case '/flaky':
+                flakyAttempts += 1;
+                if (flakyAttempts <= 2) {
+                  request.response
+                    ..statusCode = 503
+                    ..write('temporary failure #$flakyAttempts');
+                } else {
+                  request.response
+                    ..statusCode = 200
+                    ..write('ok #$flakyAttempts');
+                }
                 break;
 
               default:
@@ -81,7 +113,7 @@ void main() {
     });
 
     test('baseURL + GET', () async {
-      final client = Oxy(baseURL: baseUri);
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.get('/hello');
 
       expect(response.status, 200);
@@ -89,7 +121,7 @@ void main() {
     });
 
     test('json shortcut for request body', () async {
-      final client = Oxy(baseURL: baseUri);
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.post('/echo', json: {'name': 'oxy'});
       final payload = await response.json<Map<String, dynamic>>();
 
@@ -102,10 +134,13 @@ void main() {
     });
 
     test('manual redirect policy', () async {
-      final client = Oxy(baseURL: baseUri);
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.get(
         '/redirect',
-        options: const FetchOptions(redirect: RedirectPolicy.manual),
+        options: const RequestOptions(
+          redirectPolicy: RedirectPolicy.manual,
+          throwOnHttpError: false,
+        ),
       );
 
       expect(response.status, 302);
@@ -113,14 +148,74 @@ void main() {
     });
 
     test('aborts in-flight requests', () async {
-      final client = Oxy(baseURL: baseUri);
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
       final signal = AbortSignal();
       Timer(const Duration(milliseconds: 50), () => signal.abort('cancelled'));
 
       expect(
-        client.get('/slow', options: FetchOptions(signal: signal)),
-        throwsA('cancelled'),
+        client.get('/slow', options: RequestOptions(signal: signal)),
+        throwsA(isA<OxyCancelledException>()),
       );
+    });
+
+    test('throws on HTTP error by default', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+
+      expect(client.get('/status/404'), throwsA(isA<OxyHttpException>()));
+    });
+
+    test('can disable throwOnHttpError per request', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final response = await client.get(
+        '/status/404',
+        options: const RequestOptions(throwOnHttpError: false),
+      );
+
+      expect(response.status, 404);
+      expect(await response.text(), 'not found');
+    });
+
+    test('middleware can modify outgoing request', () async {
+      final client = Oxy(
+        OxyConfig(
+          baseUrl: baseUri,
+          middleware: <OxyMiddleware>[AddHeaderMiddleware()],
+        ),
+      );
+
+      final response = await client.get('/echo');
+      final payload = await response.json<Map<String, dynamic>>();
+
+      expect(
+        (payload['headers'] as Map<String, dynamic>)['x-middleware'],
+        equals('enabled'),
+      );
+    });
+
+    test('retries transient failures for idempotent GET', () async {
+      flakyAttempts = 0;
+      final client = Oxy(
+        OxyConfig(
+          baseUrl: baseUri,
+          retryPolicy: const RetryPolicy(maxRetries: 2),
+        ),
+      );
+
+      final response = await client.get('/flaky');
+      expect(response.status, 200);
+      expect(await response.text(), 'ok #3');
+    });
+
+    test('throws retry exhausted when attempts are not enough', () async {
+      flakyAttempts = 0;
+      final client = Oxy(
+        OxyConfig(
+          baseUrl: baseUri,
+          retryPolicy: const RetryPolicy(maxRetries: 1),
+        ),
+      );
+
+      expect(client.get('/flaky'), throwsA(isA<OxyRetryExhaustedException>()));
     });
   });
 }

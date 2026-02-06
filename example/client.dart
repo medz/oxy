@@ -1,6 +1,6 @@
 import 'package:oxy/oxy.dart';
 
-final client = Oxy(baseURL: Uri.parse('https://webhook.site'));
+final client = Oxy(OxyConfig(baseUrl: Uri.parse('https://webhook.site')));
 
 Future<void> main() async {
   final res = await client.get('/anything');

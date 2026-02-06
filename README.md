@@ -25,7 +25,9 @@ dependencies:
 import 'package:oxy/oxy.dart';
 
 Future<void> main() async {
-  final client = Oxy(baseURL: Uri.parse('https://httpbin.org'));
+  final client = Oxy(
+    OxyConfig(baseUrl: Uri.parse('https://httpbin.org')),
+  );
 
   final response = await client.post(
     '/post',
@@ -66,11 +68,12 @@ Future<void> main() async {
 
   await oxy.get(
     'https://httpbin.org/delay/3',
-    options: const FetchOptions(
-      timeout: Duration(seconds: 1),
-      redirect: RedirectPolicy.follow,
+    options: RequestOptions(
+      signal: signal,
+      requestTimeout: const Duration(seconds: 1),
+      redirectPolicy: RedirectPolicy.follow,
       keepAlive: true,
-    ).copyWith(signal: signal),
+    ),
   );
 }
 ```

@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:ht/ht.dart';
 
+import 'cookie.dart';
+import 'errors.dart';
 import 'options.dart';
+import 'result.dart';
 
 import '_internal/is_web_platform.native.dart'
     if (dart.library.js_interop) '_internal/is_web_platform.web.dart';
@@ -13,59 +17,74 @@ import '_internal/transport.stub.dart'
     as transport;
 
 class Oxy {
-  Oxy({this.baseURL, Headers? defaultHeaders, this.userAgent = 'oxy/0.1.0'})
-    : defaultHeaders = defaultHeaders?.clone() ?? Headers();
+  Oxy([OxyConfig? config]) : _config = config ?? const OxyConfig();
 
-  final Uri? baseURL;
-  final Headers defaultHeaders;
-  final String userAgent;
+  final OxyConfig _config;
+  static final Random _random = Random.secure();
 
-  Future<Response> call(
-    Request request, {
-    FetchOptions options = const FetchOptions(),
-  }) {
-    options.signal?.throwIfAborted();
+  OxyConfig get config => _config;
 
-    final mergedHeaders = _mergeHeaders(request.headers);
-    if (!isWebPlatform &&
-        !mergedHeaders.has('user-agent') &&
-        userAgent.isNotEmpty) {
-      mergedHeaders.set('user-agent', userAgent);
-    }
+  Oxy withConfig(OxyConfig patch) => Oxy(patch);
 
-    final resolvedRequest = request.copyWith(
-      url: _resolveUrl(request.url),
-      headers: mergedHeaders,
+  Oxy withMiddleware(List<OxyMiddleware> middleware) {
+    return Oxy(
+      _config.copyWith(
+        middleware: <OxyMiddleware>[..._config.middleware, ...middleware],
+      ),
     );
+  }
 
-    Future<Response> future = transport.fetchTransport(
-      resolvedRequest,
-      options,
-    );
-    if (options.timeout != null) {
-      future = future.timeout(
-        options.timeout!,
-        onTimeout: () {
-          final timeout = TimeoutException(
-            'Request timeout after ${options.timeout}',
-            options.timeout,
-          );
-          options.signal?.abort(timeout);
-          throw timeout;
-        },
+  Future<Response> call(Request request, {RequestOptions? options}) {
+    return send(request, options: options);
+  }
+
+  Future<Response> send(Request request, {RequestOptions? options}) async {
+    final resolvedOptions = _resolveOptions(options);
+    resolvedOptions.signal?.throwIfAborted();
+
+    var resolvedRequest = _prepareRequest(request, resolvedOptions);
+    resolvedRequest = await _attachCookies(resolvedRequest, resolvedOptions);
+
+    final response = await _sendWithRetry(resolvedRequest, resolvedOptions);
+    await _storeCookies(resolvedRequest.url, response, resolvedOptions);
+
+    if (resolvedOptions.redirectPolicy == RedirectPolicy.error &&
+        response.redirected) {
+      throw OxyHttpException(
+        response,
+        message: 'Redirect blocked by RedirectPolicy.error',
       );
     }
 
-    return future;
+    if ((resolvedOptions.throwOnHttpError ?? true) && !response.ok) {
+      throw OxyHttpException(response);
+    }
+
+    return response;
+  }
+
+  Future<OxyResult<Response>> safeSend(
+    Request request, {
+    RequestOptions? options,
+  }) async {
+    try {
+      final response = await send(request, options: options);
+      return OxySuccess<Response>(response);
+    } catch (error, trace) {
+      return OxyFailure<Response>(error, trace);
+    }
   }
 
   Future<Response> request(
-    String url, {
-    String method = 'GET',
+    String method,
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) {
     final requestHeaders = headers?.clone() ?? Headers();
     final requestBody = _normalizeBody(
@@ -74,110 +93,247 @@ class Oxy {
       headers: requestHeaders,
     );
 
-    final request = Request(
-      Uri.parse(url),
-      method: method,
-      headers: requestHeaders,
-      body: requestBody,
+    final nextOptions = (options ?? const RequestOptions()).copyWith(
+      query: query,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
 
-    return call(request, options: options);
+    return send(
+      Request(
+        Uri.parse(path),
+        method: method,
+        headers: requestHeaders,
+        body: requestBody,
+      ),
+      options: nextOptions,
+    );
   }
 
-  Future<Response> get(
-    String url, {
-    Headers? headers,
-    FetchOptions options = const FetchOptions(),
-  }) {
-    return request(url, method: 'GET', headers: headers, options: options);
-  }
-
-  Future<Response> post(
-    String url, {
+  Future<OxyResult<Response>> safeRequest(
+    String method,
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
-  }) {
-    return request(
-      url,
-      method: 'POST',
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) async {
+    try {
+      final response = await request(
+        method,
+        path,
+        query: query,
+        headers: headers,
+        body: body,
+        json: json,
+        options: options,
+        onSendProgress: onSendProgress,
+        onReceiveProgress: onReceiveProgress,
+      );
+      return OxySuccess<Response>(response);
+    } catch (error, trace) {
+      return OxyFailure<Response>(error, trace);
+    }
+  }
+
+  Future<T> requestDecoded<T>(
+    String method,
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) async {
+    final response = await request(
+      method,
+      path,
+      query: query,
       headers: headers,
       body: body,
       json: json,
       options: options,
+    );
+
+    Object? payload;
+    try {
+      payload = await response.json<Object?>();
+    } catch (error, trace) {
+      throw OxyDecodeException(
+        'Failed to decode response body as JSON',
+        cause: error,
+        trace: trace,
+      );
+    }
+
+    try {
+      return decoder != null ? decoder(payload) : payload as T;
+    } catch (error, trace) {
+      throw OxyDecodeException(
+        'Failed to map decoded payload to `$T`',
+        cause: error,
+        trace: trace,
+      );
+    }
+  }
+
+  Future<Response> get(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    RequestOptions? options,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return request(
+      'GET',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<T> getDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'GET',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<Response> post(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return request(
+      'POST',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
   }
 
   Future<Response> put(
-    String url, {
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) {
     return request(
-      url,
-      method: 'PUT',
+      'PUT',
+      path,
+      query: query,
       headers: headers,
       body: body,
       json: json,
       options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
   }
 
   Future<Response> patch(
-    String url, {
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) {
     return request(
-      url,
-      method: 'PATCH',
+      'PATCH',
+      path,
+      query: query,
       headers: headers,
       body: body,
       json: json,
       options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
   }
 
   Future<Response> delete(
-    String url, {
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
   }) {
     return request(
-      url,
-      method: 'DELETE',
+      'DELETE',
+      path,
+      query: query,
       headers: headers,
       body: body,
       json: json,
       options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
     );
   }
 
   Future<Response> head(
-    String url, {
+    String path, {
+    QueryMap? query,
     Headers? headers,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
   }) {
-    return request(url, method: 'HEAD', headers: headers, options: options);
+    return request(
+      'HEAD',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+    );
   }
 
   Future<Response> options(
-    String url, {
+    String path, {
+    QueryMap? query,
     Headers? headers,
     Object? body,
     Object? json,
-    FetchOptions options = const FetchOptions(),
+    RequestOptions? options,
   }) {
     return request(
-      url,
-      method: 'OPTIONS',
+      'OPTIONS',
+      path,
+      query: query,
       headers: headers,
       body: body,
       json: json,
@@ -185,33 +341,328 @@ class Oxy {
     );
   }
 
-  Uri _resolveUrl(Uri url) {
-    if (url.hasScheme) {
-      return url;
-    }
+  RequestOptions _resolveOptions(RequestOptions? options) {
+    final incoming = options ?? const RequestOptions();
 
-    if (baseURL != null) {
-      return baseURL!.resolveUri(url);
-    }
-
-    throw ArgumentError.value(
-      url.toString(),
-      'request.url',
-      'Relative URLs require Oxy(baseURL: ...).',
+    return RequestOptions(
+      headers: incoming.headers?.clone(),
+      query: incoming.query,
+      connectTimeout: incoming.connectTimeout ?? _config.connectTimeout,
+      requestTimeout: incoming.requestTimeout ?? _config.requestTimeout,
+      signal: incoming.signal,
+      redirectPolicy: incoming.redirectPolicy ?? _config.redirectPolicy,
+      maxRedirects: incoming.maxRedirects ?? _config.maxRedirects,
+      keepAlive: incoming.keepAlive ?? _config.keepAlive,
+      retryPolicy: incoming.retryPolicy ?? _config.retryPolicy,
+      throwOnHttpError: incoming.throwOnHttpError ?? _config.throwOnHttpError,
+      middleware: <OxyMiddleware>[
+        ..._config.middleware,
+        ...incoming.middleware,
+      ],
+      onSendProgress: incoming.onSendProgress,
+      onReceiveProgress: incoming.onReceiveProgress,
+      extra: incoming.extra,
     );
   }
 
-  Headers _mergeHeaders(Headers requestHeaders) {
-    final merged = defaultHeaders.clone();
+  Request _prepareRequest(Request request, RequestOptions options) {
+    final resolvedUrl = _resolveUrl(_mergeQuery(request.url, options.query));
 
-    for (final name in requestHeaders.names()) {
-      merged.delete(name);
-      for (final value in requestHeaders.getAll(name)) {
-        merged.append(name, value);
+    final mergedHeaders = Headers();
+    _appendHeaders(mergedHeaders, _config.defaultHeaders);
+    _appendHeaders(mergedHeaders, request.headers);
+    _appendHeaders(mergedHeaders, options.headers);
+
+    if (!isWebPlatform &&
+        _config.userAgent.isNotEmpty &&
+        !mergedHeaders.has('user-agent')) {
+      mergedHeaders.set('user-agent', _config.userAgent);
+    }
+
+    return request.copyWith(url: resolvedUrl, headers: mergedHeaders);
+  }
+
+  Future<Request> _attachCookies(
+    Request request,
+    RequestOptions options,
+  ) async {
+    final jar = _config.cookieJar;
+    if (jar == null) {
+      return request;
+    }
+
+    final cookies = await jar.load(request.url);
+    if (cookies.isEmpty) {
+      return request;
+    }
+
+    final cookieValue = cookies
+        .map((cookie) => cookie.toRequestCookie())
+        .join('; ');
+    final headers = request.headers.clone();
+    final existing = headers.get('cookie');
+
+    if (existing == null || existing.isEmpty) {
+      headers.set('cookie', cookieValue);
+    } else {
+      headers.set('cookie', '$existing; $cookieValue');
+    }
+
+    return request.copyWith(headers: headers);
+  }
+
+  Future<void> _storeCookies(
+    Uri requestUrl,
+    Response response,
+    RequestOptions options,
+  ) async {
+    final jar = _config.cookieJar;
+    if (jar == null) {
+      return;
+    }
+
+    final setCookies = response.headers.getSetCookie();
+    if (setCookies.isEmpty) {
+      return;
+    }
+
+    final parsed = <OxyCookie>[];
+    for (final value in setCookies) {
+      try {
+        parsed.add(OxyCookie.parseSetCookie(value, requestUrl));
+      } catch (_) {
+        // Ignore malformed cookies.
       }
     }
 
-    return merged;
+    if (parsed.isNotEmpty) {
+      await jar.save(requestUrl, parsed);
+    }
+  }
+
+  Future<Response> _sendWithRetry(
+    Request request,
+    RequestOptions options,
+  ) async {
+    final retryPolicy = options.retryPolicy ?? const RetryPolicy();
+
+    Object? lastError;
+    Response? lastResponse;
+
+    for (var attempt = 0; ; attempt++) {
+      final attemptRequest = request.clone();
+
+      try {
+        final response = await _sendOnce(attemptRequest, options);
+
+        if (_shouldRetryResponse(response, attemptRequest, options)) {
+          lastResponse = response;
+          if (attempt >= retryPolicy.maxRetries) {
+            throw OxyRetryExhaustedException(
+              attempts: attempt + 1,
+              lastResponse: response,
+            );
+          }
+
+          await _waitRetryDelay(attempt, options);
+          continue;
+        }
+
+        return response;
+      } catch (error, trace) {
+        final normalized = _normalizeError(error, trace, options);
+        lastError = normalized;
+
+        if (_shouldRetryError(normalized, attemptRequest, options)) {
+          if (attempt >= retryPolicy.maxRetries) {
+            throw OxyRetryExhaustedException(
+              attempts: attempt + 1,
+              lastError: normalized,
+            );
+          }
+
+          await _waitRetryDelay(attempt, options);
+          continue;
+        }
+
+        if (lastResponse != null) {
+          throw OxyRetryExhaustedException(
+            attempts: attempt + 1,
+            lastError: lastError,
+            lastResponse: lastResponse,
+            trace: trace,
+          );
+        }
+
+        throw normalized;
+      }
+    }
+  }
+
+  Future<Response> _sendOnce(Request request, RequestOptions options) {
+    final next = _buildPipeline(options.middleware);
+
+    Future<Response> requestFuture = next(request, options);
+
+    final timeout = options.requestTimeout;
+    if (timeout != null) {
+      requestFuture = requestFuture.timeout(
+        timeout,
+        onTimeout: () {
+          final timeoutError = OxyTimeoutException(
+            phase: TimeoutPhase.request,
+            duration: timeout,
+          );
+          options.signal?.abort(timeoutError);
+          throw timeoutError;
+        },
+      );
+    }
+
+    return requestFuture;
+  }
+
+  Next _buildPipeline(List<OxyMiddleware> middleware) {
+    Next runner = transport.fetchTransport;
+
+    for (var i = middleware.length - 1; i >= 0; i--) {
+      final current = middleware[i];
+      final next = runner;
+
+      runner = (request, options) async {
+        try {
+          return await current.intercept(request, options, next);
+        } catch (error, trace) {
+          if (error is OxyException) {
+            rethrow;
+          }
+
+          throw OxyMiddlewareException(
+            middleware: current.runtimeType.toString(),
+            message: 'Middleware execution failed',
+            cause: error,
+            trace: trace,
+          );
+        }
+      };
+    }
+
+    return runner;
+  }
+
+  bool _shouldRetryResponse(
+    Response response,
+    Request request,
+    RequestOptions options,
+  ) {
+    final policy = options.retryPolicy ?? const RetryPolicy();
+    if (!_allowMethodRetry(request, policy)) {
+      return false;
+    }
+
+    return policy.retryableStatusCodes.contains(response.status);
+  }
+
+  bool _shouldRetryError(
+    Object error,
+    Request request,
+    RequestOptions options,
+  ) {
+    final policy = options.retryPolicy ?? const RetryPolicy();
+    if (!_allowMethodRetry(request, policy)) {
+      return false;
+    }
+
+    if (error is OxyCancelledException || error is OxyDecodeException) {
+      return false;
+    }
+
+    return error is OxyNetworkException || error is OxyTimeoutException;
+  }
+
+  bool _allowMethodRetry(Request request, RetryPolicy policy) {
+    if (!policy.idempotentMethodsOnly) {
+      return true;
+    }
+
+    const idempotentMethods = <String>{
+      'GET',
+      'HEAD',
+      'OPTIONS',
+      'PUT',
+      'DELETE',
+    };
+    return idempotentMethods.contains(request.method);
+  }
+
+  Future<void> _waitRetryDelay(int attempt, RequestOptions options) {
+    final policy = options.retryPolicy ?? const RetryPolicy();
+
+    final exponentialMs = policy.baseDelay.inMilliseconds * (1 << attempt);
+    final cappedMs = min(exponentialMs, policy.maxDelay.inMilliseconds);
+    final jitterSpan = (cappedMs * 0.2).round();
+    final jitter = jitterSpan == 0
+        ? 0
+        : _random.nextInt(jitterSpan * 2 + 1) - jitterSpan;
+
+    final delay = Duration(milliseconds: max(0, cappedMs + jitter));
+
+    final signal = options.signal;
+    if (signal == null) {
+      return Future<void>.delayed(delay);
+    }
+
+    if (signal.aborted) {
+      throw OxyCancelledException(reason: signal.reason);
+    }
+
+    final completer = Completer<void>();
+    final timer = Timer(delay, () {
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+
+    signal.onAbort(() {
+      timer.cancel();
+      if (!completer.isCompleted) {
+        completer.completeError(OxyCancelledException(reason: signal.reason));
+      }
+    });
+
+    return completer.future;
+  }
+
+  Object _normalizeError(
+    Object error,
+    StackTrace trace,
+    RequestOptions options,
+  ) {
+    if (options.signal?.aborted == true) {
+      return OxyCancelledException(
+        reason: options.signal?.reason,
+        trace: trace,
+      );
+    }
+
+    if (error is OxyException) {
+      return error;
+    }
+
+    if (error is TimeoutException) {
+      return OxyTimeoutException(
+        phase: TimeoutPhase.request,
+        duration: options.requestTimeout ?? Duration.zero,
+        cause: error,
+        trace: trace,
+      );
+    }
+
+    if (error is Response) {
+      return OxyHttpException(error, cause: error, trace: trace);
+    }
+
+    return OxyNetworkException(error.toString(), cause: error, trace: trace);
   }
 
   static Object? _normalizeBody({
@@ -227,10 +678,77 @@ class Oxy {
       if (!headers.has('content-type')) {
         headers.set('content-type', 'application/json; charset=utf-8');
       }
+
       return jsonEncode(json);
     }
 
     return body;
+  }
+
+  Uri _resolveUrl(Uri url) {
+    if (url.hasScheme) {
+      return url;
+    }
+
+    if (_config.baseUrl != null) {
+      return _config.baseUrl!.resolveUri(url);
+    }
+
+    throw ArgumentError.value(
+      url.toString(),
+      'request.url',
+      'Relative URLs require `OxyConfig(baseUrl: ...)`.',
+    );
+  }
+
+  static void _appendHeaders(Headers target, Headers? source) {
+    if (source == null) {
+      return;
+    }
+
+    for (final name in source.names()) {
+      target.delete(name);
+      for (final value in source.getAll(name)) {
+        target.append(name, value);
+      }
+    }
+  }
+
+  static Uri _mergeQuery(Uri url, QueryMap? query) {
+    if (query == null || query.isEmpty) {
+      return url;
+    }
+
+    final merged = <String, List<String>>{};
+
+    for (final entry in url.queryParametersAll.entries) {
+      merged[entry.key] = List<String>.from(entry.value);
+    }
+
+    for (final entry in query.entries) {
+      final value = entry.value;
+      if (value == null) {
+        continue;
+      }
+
+      if (value is Iterable) {
+        merged[entry.key] = value.map((item) => item.toString()).toList();
+      } else {
+        merged[entry.key] = <String>[value.toString()];
+      }
+    }
+
+    final queryParts = <String>[];
+    for (final entry in merged.entries) {
+      for (final value in entry.value) {
+        queryParts.add(
+          '${Uri.encodeQueryComponent(entry.key)}='
+          '${Uri.encodeQueryComponent(value)}',
+        );
+      }
+    }
+
+    return url.replace(query: queryParts.join('&'));
   }
 }
 
@@ -239,17 +757,23 @@ final Oxy oxy = Oxy();
 Future<Response> fetch(
   String url, {
   String method = 'GET',
+  QueryMap? query,
   Headers? headers,
   Object? body,
   Object? json,
-  FetchOptions options = const FetchOptions(),
+  RequestOptions? options,
+  ProgressCallback? onSendProgress,
+  ProgressCallback? onReceiveProgress,
 }) {
   return oxy.request(
+    method,
     url,
-    method: method,
+    query: query,
     headers: headers,
     body: body,
     json: json,
     options: options,
+    onSendProgress: onSendProgress,
+    onReceiveProgress: onReceiveProgress,
   );
 }
