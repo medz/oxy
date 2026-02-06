@@ -125,4 +125,62 @@ void main() {
       expect(next.config.middleware.first, isA<RequestIdMiddleware>());
     });
   });
+
+  group('OxyPresets.minimal/full', () {
+    test('minimal builds request id only', () {
+      final middleware = OxyPresets.minimal();
+      expect(middleware, hasLength(1));
+      expect(middleware.first, isA<RequestIdMiddleware>());
+    });
+
+    test('full always includes cookie/cache/logging', () {
+      final middleware = OxyPresets.full();
+
+      expect(middleware, hasLength(4));
+      expect(middleware[0], isA<RequestIdMiddleware>());
+      expect(middleware[1], isA<CookieMiddleware>());
+      expect(middleware[2], isA<CacheMiddleware>());
+      expect(middleware[3], isA<LoggingMiddleware>());
+    });
+
+    test('full inserts auth before cookie when provided', () {
+      final middleware = OxyPresets.full(
+        authMiddleware: AuthMiddleware.staticToken('token'),
+      );
+
+      expect(middleware[0], isA<RequestIdMiddleware>());
+      expect(middleware[1], isA<AuthMiddleware>());
+      expect(middleware[2], isA<CookieMiddleware>());
+      expect(middleware[3], isA<CacheMiddleware>());
+      expect(middleware[4], isA<LoggingMiddleware>());
+    });
+
+    test('withMinimalPreset replaces middleware when requested', () {
+      final config = OxyConfig(
+        middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+      );
+
+      final next = config.withMinimalPreset(replace: true);
+
+      expect(next.middleware, hasLength(1));
+      expect(next.middleware.first, isA<RequestIdMiddleware>());
+    });
+
+    test('withFullPreset appends middleware by default', () {
+      final client = Oxy(
+        OxyConfig(
+          middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+        ),
+      );
+
+      final next = client.withFullPreset();
+
+      expect(next.config.middleware, hasLength(5));
+      expect(next.config.middleware.first, isA<AuthMiddleware>());
+      expect(next.config.middleware[1], isA<RequestIdMiddleware>());
+      expect(next.config.middleware[2], isA<CookieMiddleware>());
+      expect(next.config.middleware[3], isA<CacheMiddleware>());
+      expect(next.config.middleware[4], isA<LoggingMiddleware>());
+    });
+  });
 }

@@ -6,6 +6,17 @@ import 'oxy.dart';
 class OxyPresets {
   const OxyPresets._();
 
+  /// Minimal preset: RequestId only.
+  static List<OxyMiddleware> minimal({
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+  }) {
+    return <OxyMiddleware>[
+      requestIdMiddleware ??
+          RequestIdMiddleware(requestIdProvider: requestIdProvider),
+    ];
+  }
+
   /// Builds the recommended middleware stack in official order:
   /// RequestId -> Auth? -> Cookie? -> Cache -> Logging
   static List<OxyMiddleware> standard({
@@ -54,6 +65,31 @@ class OxyPresets {
 
     return middleware;
   }
+
+  /// Full preset: RequestId -> Auth? -> Cookie -> Cache -> Logging
+  ///
+  /// Cookie middleware is always enabled. When no [cookieJar] is provided,
+  /// [MemoryCookieJar] is used by default.
+  static List<OxyMiddleware> full({
+    AuthMiddleware? authMiddleware,
+    CookieMiddleware? cookieMiddleware,
+    CookieJar? cookieJar,
+    CacheMiddleware? cacheMiddleware,
+    CacheStore? cacheStore,
+    LoggingMiddleware? loggingMiddleware,
+    OxyLogPrinter? logPrinter,
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+  }) {
+    return <OxyMiddleware>[
+      requestIdMiddleware ??
+          RequestIdMiddleware(requestIdProvider: requestIdProvider),
+      if (authMiddleware != null) authMiddleware,
+      cookieMiddleware ?? CookieMiddleware(cookieJar ?? MemoryCookieJar()),
+      cacheMiddleware ?? CacheMiddleware(store: cacheStore),
+      loggingMiddleware ?? LoggingMiddleware(printer: logPrinter),
+    ];
+  }
 }
 
 extension OxyConfigPresetExtension on OxyConfig {
@@ -97,6 +133,48 @@ extension OxyConfigPresetExtension on OxyConfig {
       replace: replace,
     );
   }
+
+  OxyConfig withMinimalPreset({
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+    bool replace = false,
+  }) {
+    return withPreset(
+      OxyPresets.minimal(
+        requestIdProvider: requestIdProvider,
+        requestIdMiddleware: requestIdMiddleware,
+      ),
+      replace: replace,
+    );
+  }
+
+  OxyConfig withFullPreset({
+    AuthMiddleware? authMiddleware,
+    CookieMiddleware? cookieMiddleware,
+    CookieJar? cookieJar,
+    CacheMiddleware? cacheMiddleware,
+    CacheStore? cacheStore,
+    LoggingMiddleware? loggingMiddleware,
+    OxyLogPrinter? logPrinter,
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+    bool replace = false,
+  }) {
+    return withPreset(
+      OxyPresets.full(
+        authMiddleware: authMiddleware,
+        cookieMiddleware: cookieMiddleware,
+        cookieJar: cookieJar,
+        cacheMiddleware: cacheMiddleware,
+        cacheStore: cacheStore,
+        loggingMiddleware: loggingMiddleware,
+        logPrinter: logPrinter,
+        requestIdProvider: requestIdProvider,
+        requestIdMiddleware: requestIdMiddleware,
+      ),
+      replace: replace,
+    );
+  }
 }
 
 extension OxyPresetExtension on Oxy {
@@ -133,6 +211,48 @@ extension OxyPresetExtension on Oxy {
         requestIdProvider: requestIdProvider,
         requestIdMiddleware: requestIdMiddleware,
         logPrinter: logPrinter,
+        replace: replace,
+      ),
+    );
+  }
+
+  Oxy withMinimalPreset({
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+    bool replace = false,
+  }) {
+    return Oxy(
+      config.withMinimalPreset(
+        requestIdProvider: requestIdProvider,
+        requestIdMiddleware: requestIdMiddleware,
+        replace: replace,
+      ),
+    );
+  }
+
+  Oxy withFullPreset({
+    AuthMiddleware? authMiddleware,
+    CookieMiddleware? cookieMiddleware,
+    CookieJar? cookieJar,
+    CacheMiddleware? cacheMiddleware,
+    CacheStore? cacheStore,
+    LoggingMiddleware? loggingMiddleware,
+    OxyLogPrinter? logPrinter,
+    RequestIdProvider? requestIdProvider,
+    RequestIdMiddleware? requestIdMiddleware,
+    bool replace = false,
+  }) {
+    return Oxy(
+      config.withFullPreset(
+        authMiddleware: authMiddleware,
+        cookieMiddleware: cookieMiddleware,
+        cookieJar: cookieJar,
+        cacheMiddleware: cacheMiddleware,
+        cacheStore: cacheStore,
+        loggingMiddleware: loggingMiddleware,
+        logPrinter: logPrinter,
+        requestIdProvider: requestIdProvider,
+        requestIdMiddleware: requestIdMiddleware,
         replace: replace,
       ),
     );
