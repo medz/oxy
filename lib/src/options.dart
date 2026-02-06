@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:ht/ht.dart';
 
 import 'abort.dart';
-import 'cookie.dart';
 
 typedef JsonMap = Map<String, Object?>;
 typedef QueryMap = Map<String, Object?>;
@@ -150,7 +149,6 @@ class OxyConfig {
     this.keepAlive = false,
     this.retryPolicy = const RetryPolicy(),
     this.throwOnHttpError = true,
-    this.cookieJar,
     this.middleware = const [],
     this.userAgent = 'oxy/0.1.0',
   }) : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
@@ -164,7 +162,6 @@ class OxyConfig {
   final bool keepAlive;
   final RetryPolicy retryPolicy;
   final bool throwOnHttpError;
-  final CookieJar? cookieJar;
   final List<OxyMiddleware> middleware;
   final String userAgent;
 
@@ -178,7 +175,6 @@ class OxyConfig {
     bool? keepAlive,
     RetryPolicy? retryPolicy,
     bool? throwOnHttpError,
-    CookieJar? cookieJar,
     List<OxyMiddleware>? middleware,
     String? userAgent,
   }) {
@@ -192,7 +188,6 @@ class OxyConfig {
       keepAlive: keepAlive ?? this.keepAlive,
       retryPolicy: retryPolicy ?? this.retryPolicy,
       throwOnHttpError: throwOnHttpError ?? this.throwOnHttpError,
-      cookieJar: cookieJar ?? this.cookieJar,
       middleware: middleware ?? this.middleware,
       userAgent: userAgent ?? this.userAgent,
     );

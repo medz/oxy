@@ -74,10 +74,10 @@ Future<void> main() async {
   final client = Oxy(
     OxyConfig(
       baseUrl: Uri.parse('https://api.example.com'),
-      cookieJar: MemoryCookieJar(),
       middleware: <OxyMiddleware>[
         RequestIdMiddleware(),
         AuthMiddleware.staticToken('token'),
+        CookieMiddleware(MemoryCookieJar()),
         CacheMiddleware(store: MemoryCacheStore()),
         LoggingMiddleware(),
       ],

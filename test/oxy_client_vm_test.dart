@@ -295,55 +295,49 @@ void main() {
       );
     });
 
-    test(
-      'auto injects CookieMiddleware when cookieJar is configured',
-      () async {
-        final client = Oxy(
-          OxyConfig(baseUrl: baseUri, cookieJar: MemoryCookieJar()),
-        );
+    test('cookies work with explicit CookieMiddleware', () async {
+      final cookieJar = MemoryCookieJar();
+      final client = Oxy(
+        OxyConfig(
+          baseUrl: baseUri,
+          middleware: <OxyMiddleware>[CookieMiddleware(cookieJar)],
+        ),
+      );
 
-        final setCookieResponse = await client.get('/cookie/set');
-        expect(setCookieResponse.status, 200);
+      final setCookieResponse = await client.get('/cookie/set');
+      expect(setCookieResponse.status, 200);
 
-        final echoResponse = await client.get('/echo');
-        final payload = await echoResponse.json<Map<String, dynamic>>();
+      final echoResponse = await client.get('/echo');
+      final payload = await echoResponse.json<Map<String, dynamic>>();
 
-        expect(
-          (payload['headers'] as Map<String, dynamic>)['cookie'],
-          contains('sid=server-token'),
-        );
-      },
-    );
+      expect(
+        (payload['headers'] as Map<String, dynamic>)['cookie'],
+        contains('sid=server-token'),
+      );
+    });
 
-    test(
-      'request CookieMiddleware prevents duplicate auto injection',
-      () async {
-        final globalJar = MemoryCookieJar();
-        final requestJar = MemoryCookieJar();
+    test('request CookieMiddleware can be configured per request', () async {
+      final requestJar = MemoryCookieJar();
 
-        await globalJar.save(baseUri, [
-          Cookie('global', '1', domain: baseUri.host, path: '/'),
-        ]);
-        await requestJar.save(baseUri, [
-          Cookie('request', '2', domain: baseUri.host, path: '/'),
-        ]);
+      await requestJar.save(baseUri, [
+        Cookie('request', '2', domain: baseUri.host, path: '/'),
+      ]);
 
-        final client = Oxy(OxyConfig(baseUrl: baseUri, cookieJar: globalJar));
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
 
-        final response = await client.get(
-          '/echo',
-          options: RequestOptions(
-            middleware: <OxyMiddleware>[CookieMiddleware(requestJar)],
-          ),
-        );
-        final payload = await response.json<Map<String, dynamic>>();
+      final response = await client.get(
+        '/echo',
+        options: RequestOptions(
+          middleware: <OxyMiddleware>[CookieMiddleware(requestJar)],
+        ),
+      );
+      final payload = await response.json<Map<String, dynamic>>();
 
-        expect(
-          (payload['headers'] as Map<String, dynamic>)['cookie'],
-          equals('request=2'),
-        );
-      },
-    );
+      expect(
+        (payload['headers'] as Map<String, dynamic>)['cookie'],
+        equals('request=2'),
+      );
+    });
 
     test('retries transient failures for idempotent GET', () async {
       flakyAttempts = 0;

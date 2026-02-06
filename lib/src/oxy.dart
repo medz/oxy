@@ -6,7 +6,6 @@ import 'package:ht/ht.dart';
 
 import 'decode.dart';
 import 'errors.dart';
-import 'middleware/cookie_middleware.dart';
 import 'options.dart';
 import 'result.dart';
 
@@ -720,18 +719,6 @@ class Oxy {
   RequestOptions _resolveOptions(RequestOptions? options) {
     final incoming = options ?? const RequestOptions();
     final middleware = <OxyMiddleware>[..._config.middleware];
-
-    final hasCookieMiddlewareInConfig = middleware.any(
-      (item) => item is CookieMiddleware,
-    );
-    final hasCookieMiddlewareInRequest = incoming.middleware.any(
-      (item) => item is CookieMiddleware,
-    );
-    if (_config.cookieJar != null &&
-        !hasCookieMiddlewareInConfig &&
-        !hasCookieMiddlewareInRequest) {
-      middleware.add(CookieMiddleware(_config.cookieJar!));
-    }
     middleware.addAll(incoming.middleware);
 
     return RequestOptions(
