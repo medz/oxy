@@ -4,8 +4,8 @@ import 'dart:math';
 
 import 'package:ht/ht.dart';
 
-import 'cookie.dart';
 import 'errors.dart';
+import 'middleware/cookie_middleware.dart';
 import 'options.dart';
 import 'result.dart';
 
@@ -42,11 +42,8 @@ class Oxy {
     final resolvedOptions = _resolveOptions(options);
     resolvedOptions.signal?.throwIfAborted();
 
-    var resolvedRequest = _prepareRequest(request, resolvedOptions);
-    resolvedRequest = await _attachCookies(resolvedRequest, resolvedOptions);
-
+    final resolvedRequest = _prepareRequest(request, resolvedOptions);
     final response = await _sendWithRetry(resolvedRequest, resolvedOptions);
-    await _storeCookies(resolvedRequest.url, response, resolvedOptions);
 
     if (resolvedOptions.redirectPolicy == RedirectPolicy.error &&
         response.redirected) {
@@ -343,6 +340,20 @@ class Oxy {
 
   RequestOptions _resolveOptions(RequestOptions? options) {
     final incoming = options ?? const RequestOptions();
+    final middleware = <OxyMiddleware>[..._config.middleware];
+
+    final hasCookieMiddlewareInConfig = middleware.any(
+      (item) => item is CookieMiddleware,
+    );
+    final hasCookieMiddlewareInRequest = incoming.middleware.any(
+      (item) => item is CookieMiddleware,
+    );
+    if (_config.cookieJar != null &&
+        !hasCookieMiddlewareInConfig &&
+        !hasCookieMiddlewareInRequest) {
+      middleware.add(CookieMiddleware(_config.cookieJar!));
+    }
+    middleware.addAll(incoming.middleware);
 
     return RequestOptions(
       headers: incoming.headers?.clone(),
@@ -355,10 +366,7 @@ class Oxy {
       keepAlive: incoming.keepAlive ?? _config.keepAlive,
       retryPolicy: incoming.retryPolicy ?? _config.retryPolicy,
       throwOnHttpError: incoming.throwOnHttpError ?? _config.throwOnHttpError,
-      middleware: <OxyMiddleware>[
-        ..._config.middleware,
-        ...incoming.middleware,
-      ],
+      middleware: middleware,
       onSendProgress: incoming.onSendProgress,
       onReceiveProgress: incoming.onReceiveProgress,
       extra: incoming.extra,
@@ -380,64 +388,6 @@ class Oxy {
     }
 
     return request.copyWith(url: resolvedUrl, headers: mergedHeaders);
-  }
-
-  Future<Request> _attachCookies(
-    Request request,
-    RequestOptions options,
-  ) async {
-    final jar = _config.cookieJar;
-    if (jar == null) {
-      return request;
-    }
-
-    final cookies = await jar.load(request.url);
-    if (cookies.isEmpty) {
-      return request;
-    }
-
-    final cookieValue = cookies
-        .map((cookie) => cookie.toRequestCookie())
-        .join('; ');
-    final headers = request.headers.clone();
-    final existing = headers.get('cookie');
-
-    if (existing == null || existing.isEmpty) {
-      headers.set('cookie', cookieValue);
-    } else {
-      headers.set('cookie', '$existing; $cookieValue');
-    }
-
-    return request.copyWith(headers: headers);
-  }
-
-  Future<void> _storeCookies(
-    Uri requestUrl,
-    Response response,
-    RequestOptions options,
-  ) async {
-    final jar = _config.cookieJar;
-    if (jar == null) {
-      return;
-    }
-
-    final setCookies = response.headers.getSetCookie();
-    if (setCookies.isEmpty) {
-      return;
-    }
-
-    final parsed = <OxyCookie>[];
-    for (final value in setCookies) {
-      try {
-        parsed.add(OxyCookie.parseSetCookie(value, requestUrl));
-      } catch (_) {
-        // Ignore malformed cookies.
-      }
-    }
-
-    if (parsed.isNotEmpty) {
-      await jar.save(requestUrl, parsed);
-    }
   }
 
   Future<Response> _sendWithRetry(

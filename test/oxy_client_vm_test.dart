@@ -61,6 +61,16 @@ void main() {
                 );
                 break;
 
+              case '/cookie/set':
+                request.response.headers.add(
+                  'set-cookie',
+                  'sid=server-token; Path=/; HttpOnly',
+                );
+                request.response
+                  ..statusCode = 200
+                  ..write('cookie set');
+                break;
+
               case '/status/404':
                 request.response
                   ..statusCode = 404
@@ -191,6 +201,66 @@ void main() {
         equals('enabled'),
       );
     });
+
+    test(
+      'auto injects CookieMiddleware when cookieJar is configured',
+      () async {
+        final client = Oxy(
+          OxyConfig(baseUrl: baseUri, cookieJar: MemoryCookieJar()),
+        );
+
+        final setCookieResponse = await client.get('/cookie/set');
+        expect(setCookieResponse.status, 200);
+
+        final echoResponse = await client.get('/echo');
+        final payload = await echoResponse.json<Map<String, dynamic>>();
+
+        expect(
+          (payload['headers'] as Map<String, dynamic>)['cookie'],
+          contains('sid=server-token'),
+        );
+      },
+    );
+
+    test(
+      'request CookieMiddleware prevents duplicate auto injection',
+      () async {
+        final globalJar = MemoryCookieJar();
+        final requestJar = MemoryCookieJar();
+
+        await globalJar.save(baseUri, [
+          OxyCookie(
+            name: 'global',
+            value: '1',
+            domain: baseUri.host,
+            path: '/',
+          ),
+        ]);
+        await requestJar.save(baseUri, [
+          OxyCookie(
+            name: 'request',
+            value: '2',
+            domain: baseUri.host,
+            path: '/',
+          ),
+        ]);
+
+        final client = Oxy(OxyConfig(baseUrl: baseUri, cookieJar: globalJar));
+
+        final response = await client.get(
+          '/echo',
+          options: RequestOptions(
+            middleware: <OxyMiddleware>[CookieMiddleware(requestJar)],
+          ),
+        );
+        final payload = await response.json<Map<String, dynamic>>();
+
+        expect(
+          (payload['headers'] as Map<String, dynamic>)['cookie'],
+          equals('request=2'),
+        );
+      },
+    );
 
     test('retries transient failures for idempotent GET', () async {
       flakyAttempts = 0;
