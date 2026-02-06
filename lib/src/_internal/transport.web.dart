@@ -44,10 +44,12 @@ extension type RequestInit._(JSObject _) implements JSObject {
     ReadableStream? body,
     bool? keepalive,
     String? redirect,
+    String? duplex,
     WebAbortSignal? signal,
   });
 
   external ReadableStream? body;
+  external String? duplex;
   external WebAbortSignal? signal;
 }
 
@@ -95,6 +97,7 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
   final requestBody = request.body;
   if (requestBody != null) {
     init.body = toWebReadableStream(requestBody);
+    init.duplex = 'half';
   }
 
   try {
@@ -142,8 +145,9 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
       );
     }
 
+    // Browser Fetch does not expose upload byte progress for request streams.
     options.onSendProgress?.call(
-      const TransferProgress(transferred: 1, total: 1),
+      const TransferProgress(transferred: 0, total: null),
     );
 
     return Response(

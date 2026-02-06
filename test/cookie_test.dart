@@ -14,15 +14,32 @@ void main() {
       expect(cookie.httpOnly, isTrue);
     });
 
-    test('parseSetCookie parses expires and max-age', () {
+    test('parseSetCookie applies max-age as relative expiry', () {
       final uri = Uri.parse('https://example.com/login');
+      final before = DateTime.now().toUtc();
       final cookie = parseSetCookie(
         'sid=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Max-Age=120',
         uri,
       );
 
-      expect(cookie.expires, DateTime.utc(2015, 10, 21, 7, 28));
       expect(cookie.maxAge, const Duration(seconds: 120));
+      expect(cookie.expires, isNotNull);
+      final ttl = cookie.expires!.difference(before).inSeconds;
+      expect(ttl, inInclusiveRange(110, 120));
+    });
+
+    test('matchesUri enforces path segment boundary', () {
+      const cookie = Cookie('sid', 'abc', domain: 'example.com', path: '/foo');
+
+      expect(cookie.matchesUri(Uri.parse('https://example.com/foo')), isTrue);
+      expect(
+        cookie.matchesUri(Uri.parse('https://example.com/foo/bar')),
+        isTrue,
+      );
+      expect(
+        cookie.matchesUri(Uri.parse('https://example.com/foobar')),
+        isFalse,
+      );
     });
 
     test('toRequestCookie serializes as name=value pair', () {

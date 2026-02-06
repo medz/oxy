@@ -3,6 +3,34 @@ import 'package:test/test.dart';
 
 void main() {
   group('CacheMiddleware', () {
+    test(
+      'MemoryCacheStore evicts least-recently-used entry when bounded',
+      () async {
+        final store = MemoryCacheStore(maxEntries: 2);
+        final now = DateTime.now().toUtc();
+
+        CachedResponse entry(String value) {
+          return CachedResponse(
+            response: Response.text(value),
+            storedAt: now,
+            expiresAt: null,
+            etag: null,
+          );
+        }
+
+        await store.write('a', entry('a'));
+        await store.write('b', entry('b'));
+
+        // Refresh `a` so `b` becomes the least recently used.
+        await store.read('a');
+        await store.write('c', entry('c'));
+
+        expect(await store.read('a'), isNotNull);
+        expect(await store.read('b'), isNull);
+        expect(await store.read('c'), isNotNull);
+      },
+    );
+
     test('returns fresh cached response without calling downstream', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
       final request = Request(Uri.parse('https://example.com/feed'));

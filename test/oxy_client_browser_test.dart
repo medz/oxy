@@ -84,7 +84,8 @@ void main() {
       expect(text, 'hello browser');
       expect(sent, isNotEmpty);
       expect(sent.first.transferred, 0);
-      expect(sent.last.transferred, 1);
+      expect(sent.last.transferred, 0);
+      expect(sent.last.total, isNull);
       expect(received, isNotEmpty);
       expect(received.last.transferred, greaterThan(0));
     });

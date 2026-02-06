@@ -42,7 +42,7 @@ class RequestIdMiddleware implements OxyMiddleware {
 
   static String _defaultRequestId(Request _, RequestOptions _) {
     final timestamp = DateTime.now().toUtc().microsecondsSinceEpoch;
-    final randomPart = _random.nextInt(1 << 32);
+    final randomPart = _random.nextInt(0x100000000);
     return '${timestamp.toRadixString(16)}-${randomPart.toRadixString(16).padLeft(8, '0')}';
   }
 }

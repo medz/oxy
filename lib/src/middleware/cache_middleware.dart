@@ -48,6 +48,10 @@ abstract interface class CacheStore {
 }
 
 class MemoryCacheStore implements CacheStore {
+  MemoryCacheStore({this.maxEntries})
+    : assert(maxEntries == null || maxEntries > 0, 'maxEntries must be > 0');
+
+  final int? maxEntries;
   final Map<String, CachedResponse> _entries = <String, CachedResponse>{};
 
   @override
@@ -62,13 +66,32 @@ class MemoryCacheStore implements CacheStore {
 
   @override
   Future<CachedResponse?> read(String key) async {
-    final value = _entries[key];
-    return value?.clone();
+    final value = _entries.remove(key);
+    if (value == null) {
+      return null;
+    }
+
+    // Move to the newest position to preserve LRU ordering.
+    _entries[key] = value;
+    return value.clone();
   }
 
   @override
   Future<void> write(String key, CachedResponse value) async {
+    _entries.remove(key);
     _entries[key] = value.clone();
+    _evictIfNeeded();
+  }
+
+  void _evictIfNeeded() {
+    final limit = maxEntries;
+    if (limit == null) {
+      return;
+    }
+
+    while (_entries.length > limit) {
+      _entries.remove(_entries.keys.first);
+    }
   }
 }
 

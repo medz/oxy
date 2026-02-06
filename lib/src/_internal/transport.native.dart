@@ -92,7 +92,7 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
       status: ioResponse.statusCode,
       statusText: ioResponse.reasonPhrase,
       headers: headers,
-      redirected: ioResponse.isRedirect,
+      redirected: ioResponse.redirects.isNotEmpty,
       url: request.url,
     );
   } catch (error, trace) {

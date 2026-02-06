@@ -915,7 +915,7 @@ class Oxy {
       'PUT',
       'DELETE',
     };
-    return idempotentMethods.contains(request.method);
+    return idempotentMethods.contains(request.method.toUpperCase());
   }
 
   Future<void> _waitRetryDelay(int attempt, RequestOptions options) {

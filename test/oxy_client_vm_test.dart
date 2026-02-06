@@ -223,6 +223,15 @@ void main() {
       expect(response.headers.get('location'), isNotNull);
     });
 
+    test('follow redirect marks response as redirected', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final response = await client.get('/redirect');
+
+      expect(response.status, 200);
+      expect(response.redirected, isTrue);
+      expect(await response.text(), 'hello oxy');
+    });
+
     test('aborts in-flight requests', () async {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
       final signal = AbortSignal();

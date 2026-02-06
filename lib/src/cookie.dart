@@ -41,7 +41,10 @@ extension OxyCookieExtension on ocookie.Cookie {
 
     final requestPath = uri.path.isEmpty ? '/' : uri.path;
     final cookiePath = _cookiePath(this, uri);
-    if (!requestPath.startsWith(cookiePath)) {
+    if (requestPath != cookiePath &&
+        !(requestPath.startsWith(cookiePath) &&
+            (cookiePath.endsWith('/') ||
+                requestPath[cookiePath.length] == '/'))) {
       return false;
     }
 
@@ -100,15 +103,21 @@ class MemoryCookieJar implements CookieJar {
 }
 
 ocookie.Cookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
+  final now = DateTime.now().toUtc();
   final maxAge = cookie.maxAge == null
       ? null
       : Duration(seconds: max(cookie.maxAge!.inSeconds, 0));
+  final expires = switch (maxAge) {
+    null => cookie.expires?.toUtc(),
+    Duration.zero => DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    _ => now.add(maxAge),
+  };
 
   return cookie.copyWith(
     domain: _cookieDomain(cookie, uri),
     path: _cookiePath(cookie, uri),
     maxAge: maxAge,
-    expires: cookie.expires?.toUtc(),
+    expires: expires,
   );
 }
 
