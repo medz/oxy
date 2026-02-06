@@ -40,4 +40,32 @@ void main() {
     expect(result.isFailure, isTrue);
     expect(result.error, isA<ArgumentError>());
   });
+
+  test(
+    'safe convenience APIs return OxyFailure for invalid relative URL',
+    () async {
+      final client = Oxy();
+
+      final safeGetResult = await client.safeGet('/relative-without-base');
+      final safeGetDecodedResult = await client
+          .safeGetDecoded<Map<String, Object?>>('/relative-without-base');
+
+      expect(safeGetResult.isFailure, isTrue);
+      expect(safeGetResult.error, isA<ArgumentError>());
+      expect(safeGetDecodedResult.isFailure, isTrue);
+      expect(safeGetDecodedResult.error, isA<ArgumentError>());
+    },
+  );
+
+  test('top-level safeFetch APIs return OxyFailure instead of throw', () async {
+    final safeFetchResult = await safeFetch('/relative-without-base');
+    final safeFetchDecodedResult = await safeFetchDecoded<Map<String, Object?>>(
+      '/relative-without-base',
+    );
+
+    expect(safeFetchResult.isFailure, isTrue);
+    expect(safeFetchResult.error, isA<ArgumentError>());
+    expect(safeFetchDecodedResult.isFailure, isTrue);
+    expect(safeFetchDecodedResult.error, isA<ArgumentError>());
+  });
 }

@@ -63,13 +63,8 @@ class Oxy {
   Future<OxyResult<Response>> safeSend(
     Request request, {
     RequestOptions? options,
-  }) async {
-    try {
-      final response = await send(request, options: options);
-      return OxySuccess<Response>(response);
-    } catch (error, trace) {
-      return OxyFailure<Response>(error, trace);
-    }
+  }) {
+    return _capture(() => send(request, options: options));
   }
 
   Future<Response> request(
@@ -117,9 +112,9 @@ class Oxy {
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
-  }) async {
-    try {
-      final response = await request(
+  }) {
+    return _capture(
+      () => request(
         method,
         path,
         query: query,
@@ -129,11 +124,8 @@ class Oxy {
         options: options,
         onSendProgress: onSendProgress,
         onReceiveProgress: onReceiveProgress,
-      );
-      return OxySuccess<Response>(response);
-    } catch (error, trace) {
-      return OxyFailure<Response>(error, trace);
-    }
+      ),
+    );
   }
 
   Future<T> requestDecoded<T>(
@@ -178,6 +170,30 @@ class Oxy {
     }
   }
 
+  Future<OxyResult<T>> safeRequestDecoded<T>(
+    String method,
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return _capture(
+      () => requestDecoded<T>(
+        method,
+        path,
+        query: query,
+        headers: headers,
+        body: body,
+        json: json,
+        options: options,
+        decoder: decoder,
+      ),
+    );
+  }
+
   Future<Response> get(
     String path, {
     QueryMap? query,
@@ -195,6 +211,23 @@ class Oxy {
     );
   }
 
+  Future<OxyResult<Response>> safeGet(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    RequestOptions? options,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return safeRequest(
+      'GET',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
   Future<T> getDecoded<T>(
     String path, {
     QueryMap? query,
@@ -203,6 +236,23 @@ class Oxy {
     Decoder<T>? decoder,
   }) {
     return requestDecoded<T>(
+      'GET',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safeGetDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
       'GET',
       path,
       query: query,
@@ -235,6 +285,71 @@ class Oxy {
     );
   }
 
+  Future<OxyResult<Response>> safePost(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return safeRequest(
+      'POST',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<T> postDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'POST',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safePostDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
+      'POST',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
   Future<Response> put(
     String path, {
     QueryMap? query,
@@ -255,6 +370,71 @@ class Oxy {
       options: options,
       onSendProgress: onSendProgress,
       onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<OxyResult<Response>> safePut(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return safeRequest(
+      'PUT',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<T> putDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'PUT',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safePutDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
+      'PUT',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
     );
   }
 
@@ -281,6 +461,71 @@ class Oxy {
     );
   }
 
+  Future<OxyResult<Response>> safePatch(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return safeRequest(
+      'PATCH',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<T> patchDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'PATCH',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safePatchDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
+      'PATCH',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
   Future<Response> delete(
     String path, {
     QueryMap? query,
@@ -304,6 +549,71 @@ class Oxy {
     );
   }
 
+  Future<OxyResult<Response>> safeDelete(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+  }) {
+    return safeRequest(
+      'DELETE',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      onSendProgress: onSendProgress,
+      onReceiveProgress: onReceiveProgress,
+    );
+  }
+
+  Future<T> deleteDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'DELETE',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safeDeleteDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
+      'DELETE',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
   Future<Response> head(
     String path, {
     QueryMap? query,
@@ -311,6 +621,21 @@ class Oxy {
     RequestOptions? options,
   }) {
     return request(
+      'HEAD',
+      path,
+      query: query,
+      headers: headers,
+      options: options,
+    );
+  }
+
+  Future<OxyResult<Response>> safeHead(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    RequestOptions? options,
+  }) {
+    return safeRequest(
       'HEAD',
       path,
       query: query,
@@ -336,6 +661,76 @@ class Oxy {
       json: json,
       options: options,
     );
+  }
+
+  Future<OxyResult<Response>> safeOptions(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+  }) {
+    return safeRequest(
+      'OPTIONS',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+    );
+  }
+
+  Future<T> optionsDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return requestDecoded<T>(
+      'OPTIONS',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> safeOptionsDecoded<T>(
+    String path, {
+    QueryMap? query,
+    Headers? headers,
+    Object? body,
+    Object? json,
+    RequestOptions? options,
+    Decoder<T>? decoder,
+  }) {
+    return safeRequestDecoded<T>(
+      'OPTIONS',
+      path,
+      query: query,
+      headers: headers,
+      body: body,
+      json: json,
+      options: options,
+      decoder: decoder,
+    );
+  }
+
+  Future<OxyResult<T>> _capture<T>(Future<T> Function() action) async {
+    try {
+      final value = await action();
+      return OxySuccess<T>(value);
+    } catch (error, trace) {
+      return OxyFailure<T>(error, trace);
+    }
   }
 
   RequestOptions _resolveOptions(RequestOptions? options) {
@@ -725,5 +1120,73 @@ Future<Response> fetch(
     options: options,
     onSendProgress: onSendProgress,
     onReceiveProgress: onReceiveProgress,
+  );
+}
+
+Future<OxyResult<Response>> safeFetch(
+  String url, {
+  String method = 'GET',
+  QueryMap? query,
+  Headers? headers,
+  Object? body,
+  Object? json,
+  RequestOptions? options,
+  ProgressCallback? onSendProgress,
+  ProgressCallback? onReceiveProgress,
+}) {
+  return oxy.safeRequest(
+    method,
+    url,
+    query: query,
+    headers: headers,
+    body: body,
+    json: json,
+    options: options,
+    onSendProgress: onSendProgress,
+    onReceiveProgress: onReceiveProgress,
+  );
+}
+
+Future<T> fetchDecoded<T>(
+  String url, {
+  String method = 'GET',
+  QueryMap? query,
+  Headers? headers,
+  Object? body,
+  Object? json,
+  RequestOptions? options,
+  Decoder<T>? decoder,
+}) {
+  return oxy.requestDecoded<T>(
+    method,
+    url,
+    query: query,
+    headers: headers,
+    body: body,
+    json: json,
+    options: options,
+    decoder: decoder,
+  );
+}
+
+Future<OxyResult<T>> safeFetchDecoded<T>(
+  String url, {
+  String method = 'GET',
+  QueryMap? query,
+  Headers? headers,
+  Object? body,
+  Object? json,
+  RequestOptions? options,
+  Decoder<T>? decoder,
+}) {
+  return oxy.safeRequestDecoded<T>(
+    method,
+    url,
+    query: query,
+    headers: headers,
+    body: body,
+    json: json,
+    options: options,
+    decoder: decoder,
   );
 }

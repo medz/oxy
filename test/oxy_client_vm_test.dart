@@ -130,6 +130,28 @@ void main() {
       expect(await response.text(), 'hello oxy');
     });
 
+    test('safeGet returns OxySuccess for successful requests', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final result = await client.safeGet('/hello');
+      final response = result.value;
+
+      expect(result.isSuccess, isTrue);
+      expect(response, isNotNull);
+      expect(response?.status, 200);
+      expect(await response!.text(), 'hello oxy');
+    });
+
+    test('safeGetDecoded maps payload and keeps success shape', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final result = await client.safeGetDecoded<bool>(
+        '/json',
+        decoder: (value) => (value as Map<String, Object?>)['ok'] as bool,
+      );
+
+      expect(result.isSuccess, isTrue);
+      expect(result.value, isTrue);
+    });
+
     test('json shortcut for request body', () async {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
       final response = await client.post('/echo', json: {'name': 'oxy'});
@@ -172,6 +194,14 @@ void main() {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
 
       expect(client.get('/status/404'), throwsA(isA<OxyHttpException>()));
+    });
+
+    test('safeGet captures HTTP errors as OxyFailure', () async {
+      final client = Oxy(OxyConfig(baseUrl: baseUri));
+      final result = await client.safeGet('/status/404');
+
+      expect(result.isFailure, isTrue);
+      expect(result.error, isA<OxyHttpException>());
     });
 
     test('can disable throwOnHttpError per request', () async {
