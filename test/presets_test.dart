@@ -66,5 +66,63 @@ void main() {
       expect(middleware[1], same(customCookie));
       expect(middleware[2], isA<CacheMiddleware>());
     });
+
+    test('OxyConfig.withPreset appends middleware by default', () {
+      final base = OxyConfig(
+        middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+      );
+      final requestId = RequestIdMiddleware(requestIdProvider: (_, _) => 'rid');
+
+      final next = base.withPreset(<OxyMiddleware>[requestId]);
+
+      expect(base.middleware, hasLength(1));
+      expect(next.middleware, hasLength(2));
+      expect(next.middleware[0], isA<AuthMiddleware>());
+      expect(next.middleware[1], same(requestId));
+    });
+
+    test('OxyConfig.withPreset supports replace mode', () {
+      final base = OxyConfig(
+        middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+      );
+      final requestId = RequestIdMiddleware(requestIdProvider: (_, _) => 'rid');
+
+      final next = base.withPreset(<OxyMiddleware>[requestId], replace: true);
+
+      expect(next.middleware, hasLength(1));
+      expect(next.middleware.first, same(requestId));
+    });
+
+    test('Oxy.withPreset returns new client with merged middleware', () {
+      final client = Oxy(
+        OxyConfig(
+          middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+        ),
+      );
+      final requestId = RequestIdMiddleware(requestIdProvider: (_, _) => 'rid');
+
+      final next = client.withPreset(<OxyMiddleware>[requestId]);
+
+      expect(client.config.middleware, hasLength(1));
+      expect(next.config.middleware, hasLength(2));
+      expect(next.config.middleware[1], same(requestId));
+    });
+
+    test('Oxy.withStandardPreset supports replace mode', () {
+      final client = Oxy(
+        OxyConfig(
+          middleware: <OxyMiddleware>[AuthMiddleware.staticToken('token')],
+        ),
+      );
+
+      final next = client.withStandardPreset(
+        includeCache: false,
+        includeLogging: false,
+        replace: true,
+      );
+
+      expect(next.config.middleware, hasLength(1));
+      expect(next.config.middleware.first, isA<RequestIdMiddleware>());
+    });
   });
 }
