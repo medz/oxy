@@ -141,6 +141,8 @@ class CacheMiddleware implements OxyMiddleware {
       final renewed = _buildCacheEntry(merged, now, fallbackEtag: cached.etag);
       if (renewed != null) {
         await _store.write(key, renewed);
+      } else {
+        await _store.delete(key);
       }
       return merged;
     }

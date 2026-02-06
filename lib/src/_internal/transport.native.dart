@@ -65,6 +65,13 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
     if (options.redirectPolicy == RedirectPolicy.error &&
         _isRedirectStatus(ioResponse.statusCode)) {
+      try {
+        // Release the underlying socket before throwing.
+        await ioResponse.drain<void>();
+      } catch (_) {
+        // Ignore drain errors and still surface redirect policy failure.
+      }
+
       throw OxyHttpException(
         Response(
           status: ioResponse.statusCode,

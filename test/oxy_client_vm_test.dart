@@ -260,7 +260,7 @@ void main() {
       final signal = AbortSignal();
       Timer(const Duration(milliseconds: 50), () => signal.abort('cancelled'));
 
-      expect(
+      await expectLater(
         client.get('/slow', options: RequestOptions(signal: signal)),
         throwsA(isA<OxyCancelledException>()),
       );
@@ -269,7 +269,10 @@ void main() {
     test('throws on HTTP error by default', () async {
       final client = Oxy(OxyConfig(baseUrl: baseUri));
 
-      expect(client.get('/status/404'), throwsA(isA<OxyHttpException>()));
+      await expectLater(
+        client.get('/status/404'),
+        throwsA(isA<OxyHttpException>()),
+      );
     });
 
     test('safeGet captures HTTP errors as OxyFailure', () async {
@@ -396,7 +399,10 @@ void main() {
         ),
       );
 
-      expect(client.get('/flaky'), throwsA(isA<OxyRetryExhaustedException>()));
+      await expectLater(
+        client.get('/flaky'),
+        throwsA(isA<OxyRetryExhaustedException>()),
+      );
     });
 
     test(
@@ -421,7 +427,7 @@ void main() {
           ),
         );
 
-        expect(
+        await expectLater(
           client.get('/network-failure'),
           throwsA(
             isA<OxyRetryExhaustedException>().having(
