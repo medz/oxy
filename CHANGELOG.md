@@ -5,9 +5,12 @@
   `CacheMiddleware`, `LoggingMiddleware`, `RequestIdMiddleware`.
 - Added `OxyPresets.standard(...)` for recommended middleware composition,
   with optional toggles and middleware overrides.
+- Added `OxyPresets.minimal(...)` and `OxyPresets.full(...)` for
+  low/high complexity middleware composition.
 - Added fluent preset helpers:
-  `OxyConfig.withPreset/withStandardPreset` and
-  `Oxy.withPreset/withStandardPreset`.
+  `OxyConfig.withPreset/withMinimalPreset/withStandardPreset/withFullPreset`
+  and
+  `Oxy.withPreset/withMinimalPreset/withStandardPreset/withFullPreset`.
 - Decoupled cookie read/write from core send path into dedicated middleware.
 - Switched cookie model to `ocookie.Cookie` directly and removed
   `OxyCookie` wrapper type.

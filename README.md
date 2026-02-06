@@ -88,9 +88,15 @@ Future<void> main() async {
 }
 ```
 
-## Official Preset
+## Presets
 
-Use the official preset to get the recommended stack quickly:
+`oxy` provides three official presets for different complexity levels:
+
+- `OxyPresets.minimal(...)`: `RequestId` only
+- `OxyPresets.standard(...)`: `RequestId + Cache + Logging` by default, optional `Auth/Cookie`
+- `OxyPresets.full(...)`: `RequestId + Cookie + Cache + Logging`, optional `Auth`
+
+Use the `standard` preset for most projects:
 
 ```dart
 import 'package:oxy/oxy.dart';
@@ -125,6 +131,16 @@ Or apply presets via fluent helpers:
 final client = Oxy()
     .withStandardPreset(includeLogging: false)
     .withPreset([AuthMiddleware.staticToken('token')]);
+```
+
+Choose a lower or higher preset as needed:
+
+```dart
+final minimalClient = Oxy().withMinimalPreset();
+
+final fullClient = Oxy().withFullPreset(
+  authMiddleware: AuthMiddleware.staticToken('token'),
+);
 ```
 
 ## Advanced `Request/send` API
