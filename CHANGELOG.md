@@ -24,15 +24,8 @@
   `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
   plus decoded variants and top-level `safeFetch*` helpers.
 - Added `Response.decode<T>()` extension and unified typed decode behavior.
-- Expanded test coverage for middleware composition, cookie auto-injection,
+- Expanded test coverage for middleware composition, cookie middleware behavior,
   safe API behavior, and upload/download progress callbacks.
-
-## 0.1.0
-
-- Rebuilt `oxy` on top of `ht` types.
-- Removed adapter architecture and adapter packages from this repository.
-- Added built-in transport layer for VM/Web with `FetchOptions`.
-- Added redirect policy, keep-alive, timeout, and abort integration.
 
 ## 0.0.4
 
