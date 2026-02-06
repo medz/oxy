@@ -2,7 +2,7 @@
 
 `oxy` is a fetch-style HTTP client for Dart/Flutter, built on top of [`ht`](https://pub.dev/packages/ht).
 
-[![Oxy Test](https://github.com/medz/oxy/actions/workflows/oxy-test.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/oxy-test.yml)
+[![CI](https://github.com/medz/oxy/actions/workflows/ci.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/ci.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
 ## Why Oxy
