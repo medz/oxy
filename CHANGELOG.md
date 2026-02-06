@@ -1,3 +1,16 @@
+## Unreleased
+
+- Redesigned core request pipeline with clearer error model and retry flow.
+- Added official middleware set: `AuthMiddleware`, `CookieMiddleware`,
+  `CacheMiddleware`, `LoggingMiddleware`, `RequestIdMiddleware`.
+- Decoupled cookie read/write from core send path into dedicated middleware.
+- Added safe API layer:
+  `safeGet/safePost/safePut/safePatch/safeDelete/safeHead/safeOptions`,
+  plus decoded variants and top-level `safeFetch*` helpers.
+- Added `Response.decode<T>()` extension and unified typed decode behavior.
+- Expanded test coverage for middleware composition, cookie auto-injection,
+  safe API behavior, and upload/download progress callbacks.
+
 ## 0.1.0
 
 - Rebuilt `oxy` on top of `ht` types.
