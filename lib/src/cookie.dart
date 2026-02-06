@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:ocookie/ocookie.dart' as ocookie;
+
 enum OxyCookieSameSite { lax, strict, none, unspecified }
 
 class OxyCookie {
@@ -26,78 +28,29 @@ class OxyCookie {
   final OxyCookieSameSite sameSite;
 
   factory OxyCookie.parseSetCookie(String setCookie, Uri uri) {
-    final segments = setCookie
-        .split(';')
-        .map((segment) => segment.trim())
-        .where((segment) => segment.isNotEmpty)
-        .toList(growable: false);
+    final parsed = ocookie.Cookie.fromString(setCookie);
 
-    if (segments.isEmpty || !segments.first.contains('=')) {
-      throw ArgumentError.value(setCookie, 'setCookie', 'Invalid Set-Cookie');
-    }
-
-    final first = segments.first;
-    final equalsIndex = first.indexOf('=');
-    final name = first.substring(0, equalsIndex).trim();
-    final value = first.substring(equalsIndex + 1).trim();
-
-    var domain = uri.host.toLowerCase();
-    var path = _defaultPath(uri.path);
-    DateTime? expires;
-    Duration? maxAge;
-    var secure = false;
-    var httpOnly = false;
-    var sameSite = OxyCookieSameSite.unspecified;
-
-    for (var i = 1; i < segments.length; i++) {
-      final part = segments[i];
-      final attrIndex = part.indexOf('=');
-      final key = (attrIndex == -1 ? part : part.substring(0, attrIndex))
-          .trim()
-          .toLowerCase();
-      final attrValue = attrIndex == -1
-          ? ''
-          : part.substring(attrIndex + 1).trim();
-
-      switch (key) {
-        case 'domain':
-          if (attrValue.isNotEmpty) {
-            domain = attrValue.toLowerCase();
-          }
-        case 'path':
-          if (attrValue.isNotEmpty) {
-            path = attrValue;
-          }
-        case 'expires':
-          expires = DateTime.tryParse(attrValue)?.toUtc();
-        case 'max-age':
-          final seconds = int.tryParse(attrValue);
-          if (seconds != null) {
-            maxAge = Duration(seconds: max(seconds, 0));
-          }
-        case 'secure':
-          secure = true;
-        case 'httponly':
-          httpOnly = true;
-        case 'samesite':
-          sameSite = switch (attrValue.toLowerCase()) {
-            'strict' => OxyCookieSameSite.strict,
-            'none' => OxyCookieSameSite.none,
-            'lax' => OxyCookieSameSite.lax,
-            _ => OxyCookieSameSite.unspecified,
-          };
-      }
-    }
+    final domain = parsed.domain?.toLowerCase() ?? uri.host.toLowerCase();
+    final path = parsed.path ?? _defaultPath(uri.path);
+    final maxAge = parsed.maxAge == null
+        ? null
+        : Duration(seconds: max(parsed.maxAge!.inSeconds, 0));
+    final sameSite = switch (parsed.sameSite) {
+      ocookie.CookieSameSite.strict => OxyCookieSameSite.strict,
+      ocookie.CookieSameSite.none => OxyCookieSameSite.none,
+      ocookie.CookieSameSite.lax => OxyCookieSameSite.lax,
+      null => OxyCookieSameSite.unspecified,
+    };
 
     return OxyCookie(
-      name: name,
-      value: value,
+      name: parsed.name,
+      value: parsed.value,
       domain: _normalizeDomain(domain),
       path: path,
-      expires: expires,
+      expires: parsed.expires?.toUtc(),
       maxAge: maxAge,
-      httpOnly: httpOnly,
-      secure: secure,
+      httpOnly: parsed.httpOnly ?? false,
+      secure: parsed.secure ?? false,
       sameSite: sameSite,
     );
   }
@@ -138,7 +91,7 @@ class OxyCookie {
     return true;
   }
 
-  String toRequestCookie() => '$name=$value';
+  String toRequestCookie() => ocookie.Cookie(name, value).serialize();
 
   static String _normalizeDomain(String value) {
     return value.startsWith('.') ? value.substring(1) : value;
