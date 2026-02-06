@@ -1,18 +1,21 @@
 # Oxy
 
-`oxy` is a fetch-style HTTP client for Dart/Flutter, built on top of [`ht`](https://pub.dev/packages/ht).
+`oxy` is a production-ready HTTP client for Dart and Flutter.
+It provides a clean fetch-style API for quick calls, plus a middleware pipeline for advanced networking.
 
 [![CI](https://github.com/medz/oxy/actions/workflows/ci.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/ci.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
 ## Why Oxy
 
-- Unified `ht` type layer (`Request`, `Response`, `Headers`, `FormData`, `Blob`, ...)
-- No adapter abstraction
-- One API for Dart VM and Web
-- Two usage layers: simple `get/post/...` and advanced `request/send`
+- Easy day-1 API: `get/post/put/delete` with minimal setup
+- Scales to complex clients via `request/send` and rich `RequestOptions`
+- Consistent behavior across Dart VM, Flutter, and Web
 - Middleware-first extensibility (auth, cookies, cache, logging, trace)
-- Built-in retry/timeout/abort/error model with `throw` and `safe*` APIs
+- Built-in resilience: retry, timeout, abort, and clear exceptions
+- Dual error model: `throw` APIs and `safe*` result APIs
+
+Under the hood, `oxy` uses [`ht`](https://pub.dev/packages/ht) request/response primitives for consistent cross-platform behavior.
 
 ## Installation
 
