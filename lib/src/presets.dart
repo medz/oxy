@@ -93,6 +93,10 @@ class OxyPresets {
 }
 
 extension OxyConfigPresetExtension on OxyConfig {
+  /// Applies a middleware [preset] to the current config.
+  ///
+  /// When [replace] is `false` (default), preset middleware is appended after
+  /// existing middleware to preserve explicit composition order.
   OxyConfig withPreset(List<OxyMiddleware> preset, {bool replace = false}) {
     final middleware = replace
         ? List<OxyMiddleware>.from(preset)
