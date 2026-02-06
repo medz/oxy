@@ -25,5 +25,46 @@ void main() {
       expect(middleware[3], isA<CacheMiddleware>());
       expect(middleware[4], isA<LoggingMiddleware>());
     });
+
+    test('supports disabling built-in optional middlewares', () {
+      final middleware = OxyPresets.standard(
+        includeRequestId: false,
+        includeCache: false,
+        includeLogging: false,
+        authMiddleware: AuthMiddleware.staticToken('token'),
+        cookieJar: MemoryCookieJar(),
+      );
+
+      expect(middleware, hasLength(2));
+      expect(middleware[0], isA<AuthMiddleware>());
+      expect(middleware[1], isA<CookieMiddleware>());
+    });
+
+    test('supports overriding request id/cache/logging middlewares', () {
+      final requestId = RequestIdMiddleware(requestIdProvider: (_, _) => 'rid');
+      final cache = CacheMiddleware(store: MemoryCacheStore());
+      final logging = LoggingMiddleware(printer: (_) {});
+
+      final middleware = OxyPresets.standard(
+        requestIdMiddleware: requestId,
+        cacheMiddleware: cache,
+        loggingMiddleware: logging,
+      );
+
+      expect(middleware[0], same(requestId));
+      expect(middleware[1], same(cache));
+      expect(middleware[2], same(logging));
+    });
+
+    test('uses explicit cookie middleware before cache', () {
+      final customCookie = CookieMiddleware(MemoryCookieJar());
+      final middleware = OxyPresets.standard(
+        cookieMiddleware: customCookie,
+        cookieJar: MemoryCookieJar(),
+      );
+
+      expect(middleware[1], same(customCookie));
+      expect(middleware[2], isA<CacheMiddleware>());
+    });
   });
 }
