@@ -1,6 +1,8 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('LoggingMiddleware', () {
     test('logs request and response', () async {
@@ -8,10 +10,10 @@ void main() {
       final middleware = LoggingMiddleware(printer: logs.add);
 
       final response = await middleware.intercept(
-        Request(Uri.parse('https://example.com/users'), method: 'GET'),
+        testRequest(Uri.parse('https://example.com/users')),
         const RequestOptions(),
         (request, options) async {
-          return Response(status: 201);
+          return testResponse(status: 201);
         },
       );
 
@@ -27,7 +29,7 @@ void main() {
 
       await expectLater(
         middleware.intercept(
-          Request(Uri.parse('https://example.com/fail'), method: 'GET'),
+          testRequest(Uri.parse('https://example.com/fail')),
           const RequestOptions(),
           (request, options) async {
             throw const OxyNetworkException('network down');

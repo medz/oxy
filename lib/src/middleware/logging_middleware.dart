@@ -18,20 +18,20 @@ class LoggingMiddleware implements OxyMiddleware {
     Next next,
   ) async {
     final stopwatch = Stopwatch()..start();
-    _printer('[oxy] -> ${request.method} ${request.url}');
+    _printer('[oxy] -> ${request.method.value} ${request.url}');
 
     try {
       final response = await next(request, options);
       stopwatch.stop();
       _printer(
-        '[oxy] <- ${response.status} ${request.method} ${request.url} '
+        '[oxy] <- ${response.status} ${request.method.value} ${request.url} '
         '(${stopwatch.elapsedMilliseconds}ms)',
       );
       return response;
     } catch (error) {
       stopwatch.stop();
       _printer(
-        '[oxy] !! ${request.method} ${request.url} '
+        '[oxy] !! ${request.method.value} ${request.url} '
         '(${stopwatch.elapsedMilliseconds}ms) $error',
       );
       rethrow;

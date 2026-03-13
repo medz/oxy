@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:ht/ht.dart';
 
+import '../_internal/request_utils.dart';
 import '../options.dart';
 
 typedef AuthTokenProvider =
@@ -52,7 +53,7 @@ class AuthMiddleware implements OxyMiddleware {
         ? normalizedToken
         : '${scheme!} $normalizedToken';
 
-    final headers = request.headers.clone()..set(headerName, authValue);
-    return next(request.copyWith(headers: headers), options);
+    final headers = cloneHeaders(request.headers)..set(headerName, authValue);
+    return next(copyRequest(request, headers: headers), options);
   }
 }

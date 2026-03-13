@@ -9,6 +9,8 @@ import 'dart:typed_data';
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 class AddHeaderMiddleware implements OxyMiddleware {
   @override
   Future<Response> intercept(
@@ -16,8 +18,9 @@ class AddHeaderMiddleware implements OxyMiddleware {
     RequestOptions options,
     Next next,
   ) {
-    final headers = request.headers.clone()..set('x-middleware', 'enabled');
-    return next(request.copyWith(headers: headers), options);
+    final headers = cloneTestHeaders(request.headers)
+      ..set('x-middleware', 'enabled');
+    return next(copyTestRequest(request, headers: headers), options);
   }
 }
 

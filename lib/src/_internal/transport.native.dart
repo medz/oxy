@@ -13,7 +13,8 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
   options.signal?.throwIfAborted();
 
   try {
-    final openFuture = _client.openUrl(request.method, request.url);
+    final requestUri = Uri.parse(request.url);
+    final openFuture = _client.openUrl(request.method.value, requestUri);
 
     final connectTimeout = options.connectTimeout;
     final httpRequest = connectTimeout == null
@@ -46,11 +47,8 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
     _bindAbort(options.signal, httpRequest);
 
-    for (final name in request.headers.names()) {
-      final values = request.headers.getAll(name);
-      for (final value in values) {
-        httpRequest.headers.add(name, value);
-      }
+    for (final entry in request.headers) {
+      httpRequest.headers.add(entry.key, entry.value);
     }
 
     final followRedirects = options.redirectPolicy == RedirectPolicy.follow;
@@ -90,10 +88,12 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
       throw OxyHttpException(
         Response(
-          status: ioResponse.statusCode,
-          statusText: ioResponse.reasonPhrase,
-          headers: headers,
-          url: request.url,
+          null,
+          ResponseInit(
+            status: ioResponse.statusCode,
+            statusText: ioResponse.reasonPhrase,
+            headers: headers,
+          ),
         ),
         message: 'Redirect blocked by RedirectPolicy.error',
       );
@@ -118,13 +118,17 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
       );
     }
 
+    if (options.onReceiveProgress == null) {
+      return Response(ioResponse);
+    }
+
     return Response(
-      body: bodyStream,
-      status: ioResponse.statusCode,
-      statusText: ioResponse.reasonPhrase,
-      headers: headers,
-      redirected: ioResponse.redirects.isNotEmpty,
-      url: request.url,
+      bodyStream,
+      ResponseInit(
+        status: ioResponse.statusCode,
+        statusText: ioResponse.reasonPhrase,
+        headers: headers,
+      ),
     );
   } catch (error, trace) {
     if (options.signal?.aborted == true) {

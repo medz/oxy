@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:ht/ht.dart';
 
+import '../_internal/request_utils.dart';
 import '../options.dart';
 
 typedef RequestIdProvider =
@@ -36,8 +37,9 @@ class RequestIdMiddleware implements OxyMiddleware {
       return next(request, options);
     }
 
-    final headers = request.headers.clone()..set(headerName, requestId.trim());
-    return next(request.copyWith(headers: headers), options);
+    final headers = cloneHeaders(request.headers)
+      ..set(headerName, requestId.trim());
+    return next(copyRequest(request, headers: headers), options);
   }
 
   static String _defaultRequestId(Request _, RequestOptions _) {

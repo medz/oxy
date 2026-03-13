@@ -1,5 +1,6 @@
 import 'package:ht/ht.dart';
 
+import '../_internal/request_utils.dart';
 import '../options.dart';
 
 typedef CacheKeyBuilder =
@@ -115,8 +116,7 @@ class CacheMiddleware implements OxyMiddleware {
     RequestOptions options,
     Next next,
   ) async {
-    if (!_cacheMethods.contains(request.method.toUpperCase()) ||
-        _isBypassed(options)) {
+    if (!_cacheMethods.contains(request.method.value) || _isBypassed(options)) {
       return next(request, options);
     }
 
@@ -172,7 +172,7 @@ class CacheMiddleware implements OxyMiddleware {
     Request request,
     RequestOptions options,
   ) {
-    return '${request.method.toUpperCase()} ${request.url}';
+    return '${request.method.value} ${request.url}';
   }
 
   bool _isBypassed(RequestOptions options) {
@@ -184,28 +184,25 @@ class CacheMiddleware implements OxyMiddleware {
       return request;
     }
 
-    final headers = request.headers.clone()..set('if-none-match', etag);
-    return request.copyWith(headers: headers);
+    final headers = cloneHeaders(request.headers)..set('if-none-match', etag);
+    return copyRequest(request, headers: headers);
   }
 
   Response _mergeNotModified(Response cached, Response notModified) {
     final base = cached.clone();
-    final headers = base.headers.clone();
-
     final override = Headers();
-    for (final name in notModified.headers.names()) {
+    for (final name in notModified.headers.keys()) {
       if (_isUnsafe304MergeHeader(name)) {
         continue;
       }
 
-      for (final value in notModified.headers.getAll(name)) {
+      for (final value in _headerValues(notModified.headers, name)) {
         override.append(name, value);
       }
     }
 
-    _overrideHeaders(headers, override);
-
-    return base.copyWith(headers: headers);
+    _overrideHeaders(base.headers, override);
+    return base;
   }
 
   CachedResponse? _buildCacheEntry(
@@ -264,10 +261,19 @@ class CacheMiddleware implements OxyMiddleware {
   }
 
   static void _overrideHeaders(Headers target, Headers source) {
-    for (final name in source.names()) {
+    for (final name in source.keys()) {
       target.delete(name);
-      for (final value in source.getAll(name)) {
+      for (final value in _headerValues(source, name)) {
         target.append(name, value);
+      }
+    }
+  }
+
+  static Iterable<String> _headerValues(Headers headers, String name) sync* {
+    final normalizedName = name.toLowerCase();
+    for (final entry in headers) {
+      if (entry.key == normalizedName) {
+        yield entry.value;
       }
     }
   }

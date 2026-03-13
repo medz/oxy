@@ -1,6 +1,8 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('CookieMiddleware', () {
     test('attaches cookies from jar to outgoing request', () async {
@@ -14,7 +16,7 @@ void main() {
       final middleware = CookieMiddleware(jar);
 
       late Request captured;
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
@@ -37,7 +39,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(uri, headers: Headers({'cookie': 'trace=abc'})),
+        testRequest(uri, headers: Headers({'cookie': 'trace=abc'})),
         const RequestOptions(),
         (nextRequest, options) async {
           captured = nextRequest;
@@ -53,11 +55,11 @@ void main() {
       final uri = Uri.parse('https://example.com/login');
       final middleware = CookieMiddleware(jar);
 
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
-        return Response(
+        return testResponse(
           headers: Headers({
             'set-cookie': 'sid=server-token; Path=/; HttpOnly',
           }),
@@ -75,11 +77,13 @@ void main() {
       final uri = Uri.parse('https://example.com/login');
       final middleware = CookieMiddleware(jar);
 
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
-        return Response(headers: Headers({'set-cookie': 'malformed-cookie'}));
+        return testResponse(
+          headers: Headers({'set-cookie': 'malformed-cookie'}),
+        );
       });
 
       final cookies = await jar.load(uri);

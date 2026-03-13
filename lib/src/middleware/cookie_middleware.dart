@@ -1,5 +1,6 @@
 import 'package:ht/ht.dart';
 
+import '../_internal/request_utils.dart';
 import '../cookie.dart';
 import '../options.dart';
 
@@ -16,12 +17,12 @@ class CookieMiddleware implements OxyMiddleware {
   ) async {
     final hydrated = await _attachCookies(request);
     final response = await next(hydrated, options);
-    await _storeResponseCookies(hydrated.url, response);
+    await _storeResponseCookies(Uri.parse(hydrated.url), response);
     return response;
   }
 
   Future<Request> _attachCookies(Request request) async {
-    final cookies = await jar.load(request.url);
+    final cookies = await jar.load(Uri.parse(request.url));
     if (cookies.isEmpty) {
       return request;
     }
@@ -30,7 +31,7 @@ class CookieMiddleware implements OxyMiddleware {
         .map((cookie) => cookie.toRequestCookie())
         .join('; ');
 
-    final headers = request.headers.clone();
+    final headers = cloneHeaders(request.headers);
     final existing = headers.get('cookie');
     if (existing == null || existing.isEmpty) {
       headers.set('cookie', cookieValue);
@@ -38,7 +39,7 @@ class CookieMiddleware implements OxyMiddleware {
       headers.set('cookie', '$existing; $cookieValue');
     }
 
-    return request.copyWith(headers: headers);
+    return copyRequest(request, headers: headers);
   }
 
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {

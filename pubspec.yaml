@@ -15,10 +15,10 @@ funding:
   - https://opencollective.com/openodroe
 
 environment:
-  sdk: ^3.8.0
+  sdk: ^3.10.0
 
 dependencies:
-  ht: ^0.1.0
+  ht: ^0.3.0
   ocookie: ^0.1.0
 
 dev_dependencies:
