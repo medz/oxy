@@ -52,7 +52,7 @@ class AuthMiddleware implements OxyMiddleware {
         ? normalizedToken
         : '${scheme!} $normalizedToken';
 
-    final headers = request.headers.clone()..set(headerName, authValue);
-    return next(request.copyWith(headers: headers), options);
+    request.headers.set(headerName, authValue);
+    return next(request, options);
   }
 }

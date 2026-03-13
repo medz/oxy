@@ -16,8 +16,8 @@ class AddHeaderMiddleware implements OxyMiddleware {
     RequestOptions options,
     Next next,
   ) {
-    final headers = request.headers.clone()..set('x-middleware', 'enabled');
-    return next(request.copyWith(headers: headers), options);
+    request.headers.set('x-middleware', 'enabled');
+    return next(request, options);
   }
 }
 

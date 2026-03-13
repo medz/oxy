@@ -36,8 +36,8 @@ class RequestIdMiddleware implements OxyMiddleware {
       return next(request, options);
     }
 
-    final headers = request.headers.clone()..set(headerName, requestId.trim());
-    return next(request.copyWith(headers: headers), options);
+    request.headers.set(headerName, requestId.trim());
+    return next(request, options);
   }
 
   static String _defaultRequestId(Request _, RequestOptions _) {

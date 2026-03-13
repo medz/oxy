@@ -1,6 +1,8 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('RequestIdMiddleware', () {
     test('adds request id header from provider', () async {
@@ -10,7 +12,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(Uri.parse('https://example.com')),
+        testRequest(Uri.parse('https://example.com')),
         const RequestOptions(),
         (nextRequest, options) async {
           captured = nextRequest;
@@ -28,7 +30,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(
+        testRequest(
           Uri.parse('https://example.com'),
           headers: Headers({'x-request-id': 'req-old'}),
         ),
@@ -50,7 +52,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(
+        testRequest(
           Uri.parse('https://example.com'),
           headers: Headers({'x-request-id': 'req-old'}),
         ),
@@ -69,7 +71,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(Uri.parse('https://example.com')),
+        testRequest(Uri.parse('https://example.com')),
         const RequestOptions(),
         (nextRequest, options) async {
           captured = nextRequest;
@@ -87,7 +89,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(Uri.parse('https://example.com')),
+        testRequest(Uri.parse('https://example.com')),
         const RequestOptions(),
         (nextRequest, options) async {
           captured = nextRequest;

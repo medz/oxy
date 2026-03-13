@@ -19,7 +19,7 @@ class OxyHttpException extends OxyException {
   OxyHttpException(this.response, {String? message, Object? cause, super.trace})
     : super(
         message ??
-            'HTTP ${response.status} ${response.statusText}: ${response.url ?? 'unknown url'}',
+            'HTTP ${response.status} ${response.statusText}: ${response.url.isEmpty ? 'unknown url' : response.url}',
         cause: cause,
       );
 

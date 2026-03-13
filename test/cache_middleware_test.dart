@@ -1,6 +1,8 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('CacheMiddleware', () {
     test(
@@ -11,7 +13,7 @@ void main() {
 
         CachedResponse entry(String value) {
           return CachedResponse(
-            response: Response.text(value),
+            response: textResponse(value),
             storedAt: now,
             expiresAt: null,
             etag: null,
@@ -33,12 +35,12 @@ void main() {
 
     test('returns fresh cached response without calling downstream', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/feed'));
+      final request = testRequest(Uri.parse('https://example.com/feed'));
 
       var callCount = 0;
       Future<Response> downstream(Request req, RequestOptions opt) async {
         callCount += 1;
-        return Response.text(
+        return textResponse(
           'network-v1',
           headers: Headers({'cache-control': 'max-age=60', 'etag': '"v1"'}),
         );
@@ -56,7 +58,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text('network-v2');
+          return textResponse('network-v2');
         },
       );
 
@@ -68,7 +70,7 @@ void main() {
       'revalidates stale cache using if-none-match and handles 304',
       () async {
         final middleware = CacheMiddleware(store: MemoryCacheStore());
-        final request = Request(Uri.parse('https://example.com/feed'));
+        final request = testRequest(Uri.parse('https://example.com/feed'));
 
         var callCount = 0;
         Request? revalidationRequest;
@@ -78,7 +80,7 @@ void main() {
           const RequestOptions(),
           (req, opt) async {
             callCount += 1;
-            return Response.text(
+            return textResponse(
               'cached-body',
               headers: Headers({
                 'cache-control': 'max-age=0',
@@ -95,7 +97,10 @@ void main() {
           (req, opt) async {
             callCount += 1;
             revalidationRequest = req;
-            return Response(status: 304, headers: Headers({'etag': '"tag-1"'}));
+            return testResponse(
+              status: 304,
+              headers: Headers({'etag': '"tag-1"'}),
+            );
           },
         );
 
@@ -111,13 +116,13 @@ void main() {
       'revalidates without overwriting cached entity headers from 304 response',
       () async {
         final middleware = CacheMiddleware(store: MemoryCacheStore());
-        final request = Request(Uri.parse('https://example.com/feed'));
+        final request = testRequest(Uri.parse('https://example.com/feed'));
 
         await middleware.intercept(request, const RequestOptions(), (
           req,
           opt,
         ) async {
-          return Response.text(
+          return textResponse(
             'cached-body',
             headers: Headers({'cache-control': 'max-age=0', 'etag': '"tag-2"'}),
           );
@@ -127,7 +132,7 @@ void main() {
           request,
           const RequestOptions(),
           (req, opt) async {
-            return Response(
+            return testResponse(
               status: 304,
               headers: Headers({
                 'etag': '"tag-2"',
@@ -147,7 +152,7 @@ void main() {
 
     test('does not store when cache-control is no-store', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/private'));
+      final request = testRequest(Uri.parse('https://example.com/private'));
 
       var callCount = 0;
 
@@ -156,7 +161,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text(
+          return textResponse(
             'secret-v1',
             headers: Headers({'cache-control': 'no-store'}),
           );
@@ -169,7 +174,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text('secret-v2');
+          return textResponse('secret-v2');
         },
       );
 
@@ -179,7 +184,7 @@ void main() {
 
     test('no-cache forces revalidation even when max-age exists', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/feed'));
+      final request = testRequest(Uri.parse('https://example.com/feed'));
 
       var callCount = 0;
       Request? revalidationRequest;
@@ -189,7 +194,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text(
+          return textResponse(
             'v1',
             headers: Headers({
               'cache-control': 'no-cache, max-age=60',
@@ -206,7 +211,7 @@ void main() {
         (req, opt) async {
           callCount += 1;
           revalidationRequest = req;
-          return Response(status: 304, headers: Headers({'etag': '"v1"'}));
+          return testResponse(status: 304, headers: Headers({'etag': '"v1"'}));
         },
       );
 
@@ -218,7 +223,7 @@ void main() {
 
     test('304 no-store clears stale cached entry', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/feed'));
+      final request = testRequest(Uri.parse('https://example.com/feed'));
 
       var callCount = 0;
       Request? secondRequest;
@@ -229,7 +234,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text(
+          return textResponse(
             'v1',
             headers: Headers({'cache-control': 'max-age=0', 'etag': '"v1"'}),
           );
@@ -243,7 +248,7 @@ void main() {
         (req, opt) async {
           callCount += 1;
           secondRequest = req;
-          return Response(
+          return testResponse(
             status: 304,
             headers: Headers({'cache-control': 'no-store', 'etag': '"v1"'}),
           );
@@ -253,13 +258,16 @@ void main() {
       expect(second.status, 200);
       expect(await second.text(), 'v1');
 
+      final refreshedRequest = testRequest(
+        Uri.parse('https://example.com/feed'),
+      );
       final third = await middleware.intercept(
-        request,
+        refreshedRequest,
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
           thirdRequest = req;
-          return Response.text(
+          return textResponse(
             'v2',
             headers: Headers({'cache-control': 'max-age=60'}),
           );
@@ -273,7 +281,7 @@ void main() {
 
     test('computes max-age expiry from response receipt time', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/feed'));
+      final request = testRequest(Uri.parse('https://example.com/feed'));
 
       var callCount = 0;
 
@@ -283,7 +291,7 @@ void main() {
         (req, opt) async {
           callCount += 1;
           await Future<void>.delayed(const Duration(milliseconds: 1200));
-          return Response.text(
+          return textResponse(
             'v1',
             headers: Headers({'cache-control': 'max-age=1'}),
           );
@@ -296,7 +304,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text('v2');
+          return textResponse('v2');
         },
       );
 
@@ -306,7 +314,7 @@ void main() {
 
     test('supports bypass flag via RequestOptions.extra', () async {
       final middleware = CacheMiddleware(store: MemoryCacheStore());
-      final request = Request(Uri.parse('https://example.com/feed'));
+      final request = testRequest(Uri.parse('https://example.com/feed'));
 
       var callCount = 0;
 
@@ -315,7 +323,7 @@ void main() {
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;
-          return Response.text(
+          return textResponse(
             'v1',
             headers: Headers({'cache-control': 'max-age=60', 'etag': '"v1"'}),
           );
@@ -328,7 +336,7 @@ void main() {
         const RequestOptions(extra: {CacheOptionsKeys.bypass: true}),
         (req, opt) async {
           callCount += 1;
-          return Response.text('v2');
+          return textResponse('v2');
         },
       );
 

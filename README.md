@@ -183,8 +183,8 @@ Future<void> main() async {
   final client = Oxy();
 
   final request = Request(
-    Uri.parse('https://httpbin.org/get'),
-    headers: Headers({'x-from': 'oxy'}),
+    RequestInput.uri(Uri.parse('https://httpbin.org/get')),
+    RequestInit(headers: Headers({'x-from': 'oxy'})),
   );
 
   final response = await client.send(

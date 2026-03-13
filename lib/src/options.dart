@@ -90,7 +90,7 @@ class RequestOptions {
     this.extra = const {},
   });
 
-  final Headers? headers;
+  final HeadersInit? headers;
   final QueryMap? query;
   final Duration? connectTimeout;
   final Duration? requestTimeout;
@@ -106,7 +106,7 @@ class RequestOptions {
   final Map<String, Object?> extra;
 
   RequestOptions copyWith({
-    Headers? headers,
+    HeadersInit? headers,
     QueryMap? query,
     Duration? connectTimeout,
     Duration? requestTimeout,
@@ -156,7 +156,7 @@ class OxyConfig {
   }) : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
 
   final Uri? baseUrl;
-  final Headers? defaultHeaders;
+  final HeadersInit? defaultHeaders;
   final Duration connectTimeout;
   final Duration requestTimeout;
   final RedirectPolicy redirectPolicy;
@@ -169,7 +169,7 @@ class OxyConfig {
 
   OxyConfig copyWith({
     Uri? baseUrl,
-    Headers? defaultHeaders,
+    HeadersInit? defaultHeaders,
     Duration? connectTimeout,
     Duration? requestTimeout,
     RedirectPolicy? redirectPolicy,

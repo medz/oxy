@@ -20,7 +20,7 @@ void main() {
     });
 
     test('throws OxyDecodeException when response body is not JSON', () async {
-      final response = Response.text('not-json');
+      final response = Response('not-json');
 
       expect(
         response.decode<Map<String, Object?>>(),

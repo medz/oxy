@@ -87,7 +87,7 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
   _bindAbort(controller, options);
 
   final init = RequestInit(
-    method: request.method,
+    method: request.method.value,
     headers: headers,
     keepalive: options.keepAlive,
     redirect: _mapRedirect(options.redirectPolicy ?? RedirectPolicy.follow),
@@ -151,12 +151,12 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
     );
 
     return Response(
-      body: body,
-      status: webResponse.status,
-      statusText: webResponse.statusText,
-      headers: responseHeaders,
-      redirected: webResponse.redirected,
-      url: Uri.tryParse(webResponse.url),
+      body,
+      ResponseInit(
+        status: webResponse.status,
+        statusText: webResponse.statusText,
+        headers: responseHeaders,
+      ),
     );
   } catch (error, trace) {
     if (options.signal?.aborted == true) {

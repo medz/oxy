@@ -1,6 +1,8 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('CookieMiddleware', () {
     test('attaches cookies from jar to outgoing request', () async {
@@ -14,7 +16,7 @@ void main() {
       final middleware = CookieMiddleware(jar);
 
       late Request captured;
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
@@ -37,7 +39,7 @@ void main() {
 
       late Request captured;
       await middleware.intercept(
-        Request(uri, headers: Headers({'cookie': 'trace=abc'})),
+        testRequest(uri, headers: Headers({'cookie': 'trace=abc'})),
         const RequestOptions(),
         (nextRequest, options) async {
           captured = nextRequest;
@@ -45,7 +47,70 @@ void main() {
         },
       );
 
-      expect(captured.headers.get('cookie'), 'trace=abc; sid=456');
+      expect(Cookie.parse(captured.headers.get('cookie')!), {
+        'sid': '456',
+        'trace': 'abc',
+      });
+    });
+
+    test('request cookie header overrides jar cookies by name', () async {
+      final jar = MemoryCookieJar();
+      final uri = Uri.parse('https://example.com/profile');
+
+      await jar.save(uri, [
+        const Cookie('sid', '456', domain: 'example.com', path: '/'),
+        const Cookie('theme', 'dark', domain: 'example.com', path: '/'),
+      ]);
+
+      final middleware = CookieMiddleware(jar);
+      final request = testRequest(
+        uri,
+        headers: Headers({'cookie': 'trace=abc; sid=123'}),
+      );
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      expect(Cookie.parse(request.headers.get('cookie')!), {
+        'sid': '123',
+        'theme': 'dark',
+        'trace': 'abc',
+      });
+    });
+
+    test('cookie names remain case-sensitive when merging', () async {
+      final jar = MemoryCookieJar();
+      final uri = Uri.parse('https://example.com/profile');
+
+      await jar.save(uri, [
+        const Cookie('sid', '456', domain: 'example.com', path: '/'),
+      ]);
+
+      final middleware = CookieMiddleware(jar);
+      final request = testRequest(uri, headers: Headers({'cookie': 'SID=123'}));
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      expect(Cookie.parse(request.headers.get('cookie')!), {
+        'sid': '456',
+        'SID': '123',
+      });
     });
 
     test('stores set-cookie response header into cookie jar', () async {
@@ -53,11 +118,11 @@ void main() {
       final uri = Uri.parse('https://example.com/login');
       final middleware = CookieMiddleware(jar);
 
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
-        return Response(
+        return testResponse(
           headers: Headers({
             'set-cookie': 'sid=server-token; Path=/; HttpOnly',
           }),
@@ -75,11 +140,13 @@ void main() {
       final uri = Uri.parse('https://example.com/login');
       final middleware = CookieMiddleware(jar);
 
-      await middleware.intercept(Request(uri), const RequestOptions(), (
+      await middleware.intercept(testRequest(uri), const RequestOptions(), (
         nextRequest,
         options,
       ) async {
-        return Response(headers: Headers({'set-cookie': 'malformed-cookie'}));
+        return testResponse(
+          headers: Headers({'set-cookie': 'malformed-cookie'}),
+        );
       });
 
       final cookies = await jar.load(uri);

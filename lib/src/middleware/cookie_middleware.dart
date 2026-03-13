@@ -16,29 +16,32 @@ class CookieMiddleware implements OxyMiddleware {
   ) async {
     final hydrated = await _attachCookies(request);
     final response = await next(hydrated, options);
-    await _storeResponseCookies(hydrated.url, response);
+    await _storeResponseCookies(Uri.parse(hydrated.url), response);
     return response;
   }
 
   Future<Request> _attachCookies(Request request) async {
-    final cookies = await jar.load(request.url);
+    final cookies = await jar.load(Uri.parse(request.url));
     if (cookies.isEmpty) {
       return request;
     }
 
-    final cookieValue = cookies
-        .map((cookie) => cookie.toRequestCookie())
-        .join('; ');
-
-    final headers = request.headers.clone();
-    final existing = headers.get('cookie');
-    if (existing == null || existing.isEmpty) {
-      headers.set('cookie', cookieValue);
-    } else {
-      headers.set('cookie', '$existing; $cookieValue');
+    final merged = <String, String>{
+      for (final cookie in cookies) cookie.name: cookie.value,
+    };
+    final existing = request.headers.get('cookie');
+    if (existing != null && existing.isNotEmpty) {
+      merged.addAll(Cookie.parse(existing));
     }
 
-    return request.copyWith(headers: headers);
+    request.headers.set(
+      'cookie',
+      merged.entries
+          .map((entry) => Cookie(entry.key, entry.value).serialize())
+          .join('; '),
+    );
+
+    return request;
   }
 
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {

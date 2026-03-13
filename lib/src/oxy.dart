@@ -75,14 +75,14 @@ class Oxy {
     String method,
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
   }) {
-    final requestHeaders = headers?.clone() ?? Headers();
+    final requestHeaders = Headers(headers);
     final requestBody = _normalizeBody(
       body: body,
       json: json,
@@ -97,10 +97,12 @@ class Oxy {
 
     return send(
       Request(
-        Uri.parse(path),
-        method: method,
-        headers: requestHeaders,
-        body: requestBody,
+        RequestInput.string(path),
+        RequestInit(
+          method: HttpMethod.parse(method),
+          headers: requestHeaders,
+          body: requestBody,
+        ),
       ),
       options: nextOptions,
     );
@@ -110,7 +112,7 @@ class Oxy {
     String method,
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -136,7 +138,7 @@ class Oxy {
     String method,
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -158,7 +160,7 @@ class Oxy {
     String method,
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -181,7 +183,7 @@ class Oxy {
   Future<Response> get(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
     ProgressCallback? onReceiveProgress,
   }) {
@@ -198,7 +200,7 @@ class Oxy {
   Future<OxyResult<Response>> safeGet(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
     ProgressCallback? onReceiveProgress,
   }) {
@@ -215,7 +217,7 @@ class Oxy {
   Future<T> getDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
     Decoder<T>? decoder,
   }) {
@@ -232,7 +234,7 @@ class Oxy {
   Future<OxyResult<T>> safeGetDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
     Decoder<T>? decoder,
   }) {
@@ -249,7 +251,7 @@ class Oxy {
   Future<Response> post(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -272,7 +274,7 @@ class Oxy {
   Future<OxyResult<Response>> safePost(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -295,7 +297,7 @@ class Oxy {
   Future<T> postDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -316,7 +318,7 @@ class Oxy {
   Future<OxyResult<T>> safePostDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -337,7 +339,7 @@ class Oxy {
   Future<Response> put(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -360,7 +362,7 @@ class Oxy {
   Future<OxyResult<Response>> safePut(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -383,7 +385,7 @@ class Oxy {
   Future<T> putDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -404,7 +406,7 @@ class Oxy {
   Future<OxyResult<T>> safePutDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -425,7 +427,7 @@ class Oxy {
   Future<Response> patch(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -448,7 +450,7 @@ class Oxy {
   Future<OxyResult<Response>> safePatch(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -471,7 +473,7 @@ class Oxy {
   Future<T> patchDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -492,7 +494,7 @@ class Oxy {
   Future<OxyResult<T>> safePatchDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -513,7 +515,7 @@ class Oxy {
   Future<Response> delete(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -536,7 +538,7 @@ class Oxy {
   Future<OxyResult<Response>> safeDelete(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -559,7 +561,7 @@ class Oxy {
   Future<T> deleteDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -580,7 +582,7 @@ class Oxy {
   Future<OxyResult<T>> safeDeleteDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -601,7 +603,7 @@ class Oxy {
   Future<Response> head(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
   }) {
     return request(
@@ -616,7 +618,7 @@ class Oxy {
   Future<OxyResult<Response>> safeHead(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     RequestOptions? options,
   }) {
     return safeRequest(
@@ -631,7 +633,7 @@ class Oxy {
   Future<Response> options(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -650,7 +652,7 @@ class Oxy {
   Future<OxyResult<Response>> safeOptions(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -669,7 +671,7 @@ class Oxy {
   Future<T> optionsDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -690,7 +692,7 @@ class Oxy {
   Future<OxyResult<T>> safeOptionsDecoded<T>(
     String path, {
     QueryMap? query,
-    Headers? headers,
+    HeadersInit? headers,
     Object? body,
     Object? json,
     RequestOptions? options,
@@ -723,7 +725,7 @@ class Oxy {
     middleware.addAll(incoming.middleware);
 
     return RequestOptions(
-      headers: incoming.headers?.clone(),
+      headers: incoming.headers,
       query: incoming.query,
       connectTimeout: incoming.connectTimeout ?? _config.connectTimeout,
       requestTimeout: incoming.requestTimeout ?? _config.requestTimeout,
@@ -741,20 +743,40 @@ class Oxy {
   }
 
   Request _prepareRequest(Request request, RequestOptions options) {
-    final resolvedUrl = _resolveUrl(_mergeQuery(request.url, options.query));
+    final resolvedUrl = _resolveUrl(
+      _mergeQuery(Uri.parse(request.url), options.query),
+    );
 
-    final mergedHeaders = Headers();
-    _appendHeaders(mergedHeaders, _config.defaultHeaders);
-    _appendHeaders(mergedHeaders, request.headers);
-    _appendHeaders(mergedHeaders, options.headers);
+    _appendMissingHeaders(request.headers, _config.defaultHeaders);
+    _overrideHeaders(request.headers, options.headers);
 
     if (!isWebPlatform &&
         _config.userAgent.isNotEmpty &&
-        !mergedHeaders.has('user-agent')) {
-      mergedHeaders.set('user-agent', _config.userAgent);
+        !request.headers.has('user-agent')) {
+      request.headers.set('user-agent', _config.userAgent);
     }
 
-    return request.copyWith(url: resolvedUrl, headers: mergedHeaders);
+    if (request.url == resolvedUrl.toString()) {
+      return request;
+    }
+
+    return Request(
+      RequestInput.uri(resolvedUrl),
+      RequestInit(
+        method: request.method,
+        headers: request.headers,
+        body: request.body?.clone(),
+        referrer: request.referrer,
+        referrerPolicy: request.referrerPolicy,
+        mode: request.mode,
+        credentials: request.credentials,
+        cache: request.cache,
+        redirect: request.redirect,
+        integrity: request.integrity,
+        keepalive: request.keepalive,
+        duplex: request.duplex,
+      ),
+    );
   }
 
   Future<Response> _sendWithRetry(
@@ -767,7 +789,7 @@ class Oxy {
     Response? lastResponse;
 
     for (var attempt = 0; ; attempt++) {
-      final attemptRequest = request.clone();
+      final attemptRequest = request;
 
       try {
         final response = await _sendOnce(attemptRequest, options);
@@ -915,7 +937,7 @@ class Oxy {
       'PUT',
       'DELETE',
     };
-    return idempotentMethods.contains(request.method.toUpperCase());
+    return idempotentMethods.contains(request.method.value);
   }
 
   Future<void> _waitRetryDelay(int attempt, RequestOptions options) {
@@ -1024,15 +1046,42 @@ class Oxy {
     );
   }
 
-  static void _appendHeaders(Headers target, Headers? source) {
+  static void _appendMissingHeaders(Headers target, HeadersInit? source) {
     if (source == null) {
       return;
     }
 
-    for (final name in source.names()) {
+    final headers = source is Headers ? source : Headers(source);
+
+    for (final name in headers.keys()) {
+      for (final value in _headerValues(headers, name)) {
+        if (!target.has(name)) {
+          target.append(name, value);
+        }
+      }
+    }
+  }
+
+  static void _overrideHeaders(Headers target, HeadersInit? source) {
+    if (source == null) {
+      return;
+    }
+
+    final headers = source is Headers ? source : Headers(source);
+
+    for (final name in headers.keys()) {
       target.delete(name);
-      for (final value in source.getAll(name)) {
+      for (final value in _headerValues(headers, name)) {
         target.append(name, value);
+      }
+    }
+  }
+
+  static Iterable<String> _headerValues(Headers headers, String name) sync* {
+    final normalizedName = name.toLowerCase();
+    for (final entry in headers) {
+      if (entry.key == normalizedName) {
+        yield entry.value;
       }
     }
   }
@@ -1081,7 +1130,7 @@ Future<Response> fetch(
   String url, {
   String method = 'GET',
   QueryMap? query,
-  Headers? headers,
+  HeadersInit? headers,
   Object? body,
   Object? json,
   RequestOptions? options,
@@ -1105,7 +1154,7 @@ Future<OxyResult<Response>> safeFetch(
   String url, {
   String method = 'GET',
   QueryMap? query,
-  Headers? headers,
+  HeadersInit? headers,
   Object? body,
   Object? json,
   RequestOptions? options,
@@ -1129,7 +1178,7 @@ Future<T> fetchDecoded<T>(
   String url, {
   String method = 'GET',
   QueryMap? query,
-  Headers? headers,
+  HeadersInit? headers,
   Object? body,
   Object? json,
   RequestOptions? options,
@@ -1151,7 +1200,7 @@ Future<OxyResult<T>> safeFetchDecoded<T>(
   String url, {
   String method = 'GET',
   QueryMap? query,
-  Headers? headers,
+  HeadersInit? headers,
   Object? body,
   Object? json,
   RequestOptions? options,

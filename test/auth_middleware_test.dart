@@ -1,11 +1,13 @@
 import 'package:oxy/oxy.dart';
 import 'package:test/test.dart';
 
+import 'test_utils.dart';
+
 void main() {
   group('AuthMiddleware', () {
     test('adds authorization header from static token', () async {
       final middleware = AuthMiddleware.staticToken('abc123');
-      final request = Request(Uri.parse('https://example.com'));
+      final request = testRequest(Uri.parse('https://example.com'));
 
       late Request captured;
       await middleware.intercept(request, const RequestOptions(), (
@@ -21,7 +23,7 @@ void main() {
 
     test('does not override existing header by default', () async {
       final middleware = AuthMiddleware.staticToken('abc123');
-      final request = Request(
+      final request = testRequest(
         Uri.parse('https://example.com'),
         headers: Headers({'authorization': 'Bearer existing'}),
       );
@@ -43,7 +45,7 @@ void main() {
         'new-token',
         overrideExisting: true,
       );
-      final request = Request(
+      final request = testRequest(
         Uri.parse('https://example.com'),
         headers: Headers({'authorization': 'Bearer old-token'}),
       );
@@ -62,7 +64,7 @@ void main() {
 
     test('supports no scheme mode', () async {
       final middleware = AuthMiddleware.staticToken('raw-token', scheme: null);
-      final request = Request(Uri.parse('https://example.com'));
+      final request = testRequest(Uri.parse('https://example.com'));
 
       late Request captured;
       await middleware.intercept(request, const RequestOptions(), (
@@ -78,7 +80,7 @@ void main() {
 
     test('skips header when provider returns null', () async {
       final middleware = AuthMiddleware(tokenProvider: (_, _) => null);
-      final request = Request(Uri.parse('https://example.com'));
+      final request = testRequest(Uri.parse('https://example.com'));
 
       late Request captured;
       await middleware.intercept(request, const RequestOptions(), (
