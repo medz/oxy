@@ -152,7 +152,7 @@ class OxyConfig {
     this.retryPolicy = const RetryPolicy(),
     this.httpErrorPolicy = HttpErrorPolicy.throwException,
     this.middleware = const [],
-    this.userAgent = 'oxy/0.1.0',
+    this.userAgent = 'oxy/0.2.0',
   }) : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
 
   final Uri? baseUrl;

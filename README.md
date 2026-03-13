@@ -21,7 +21,7 @@ Under the hood, `oxy` uses [`ht`](https://pub.dev/packages/ht) request/response 
 
 ```yaml
 dependencies:
-  oxy: ^0.1.0
+  oxy: ^0.2.0
 ```
 
 ## Quick Start

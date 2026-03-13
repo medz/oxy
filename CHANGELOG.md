@@ -1,8 +1,27 @@
 ## Unreleased
 
+- No changes yet.
+
+## 0.2.0
+
+### Breaking Changes
+
+- Upgraded to `ht 0.3` and aligned Oxy request/response APIs with the new `ht` request and response semantics.
+- Low-level request construction now follows the `ht 0.3` model, including `RequestInput.*`, `RequestInit`, `HttpMethod`, and `HeadersInit`-based inputs where applicable.
+- Middleware now forwards and mutates the active `Request` instance instead of depending on copied request objects. Custom middleware that relied on copy-on-write behavior should update to mutate the provided request before calling `next`.
+- Re-exported cookie types now follow `ocookie 0.2.0` two-state flag semantics. `Cookie.httpOnly`, `Cookie.secure`, and `Cookie.partitioned` now default to `false`, and `CookieNullableField.httpOnly`, `CookieNullableField.secure`, and `CookieNullableField.partitioned` are no longer available.
+
 ### Changed
 
-- Upgraded `ocookie` to `0.2.0` and aligned cookie handling with its two-state flag semantics.
+- Upgraded dependencies to `ht ^0.3.0` and `ocookie ^0.2.0`.
+- Updated examples, README snippets, and test coverage for the `ht 0.3` request construction model.
+- Aligned transport, cache, logging, auth, request ID, and cookie middleware behavior with the latest `ht` header and response APIs.
+
+### Fixed
+
+- Preserved request `Cookie` header precedence over cookie jar values when merging cookies in `CookieMiddleware`.
+- Kept cookie parsing aligned with `ocookie 0.2.0`, including explicit `Secure=false`, `HttpOnly=false`, and `Partitioned=false` flag handling.
+- Removed unnecessary request copying inside the middleware pipeline while preserving request mutation behavior across built-in middleware.
 
 ## 0.1.0
 
