@@ -2,6 +2,14 @@
 
 - No changes yet.
 
+## 0.2.1
+
+### Fixed
+
+- Raised the `ht` lower bound to `^0.3.1` to avoid resolving the broken `ht 0.3.0` release.
+- Updated Oxy request construction to match the corrected `ht 0.3.1` `Request(Object? input, [RequestInit? init])` API.
+- Refreshed README snippets and public API tests for the `ht 0.3.1` hotfix line.
+
 ## 0.2.0
 
 ### Breaking Changes

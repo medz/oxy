@@ -7,7 +7,7 @@ Request testRequest(
   Object? body,
 }) {
   return Request(
-    RequestInput.uri(uri),
+    uri,
     RequestInit(method: HttpMethod.parse(method), headers: headers, body: body),
   );
 }

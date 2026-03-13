@@ -183,7 +183,7 @@ Future<void> main() async {
   final client = Oxy();
 
   final request = Request(
-    RequestInput.uri(Uri.parse('https://httpbin.org/get')),
+    Uri.parse('https://httpbin.org/get'),
     RequestInit(headers: Headers({'x-from': 'oxy'})),
   );
 
