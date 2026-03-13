@@ -28,6 +28,18 @@ void main() {
       expect(ttl, inInclusiveRange(110, 120));
     });
 
+    test('parseSetCookie treats explicit false flags as disabled', () {
+      final uri = Uri.parse('https://example.com/login');
+      final cookie = parseSetCookie(
+        'sid=abc; Secure=false; HttpOnly=false; Partitioned=false',
+        uri,
+      );
+
+      expect(cookie.secure, isFalse);
+      expect(cookie.httpOnly, isFalse);
+      expect(cookie.partitioned, isFalse);
+    });
+
     test('matchesUri enforces path segment boundary', () {
       const cookie = Cookie('sid', 'abc', domain: 'example.com', path: '/foo');
 

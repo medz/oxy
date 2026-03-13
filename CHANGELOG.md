@@ -1,6 +1,8 @@
 ## Unreleased
 
-- No changes yet.
+### Changed
+
+- Upgraded `ocookie` to `0.2.0` and aligned cookie handling with its two-state flag semantics.
 
 ## 0.1.0
 

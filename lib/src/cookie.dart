@@ -48,7 +48,7 @@ extension OxyCookieExtension on ocookie.Cookie {
       return false;
     }
 
-    if ((secure ?? false) && uri.scheme != 'https') {
+    if (secure && uri.scheme != 'https') {
       return false;
     }
 
