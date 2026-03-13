@@ -4,7 +4,7 @@ import 'package:test/test.dart';
 void main() {
   test('re-exports ht types', () async {
     final request = Request(
-      RequestInput.uri(Uri.parse('https://example.com')),
+      Uri.parse('https://example.com'),
       RequestInit(headers: Headers({'x-test': '1'})),
     );
 

@@ -97,7 +97,7 @@ class Oxy {
 
     return send(
       Request(
-        RequestInput.string(path),
+        path,
         RequestInit(
           method: HttpMethod.parse(method),
           headers: requestHeaders,
@@ -761,7 +761,7 @@ class Oxy {
     }
 
     return Request(
-      RequestInput.uri(resolvedUrl),
+      resolvedUrl,
       RequestInit(
         method: request.method,
         headers: request.headers,
