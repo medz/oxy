@@ -26,16 +26,20 @@ class CookieMiddleware implements OxyMiddleware {
       return request;
     }
 
-    final cookieValue = cookies
-        .map((cookie) => cookie.toRequestCookie())
-        .join('; ');
-
+    final merged = <String, String>{
+      for (final cookie in cookies) cookie.name: cookie.value,
+    };
     final existing = request.headers.get('cookie');
-    if (existing == null || existing.isEmpty) {
-      request.headers.set('cookie', cookieValue);
-    } else {
-      request.headers.set('cookie', '$existing; $cookieValue');
+    if (existing != null && existing.isNotEmpty) {
+      merged.addAll(Cookie.parse(existing));
     }
+
+    request.headers.set(
+      'cookie',
+      merged.entries
+          .map((entry) => Cookie(entry.key, entry.value).serialize())
+          .join('; '),
+    );
 
     return request;
   }

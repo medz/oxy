@@ -47,7 +47,70 @@ void main() {
         },
       );
 
-      expect(captured.headers.get('cookie'), 'trace=abc; sid=456');
+      expect(Cookie.parse(captured.headers.get('cookie')!), {
+        'sid': '456',
+        'trace': 'abc',
+      });
+    });
+
+    test('request cookie header overrides jar cookies by name', () async {
+      final jar = MemoryCookieJar();
+      final uri = Uri.parse('https://example.com/profile');
+
+      await jar.save(uri, [
+        const Cookie('sid', '456', domain: 'example.com', path: '/'),
+        const Cookie('theme', 'dark', domain: 'example.com', path: '/'),
+      ]);
+
+      final middleware = CookieMiddleware(jar);
+      final request = testRequest(
+        uri,
+        headers: Headers({'cookie': 'trace=abc; sid=123'}),
+      );
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      expect(Cookie.parse(request.headers.get('cookie')!), {
+        'sid': '123',
+        'theme': 'dark',
+        'trace': 'abc',
+      });
+    });
+
+    test('cookie names remain case-sensitive when merging', () async {
+      final jar = MemoryCookieJar();
+      final uri = Uri.parse('https://example.com/profile');
+
+      await jar.save(uri, [
+        const Cookie('sid', '456', domain: 'example.com', path: '/'),
+      ]);
+
+      final middleware = CookieMiddleware(jar);
+      final request = testRequest(uri, headers: Headers({'cookie': 'SID=123'}));
+
+      await middleware.intercept(request, const RequestOptions(), (
+        nextRequest,
+        options,
+      ) async {
+        return Response();
+      });
+
+      expect(Cookie.parse(request.headers.get('cookie')!), {
+        'sid': '456',
+        'SID': '123',
+      });
     });
 
     test('stores set-cookie response header into cookie jar', () async {
