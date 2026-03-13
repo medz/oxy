@@ -258,8 +258,11 @@ void main() {
       expect(second.status, 200);
       expect(await second.text(), 'v1');
 
+      final refreshedRequest = testRequest(
+        Uri.parse('https://example.com/feed'),
+      );
       final third = await middleware.intercept(
-        request,
+        refreshedRequest,
         const RequestOptions(),
         (req, opt) async {
           callCount += 1;

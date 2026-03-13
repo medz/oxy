@@ -1,6 +1,5 @@
 import 'package:ht/ht.dart';
 
-import '../_internal/request_utils.dart';
 import '../cookie.dart';
 import '../options.dart';
 
@@ -31,15 +30,14 @@ class CookieMiddleware implements OxyMiddleware {
         .map((cookie) => cookie.toRequestCookie())
         .join('; ');
 
-    final headers = cloneHeaders(request.headers);
-    final existing = headers.get('cookie');
+    final existing = request.headers.get('cookie');
     if (existing == null || existing.isEmpty) {
-      headers.set('cookie', cookieValue);
+      request.headers.set('cookie', cookieValue);
     } else {
-      headers.set('cookie', '$existing; $cookieValue');
+      request.headers.set('cookie', '$existing; $cookieValue');
     }
 
-    return copyRequest(request, headers: headers);
+    return request;
   }
 
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {

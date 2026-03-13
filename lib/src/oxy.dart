@@ -11,7 +11,6 @@ import 'result.dart';
 
 import '_internal/is_web_platform.native.dart'
     if (dart.library.js_interop) '_internal/is_web_platform.web.dart';
-import '_internal/request_utils.dart';
 import '_internal/transport.stub.dart'
     if (dart.library.io) '_internal/transport.native.dart'
     if (dart.library.js_interop) '_internal/transport.web.dart'
@@ -748,18 +747,36 @@ class Oxy {
       _mergeQuery(Uri.parse(request.url), options.query),
     );
 
-    final mergedHeaders = Headers();
-    _appendHeaders(mergedHeaders, _config.defaultHeaders);
-    _appendHeaders(mergedHeaders, request.headers);
-    _appendHeaders(mergedHeaders, options.headers);
+    _appendMissingHeaders(request.headers, _config.defaultHeaders);
+    _overrideHeaders(request.headers, options.headers);
 
     if (!isWebPlatform &&
         _config.userAgent.isNotEmpty &&
-        !mergedHeaders.has('user-agent')) {
-      mergedHeaders.set('user-agent', _config.userAgent);
+        !request.headers.has('user-agent')) {
+      request.headers.set('user-agent', _config.userAgent);
     }
 
-    return copyRequest(request, url: resolvedUrl, headers: mergedHeaders);
+    if (request.url == resolvedUrl.toString()) {
+      return request;
+    }
+
+    return Request(
+      RequestInput.uri(resolvedUrl),
+      RequestInit(
+        method: request.method,
+        headers: request.headers,
+        body: request.body?.clone(),
+        referrer: request.referrer,
+        referrerPolicy: request.referrerPolicy,
+        mode: request.mode,
+        credentials: request.credentials,
+        cache: request.cache,
+        redirect: request.redirect,
+        integrity: request.integrity,
+        keepalive: request.keepalive,
+        duplex: request.duplex,
+      ),
+    );
   }
 
   Future<Response> _sendWithRetry(
@@ -772,7 +789,7 @@ class Oxy {
     Response? lastResponse;
 
     for (var attempt = 0; ; attempt++) {
-      final attemptRequest = copyRequest(request);
+      final attemptRequest = request;
 
       try {
         final response = await _sendOnce(attemptRequest, options);
@@ -1029,7 +1046,23 @@ class Oxy {
     );
   }
 
-  static void _appendHeaders(Headers target, HeadersInit? source) {
+  static void _appendMissingHeaders(Headers target, HeadersInit? source) {
+    if (source == null) {
+      return;
+    }
+
+    final headers = source is Headers ? source : Headers(source);
+
+    for (final name in headers.keys()) {
+      for (final value in _headerValues(headers, name)) {
+        if (!target.has(name)) {
+          target.append(name, value);
+        }
+      }
+    }
+  }
+
+  static void _overrideHeaders(Headers target, HeadersInit? source) {
     if (source == null) {
       return;
     }

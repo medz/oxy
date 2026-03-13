@@ -1,6 +1,5 @@
 import 'package:ht/ht.dart';
 
-import '../_internal/request_utils.dart';
 import '../options.dart';
 
 typedef CacheKeyBuilder =
@@ -184,8 +183,8 @@ class CacheMiddleware implements OxyMiddleware {
       return request;
     }
 
-    final headers = cloneHeaders(request.headers)..set('if-none-match', etag);
-    return copyRequest(request, headers: headers);
+    request.headers.set('if-none-match', etag);
+    return request;
   }
 
   Response _mergeNotModified(Response cached, Response notModified) {

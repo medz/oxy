@@ -12,28 +12,6 @@ Request testRequest(
   );
 }
 
-Headers cloneTestHeaders(Headers headers) => Headers(headers.entries());
-
-Request copyTestRequest(Request request, {Headers? headers, Object? body}) {
-  return Request(
-    RequestInput.string(request.url),
-    RequestInit(
-      method: request.method,
-      headers: headers ?? cloneTestHeaders(request.headers),
-      body: body ?? request.body?.clone(),
-      referrer: request.referrer,
-      referrerPolicy: request.referrerPolicy,
-      mode: request.mode,
-      credentials: request.credentials,
-      cache: request.cache,
-      redirect: request.redirect,
-      integrity: request.integrity,
-      keepalive: request.keepalive,
-      duplex: request.duplex,
-    ),
-  );
-}
-
 Response testResponse({
   Object? body,
   int status = 200,
