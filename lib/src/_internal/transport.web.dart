@@ -179,8 +179,13 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
 WebRequestBodyMode _requestBodyMode(RequestOptions options) {
   final rawValue = options.extra[webRequestBodyModeExtraKey];
-  if (rawValue is String) {
+  if (rawValue is String &&
+      WebRequestBodyMode.values.any((mode) => mode.name == rawValue)) {
     return WebRequestBodyMode.values.byName(rawValue);
+  }
+
+  if (rawValue != null) {
+    return WebRequestBodyMode.buffered;
   }
 
   return WebRequestBodyMode.streaming;

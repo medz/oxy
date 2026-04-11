@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/_internal/web_request_body_mode.dart';
 import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
 
@@ -18,8 +19,7 @@ void main() {
     late String jsonUrl;
 
     setUpAll(() async {
-      final channel = spawnHybridCode(
-        r'''
+      final channel = spawnHybridCode(r'''
         import 'dart:convert';
         import 'dart:io';
 
@@ -58,9 +58,7 @@ void main() {
             await request.response.close();
           }
         }
-        ''',
-        stayAlive: true,
-      );
+        ''', stayAlive: true);
 
       echoUri = Uri.parse('http://127.0.0.1:${await channel.firstAsInt}/echo');
     });
@@ -134,16 +132,44 @@ void main() {
       );
 
       expect(response.status, 200);
-      expect(
-        await response.json<Map<String, Object?>>(),
-        {
-          'method': 'POST',
-          'body': jsonEncode({
-            'name': 'Browser Repro',
-            'email': 'browser-repro@spry.dev',
-          }),
-        },
+      expect(await response.json<Map<String, Object?>>(), {
+        'method': 'POST',
+        'body': jsonEncode({
+          'name': 'Browser Repro',
+          'email': 'browser-repro@spry.dev',
+        }),
+      });
+    });
+
+    test('ignores invalid internal web request body mode metadata', () async {
+      final client = Oxy();
+      final response = await client.send(
+        Request(
+          echoUri.toString(),
+          RequestInit(
+            method: HttpMethod.post,
+            headers: Headers({'content-type': 'application/json'}),
+            body: jsonEncode({
+              'name': 'Invalid Metadata',
+              'email': 'invalid-metadata@spry.dev',
+            }),
+          ),
+        ),
+        options: const RequestOptions(
+          extra: <String, Object?>{
+            webRequestBodyModeExtraKey: 'not-a-valid-mode',
+          },
+        ),
       );
+
+      expect(response.status, 200);
+      expect(await response.json<Map<String, Object?>>(), {
+        'method': 'POST',
+        'body': jsonEncode({
+          'name': 'Invalid Metadata',
+          'email': 'invalid-metadata@spry.dev',
+        }),
+      });
     });
 
     test('reports send and receive progress on browser', () async {
