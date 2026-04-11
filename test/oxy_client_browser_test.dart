@@ -172,6 +172,32 @@ void main() {
       });
     });
 
+    test('manual send preserves browser request body mode metadata', () async {
+      final client = Oxy();
+      final response = await client.send(
+        Request(
+          echoUri.toString(),
+          RequestInit(
+            method: HttpMethod.post,
+            headers: Headers({'content-type': 'application/json'}),
+            body: jsonEncode({
+              'name': 'Manual Send',
+              'email': 'manual-send@spry.dev',
+            }),
+          ),
+        ),
+      );
+
+      expect(response.status, 200);
+      expect(await response.json<Map<String, Object?>>(), {
+        'method': 'POST',
+        'body': jsonEncode({
+          'name': 'Manual Send',
+          'email': 'manual-send@spry.dev',
+        }),
+      });
+    });
+
     test('reports send and receive progress on browser', () async {
       final client = Oxy();
       final sent = <TransferProgress>[];
