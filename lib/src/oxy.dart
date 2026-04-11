@@ -15,6 +15,7 @@ import '_internal/transport.stub.dart'
     if (dart.library.io) '_internal/transport.native.dart'
     if (dart.library.js_interop) '_internal/transport.web.dart'
     as transport;
+import '_internal/web_request_body_mode.dart';
 
 class Oxy {
   Oxy([OxyConfig? config]) : _config = config ?? const OxyConfig();
@@ -91,6 +92,10 @@ class Oxy {
 
     final nextOptions = (options ?? const RequestOptions()).copyWith(
       query: query,
+      extra: _withWebRequestBodyMode(
+        options?.extra ?? const {},
+        requestBody,
+      ),
       onSendProgress: onSendProgress,
       onReceiveProgress: onReceiveProgress,
     );
@@ -1028,6 +1033,22 @@ class Oxy {
     }
 
     return body;
+  }
+
+  static Map<String, Object?> _withWebRequestBodyMode(
+    Map<String, Object?> extra,
+    Object? body,
+  ) {
+    if (body == null) {
+      return extra;
+    }
+
+    return <String, Object?>{
+      ...extra,
+      webRequestBodyModeExtraKey: body is Stream<List<int>>
+          ? WebRequestBodyMode.streaming.name
+          : WebRequestBodyMode.buffered.name,
+    };
   }
 
   Uri _resolveUrl(Uri url) {

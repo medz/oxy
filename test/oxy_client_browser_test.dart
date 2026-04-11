@@ -4,12 +4,66 @@ library;
 import 'dart:convert';
 
 import 'package:oxy/oxy.dart';
+import 'package:stream_channel/stream_channel.dart';
 import 'package:test/test.dart';
+
+extension on StreamChannel {
+  Future<int> get firstAsInt async => ((await stream.first) as num).toInt();
+}
 
 void main() {
   group('Oxy client (browser)', () {
+    late Uri echoUri;
     late String textUrl;
     late String jsonUrl;
+
+    setUpAll(() async {
+      final channel = spawnHybridCode(
+        r'''
+        import 'dart:convert';
+        import 'dart:io';
+
+        import 'package:stream_channel/stream_channel.dart';
+
+        Future<void> hybridMain(StreamChannel channel) async {
+          final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+          channel.sink.add(server.port);
+
+          await for (final request in server) {
+            request.response.headers
+              ..set('access-control-allow-origin', '*')
+              ..set('access-control-allow-headers', 'content-type')
+              ..set('access-control-allow-methods', 'POST, OPTIONS');
+
+            if (request.method == 'OPTIONS') {
+              request.response
+                ..statusCode = HttpStatus.noContent
+                ..close();
+              continue;
+            }
+
+            if (request.uri.path != '/echo') {
+              request.response
+                ..statusCode = HttpStatus.notFound
+                ..close();
+              continue;
+            }
+
+            final body = await utf8.decodeStream(request);
+            request.response.headers.contentType = ContentType.json;
+            request.response.write(
+              jsonEncode({'method': request.method, 'body': body}),
+            );
+            await request.response.close();
+          }
+        }
+        ''',
+        stayAlive: true,
+      );
+
+      echoUri = Uri.parse('http://127.0.0.1:${await channel.firstAsInt}/echo');
+    });
 
     setUp(() {
       textUrl = Uri.dataFromString(
@@ -66,6 +120,30 @@ void main() {
 
       expect(result.isFailure, isTrue);
       expect(result.error, isA<OxyCancelledException>());
+    });
+
+    test('posts JSON body to HTTP/1.1 endpoint', () async {
+      final client = Oxy();
+      final response = await client.post(
+        echoUri.toString(),
+        headers: Headers({'content-type': 'application/json'}),
+        body: jsonEncode({
+          'name': 'Browser Repro',
+          'email': 'browser-repro@spry.dev',
+        }),
+      );
+
+      expect(response.status, 200);
+      expect(
+        await response.json<Map<String, Object?>>(),
+        {
+          'method': 'POST',
+          'body': jsonEncode({
+            'name': 'Browser Repro',
+            'email': 'browser-repro@spry.dev',
+          }),
+        },
+      );
     });
 
     test('reports send and receive progress on browser', () async {
