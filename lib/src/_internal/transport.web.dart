@@ -1,9 +1,11 @@
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'package:ht/ht.dart';
 
 import '../errors.dart';
 import '../options.dart';
+import 'web_request_body_mode.dart';
 import 'web_stream_utils.dart';
 
 extension type IteratorReturnResult._(JSObject _) implements JSObject {
@@ -41,14 +43,14 @@ extension type RequestInit._(JSObject _) implements JSObject {
   external factory RequestInit({
     String? method,
     WebHeaders? headers,
-    ReadableStream? body,
+    JSAny? body,
     bool? keepalive,
     String? redirect,
     String? duplex,
     WebAbortSignal? signal,
   });
 
-  external ReadableStream? body;
+  external JSAny? body;
   external String? duplex;
   external WebAbortSignal? signal;
 }
@@ -96,8 +98,12 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
   final requestBody = request.body;
   if (requestBody != null) {
-    init.body = toWebReadableStream(requestBody);
-    init.duplex = 'half';
+    if (_requestBodyMode(options) == WebRequestBodyMode.streaming) {
+      init.body = toWebReadableStream(requestBody);
+      init.duplex = 'half';
+    } else {
+      init.body = (await _materializeRequestBody(requestBody)).toJS;
+    }
   }
 
   try {
@@ -169,6 +175,27 @@ Future<Response> fetchTransport(Request request, RequestOptions options) async {
 
     throw OxyNetworkException(error.toString(), cause: error, trace: trace);
   }
+}
+
+WebRequestBodyMode _requestBodyMode(RequestOptions options) {
+  final rawValue = options.extra[webRequestBodyModeExtraKey];
+  if (rawValue is String &&
+      WebRequestBodyMode.values.any((mode) => mode.name == rawValue)) {
+    return WebRequestBodyMode.values.byName(rawValue);
+  }
+
+  if (rawValue != null) {
+    return WebRequestBodyMode.buffered;
+  }
+
+  return WebRequestBodyMode.streaming;
+}
+
+Future<Uint8List> _materializeRequestBody(Body requestBody) {
+  // Non-stream request bodies should align with native `fetch` semantics on
+  // web. Materializing these bodies avoids accidentally opting into browser
+  // request streaming, which requires `duplex: 'half'` and rejects HTTP/1.x.
+  return requestBody.bytes();
 }
 
 void _bindAbort(AbortController controller, RequestOptions options) {

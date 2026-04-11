@@ -15,6 +15,7 @@ import '_internal/transport.stub.dart'
     if (dart.library.io) '_internal/transport.native.dart'
     if (dart.library.js_interop) '_internal/transport.web.dart'
     as transport;
+import '_internal/web_request_body_mode.dart';
 
 class Oxy {
   Oxy([OxyConfig? config]) : _config = config ?? const OxyConfig();
@@ -39,7 +40,9 @@ class Oxy {
   }
 
   Future<Response> send(Request request, {RequestOptions? options}) async {
-    final resolvedOptions = _resolveOptions(options);
+    final resolvedOptions = _resolveOptions(
+      _ensureWebRequestBodyMode(options, request),
+    );
     final signal = resolvedOptions.signal;
     if (signal?.aborted ?? false) {
       throw OxyCancelledException(reason: signal?.reason);
@@ -91,6 +94,7 @@ class Oxy {
 
     final nextOptions = (options ?? const RequestOptions()).copyWith(
       query: query,
+      extra: _withWebRequestBodyMode(options?.extra ?? const {}, requestBody),
       onSendProgress: onSendProgress,
       onReceiveProgress: onReceiveProgress,
     );
@@ -1028,6 +1032,44 @@ class Oxy {
     }
 
     return body;
+  }
+
+  static Map<String, Object?> _withWebRequestBodyMode(
+    Map<String, Object?> extra,
+    Object? body,
+  ) {
+    if (body == null) {
+      return extra;
+    }
+
+    return <String, Object?>{
+      ...extra,
+      webRequestBodyModeExtraKey: body is Stream<List<int>>
+          ? WebRequestBodyMode.streaming.name
+          : WebRequestBodyMode.buffered.name,
+    };
+  }
+
+  static RequestOptions? _ensureWebRequestBodyMode(
+    RequestOptions? options,
+    Request request,
+  ) {
+    final body = request.body;
+    final extra = options?.extra ?? const <String, Object?>{};
+    if (body == null || extra.containsKey(webRequestBodyModeExtraKey)) {
+      return options;
+    }
+
+    return (options ?? const RequestOptions()).copyWith(
+      extra: <String, Object?>{
+        ...extra,
+        // Manually-constructed Request instances do not preserve whether the
+        // original body came from a String/bytes source or a Dart stream.
+        // Defaulting to buffered matches native browser fetch for common
+        // request bodies without overriding explicit streaming metadata.
+        webRequestBodyModeExtraKey: WebRequestBodyMode.buffered.name,
+      },
+    );
   }
 
   Uri _resolveUrl(Uri url) {
