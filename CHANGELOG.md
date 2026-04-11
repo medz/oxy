@@ -1,6 +1,12 @@
 ## Unreleased
 
-- No changes yet.
+## 0.2.2
+
+### Fixed
+
+- Restored browser compatibility for non-stream request bodies by avoiding accidental request streaming on HTTP/1.1 endpoints.
+- Preserved the intended web body transport mode for manual `send(Request(...))` calls and hardened invalid internal body-mode metadata handling.
+- Added browser regression coverage for JSON POST requests and manual request-body mode handling.
 
 ## 0.2.1
 

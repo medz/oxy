@@ -1,6 +1,6 @@
 name: oxy
 description: A production-ready HTTP client for Dart and Flutter with middleware, retries, timeout, and safe APIs.
-version: 0.2.1
+version: 0.2.2
 repository: https://github.com/medz/oxy
 
 topics:
