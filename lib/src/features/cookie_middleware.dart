@@ -1,3 +1,4 @@
+import '../core/errors.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
@@ -20,10 +21,17 @@ final class CookieMiddleware implements Middleware {
     }
 
     final hydrated = await _attachCookies(request);
-    final response = await next(hydrated, context);
-    final cookieUri = response.url.hasScheme ? response.url : hydrated.uri;
-    await _storeResponseCookies(cookieUri, response);
-    return response;
+    try {
+      final response = await next(hydrated, context);
+      await _storeResponseCookies(_cookieUri(hydrated, response), response);
+      return response;
+    } on StatusError catch (error) {
+      await _storeResponseCookies(
+        _cookieUri(hydrated, error.statusResponse),
+        error.statusResponse,
+      );
+      rethrow;
+    }
   }
 
   Future<Request> _attachCookies(Request request) async {
@@ -63,5 +71,9 @@ final class CookieMiddleware implements Middleware {
     if (parsed.isNotEmpty) {
       await jar.save(requestUrl, parsed);
     }
+  }
+
+  Uri _cookieUri(Request request, Response response) {
+    return response.url.hasScheme ? response.url : request.uri;
   }
 }

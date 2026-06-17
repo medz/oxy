@@ -19,4 +19,18 @@ void main() {
     expect(response.status, 200);
     expect(await response.json<Map<String, Object?>>(), {'ok': true});
   });
+
+  test('browser transport rejects custom redirect limits', () async {
+    final url = Uri.dataFromString('ok', mimeType: 'text/plain');
+    final client = Client(
+      const ClientOptions(
+        redirectPolicy: RedirectPolicy(
+          mode: RedirectMode.follow,
+          maxRedirects: 1,
+        ),
+      ),
+    );
+
+    await expectLater(client.get(url), throwsA(isA<PolicyError>()));
+  });
 }

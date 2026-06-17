@@ -72,6 +72,7 @@ extension type WebResponse._(JSObject _) implements JSObject {
   external int get status;
   external String get statusText;
   external String get url;
+  external String get type;
   external bool get redirected;
   external WebHeaders get headers;
   external ReadableStream? get body;
@@ -96,6 +97,7 @@ final class WebTransport implements Transport {
     if (context.signal?.aborted == true) {
       throw CancelError(reason: context.signal?.reason, request: request);
     }
+    _validateRedirectPolicy(request, context);
 
     final headers = WebHeaders();
     for (final entry in request.headers) {
@@ -114,7 +116,7 @@ final class WebTransport implements Transport {
       method: request.method,
       headers: headers,
       keepalive: context.clientOptions.keepAlive && requestBody == null,
-      redirect: _redirectMode(context.redirectPolicy.mode),
+      redirect: _redirectMode(context.redirectPolicy),
       signal: controller.signal,
     );
 
@@ -179,7 +181,8 @@ final class WebTransport implements Transport {
         redirected: webResponse.redirected,
       );
       if (context.redirectPolicy.mode == RedirectMode.error &&
-          _isRedirect(response.status)) {
+          (_isRedirect(response.status) ||
+              webResponse.type == 'opaqueredirect')) {
         throw StatusError(
           response,
           request: request,
@@ -197,14 +200,6 @@ final class WebTransport implements Transport {
       }
       if (error is RequestError) {
         rethrow;
-      }
-      if (context.redirectPolicy.mode == RedirectMode.error) {
-        throw StatusError(
-          Response(null, status: 0, statusText: 'Redirect blocked'),
-          request: request,
-          message: 'Redirect blocked by RedirectPolicy.error.',
-          trace: trace,
-        );
       }
       throw NetworkError(
         error.toString(),
@@ -292,16 +287,28 @@ final class WebTransport implements Transport {
     });
   }
 
-  String _redirectMode(RedirectMode mode) {
-    return switch (mode) {
+  void _validateRedirectPolicy(Request request, Context context) {
+    final policy = context.redirectPolicy;
+    if (policy.mode == RedirectMode.follow &&
+        policy.maxRedirects != RedirectPolicy.follow.maxRedirects) {
+      throw PolicyError(
+        'Browser Fetch does not expose redirect chains, so custom '
+        'RedirectPolicy.maxRedirects cannot be enforced on web.',
+        request: request,
+      );
+    }
+  }
+
+  String _redirectMode(RedirectPolicy policy) {
+    return switch (policy.mode) {
       RedirectMode.follow => 'follow',
       RedirectMode.manual => 'manual',
-      RedirectMode.error => 'error',
+      RedirectMode.error => 'manual',
     };
   }
 
   bool _isRedirect(int status) {
-    return status >= 300 && status <= 399;
+    return status >= 300 && status <= 399 && status != 304;
   }
 
   bool _isForbiddenRequestHeader(String name) {

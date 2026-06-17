@@ -8,7 +8,6 @@ import '../core/request.dart';
 import '../core/response.dart';
 import '../options.dart';
 import '../pipeline/context.dart';
-import '../policies.dart';
 import 'capability.dart';
 import 'transport.dart';
 
@@ -53,14 +52,12 @@ final class NativeTransport implements Transport {
 
       _bindAbort(context, httpRequest);
       _configureRequest(httpRequest, request, context);
-      await _withSendTimeout(
-        _writeBody(httpRequest, request, context),
+      final ioResponse = await _withSendTimeout(
+        _writeAndClose(httpRequest, request, context),
         httpRequest,
         request,
         context,
       );
-
-      final ioResponse = await httpRequest.close();
       final headers = _toHeaders(ioResponse.headers);
       final total = ioResponse.contentLength < 0
           ? null
@@ -73,17 +70,13 @@ final class NativeTransport implements Transport {
         );
       }
 
-      final finalUrl = ioResponse.redirects.isEmpty
-          ? request.uri
-          : ioResponse.redirects.last.location;
-
       return Response.stream(
         body,
         status: ioResponse.statusCode,
         statusText: ioResponse.reasonPhrase,
         headers: headers,
-        url: finalUrl,
-        redirected: ioResponse.redirects.isNotEmpty,
+        url: request.uri,
+        redirected: false,
         contentLength: total,
       );
     } catch (error, trace) {
@@ -155,13 +148,18 @@ final class NativeTransport implements Transport {
       }
     }
 
-    httpRequest.followRedirects =
-        context.redirectPolicy.mode == RedirectMode.follow;
-    httpRequest.maxRedirects =
-        context.redirectPolicy.mode == RedirectMode.follow
-        ? context.redirectPolicy.maxRedirects
-        : 0;
+    httpRequest.followRedirects = false;
+    httpRequest.maxRedirects = 0;
     httpRequest.persistentConnection = _keepAlive;
+  }
+
+  Future<HttpClientResponse> _writeAndClose(
+    HttpClientRequest httpRequest,
+    Request request,
+    Context context,
+  ) async {
+    await _writeBody(httpRequest, request, context);
+    return httpRequest.close();
   }
 
   Future<void> _writeBody(
@@ -190,8 +188,8 @@ final class NativeTransport implements Transport {
     }
   }
 
-  Future<void> _withSendTimeout(
-    Future<void> sendFuture,
+  Future<T> _withSendTimeout<T>(
+    Future<T> sendFuture,
     HttpClientRequest httpRequest,
     Request request,
     Context context,

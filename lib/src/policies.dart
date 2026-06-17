@@ -158,7 +158,7 @@ const Map<String, int> _httpMonths = <String, int>{
 enum RedirectMode { follow, manual, error }
 
 final class RedirectPolicy {
-  const RedirectPolicy({required this.mode, this.maxRedirects = 5})
+  const RedirectPolicy({required this.mode, this.maxRedirects = 20})
     : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
 
   static const RedirectPolicy follow = RedirectPolicy(

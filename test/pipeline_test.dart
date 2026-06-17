@@ -33,6 +33,15 @@ final class HeaderMiddleware implements Middleware {
   }
 }
 
+final class PassThroughMiddleware implements Middleware {
+  const PassThroughMiddleware();
+
+  @override
+  Future<Response> intercept(Request request, Context context, Next next) {
+    return next(request, context);
+  }
+}
+
 void main() {
   test(
     'runs application middleware once and network middleware per attempt',
@@ -143,5 +152,106 @@ void main() {
     await client.post('https://example.com', body: 'hello');
 
     expect(captured.headers.has('content-length'), isFalse);
+  });
+
+  test('explicit json null sends a JSON null body', () async {
+    late Request captured;
+    final client = Client(
+      ClientOptions(
+        transport: MockTransport((request, context) async {
+          captured = request;
+          return Response.text(await request.body!.text());
+        }),
+      ),
+    );
+
+    final response = await client.post('https://example.com/null', json: null);
+
+    expect(await response.text(), 'null');
+    expect(captured.headers.get('content-type'), contains('application/json'));
+  });
+
+  test(
+    'pass-through middleware preserves downstream errors for retry',
+    () async {
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          retryPolicy: const RetryPolicy(
+            maxRetries: 1,
+            baseDelay: Duration.zero,
+          ),
+          middleware: const [PassThroughMiddleware()],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 1) {
+              throw StateError('socket reset');
+            }
+            return Response.text('ok');
+          }),
+        ),
+      );
+
+      final response = await client.get('https://example.com/flaky');
+
+      expect(await response.text(), 'ok');
+      expect(calls, 2);
+    },
+  );
+
+  test('client redirect loop follows preserved-method redirects', () async {
+    var calls = 0;
+    late Request redirected;
+    final client = Client(
+      ClientOptions(
+        baseUrl: Uri.parse('https://example.com'),
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            return Response(
+              null,
+              status: 307,
+              headers: {'location': '/target'},
+            );
+          }
+          redirected = request;
+          return Response.text(await request.body!.text(), url: request.uri);
+        }),
+      ),
+    );
+
+    final response = await client.put('/start', body: 'payload');
+
+    expect(await response.text(), 'payload');
+    expect(response.redirected, isTrue);
+    expect(redirected.method, 'PUT');
+    expect(redirected.uri.path, '/target');
+    expect(calls, 2);
+  });
+
+  test('client redirect loop honors maxRedirects', () async {
+    final client = Client(
+      ClientOptions(
+        baseUrl: Uri.parse('https://example.com'),
+        redirectPolicy: const RedirectPolicy(
+          mode: RedirectMode.follow,
+          maxRedirects: 0,
+        ),
+        transport: MockTransport((request, context) async {
+          return Response(null, status: 302, headers: {'location': '/next'});
+        }),
+      ),
+    );
+
+    await expectLater(
+      client.get('/start'),
+      throwsA(
+        isA<StatusError>().having(
+          (error) => error.message,
+          'message',
+          'Too many redirects.',
+        ),
+      ),
+    );
   });
 }

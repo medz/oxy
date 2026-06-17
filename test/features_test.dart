@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:oxy/oxy.dart';
 import 'package:oxy/testing.dart';
 import 'package:test/test.dart';
@@ -128,6 +130,64 @@ void main() {
 
     expect(finalHostRequest.headers.get('cookie'), 'sid=final');
     expect(await jar.load(Uri.parse('https://a.example.com/account')), isEmpty);
+  });
+
+  test('cookie middleware stores cookies from followed redirects', () async {
+    final jar = MemoryCookieJar();
+    var calls = 0;
+    late Request finalRequest;
+    final client = Client(
+      ClientOptions(
+        middleware: [CookieMiddleware(jar)],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            return Response(
+              null,
+              status: 302,
+              headers: {
+                'location': '/account',
+                'set-cookie': 'sid=redirect; Path=/',
+              },
+            );
+          }
+          finalRequest = request;
+          return Response.text('ok', url: request.uri);
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/login');
+
+    expect(await response.text(), 'ok');
+    expect(response.redirected, isTrue);
+    expect(finalRequest.headers.get('cookie'), 'sid=redirect');
+    expect(calls, 2);
+  });
+
+  test('cookie middleware stores cookies from status errors', () async {
+    final jar = MemoryCookieJar();
+    final client = Client(
+      ClientOptions(
+        middleware: [CookieMiddleware(jar)],
+        transport: MockTransport((request, context) async {
+          return Response.text(
+            'unauthorized',
+            status: 401,
+            headers: {'set-cookie': 'sid=error; Path=/'},
+            url: request.uri,
+          );
+        }),
+      ),
+    );
+
+    await expectLater(
+      client.get('https://example.com/login'),
+      throwsA(isA<StatusError>()),
+    );
+
+    final cookies = await jar.load(Uri.parse('https://example.com/account'));
+    expect(cookies.map((cookie) => cookie.name), contains('sid'));
   });
 
   test('cookie middleware is a no-op for browser transports', () async {
@@ -274,6 +334,66 @@ void main() {
     expect(await second.text(), 'v2');
     expect(second.fromCache, isFalse);
     expect(calls, 2);
+  });
+
+  test('cache middleware revalidates caller conditional requests', () async {
+    var calls = 0;
+    String? conditionalHeader;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 2) {
+            conditionalHeader = request.headers.get('if-none-match');
+            return Response(null, status: 304, headers: {'etag': 'v1'});
+          }
+          return Response.text(
+            'cached',
+            headers: {'cache-control': 'max-age=60', 'etag': 'v1'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached',
+    );
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'if-none-match': 'caller'},
+    );
+
+    expect(await second.text(), 'cached');
+    expect(second.fromCache, isTrue);
+    expect(conditionalHeader, 'caller');
+    expect(calls, 2);
+  });
+
+  test('cache middleware surfaces stream buffering failures', () async {
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          return Response.stream(
+            Stream<List<int>>.error(StateError('broken stream')),
+            headers: {'cache-control': 'max-age=60'},
+          );
+        }),
+      ),
+    );
+
+    await expectLater(
+      client.get('https://example.com/broken'),
+      throwsA(
+        isA<NetworkError>().having(
+          (error) => error.cause,
+          'cause',
+          isA<StateError>(),
+        ),
+      ),
+    );
   });
 
   test(

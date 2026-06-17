@@ -82,6 +82,10 @@ final class DecodeError extends RequestError {
   const DecodeError(super.message, {super.response, super.cause, super.trace});
 }
 
+final class PolicyError extends RequestError {
+  const PolicyError(super.message, {super.request, super.cause, super.trace});
+}
+
 final class RetryError extends RequestError {
   const RetryError({
     required this.attempts,

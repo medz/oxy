@@ -4,8 +4,8 @@
 
 - Rebuilt Oxy around semantic core types: `Client`, `Request`, `Response`,
   `Headers`, `Body`, policy types, middleware, typed errors, and `Result`.
-- Removed the public dependency on `ht` primitives and the old `Oxy`/`OxyConfig`
-  API shape.
+- Removed `ht.Request`/`ht.Response` as Oxy's public request model along with
+  the old `Oxy`/`OxyConfig` API shape.
 - Replaced the `safe*` method matrix with unified result flows:
   `Result.capture(...)`, `Client.sendResult(...)`, `Client.requestResult(...)`,
   and `fetchResult(...)`.
@@ -23,6 +23,9 @@
   request model.
 - Hardened cookie scope validation, cache revalidation, browser forbidden
   headers, timeout enforcement, retry draining, and error-body preview handling.
+- Added client-level native/test redirect following, explicit web redirect-limit
+  policy errors, JSON `null` request bodies, and stronger middleware error
+  normalization.
 - Application and network middleware layers.
 - Policy-driven timeout, retry, redirect, and status behavior.
 - `MockTransport` via `package:oxy/testing.dart`.

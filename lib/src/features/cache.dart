@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import '../core/body.dart';
+import '../core/errors.dart';
 import '../core/headers.dart';
 import '../core/request.dart';
 import '../core/response.dart';
@@ -115,13 +116,12 @@ final class CacheMiddleware implements Middleware {
     final now = DateTime.now().toUtc();
     if (cached != null &&
         cached.isFresh(now) &&
-        !requestControl.requiresRevalidation) {
+        !requestControl.requiresRevalidation &&
+        !_hasConditionalHeader(request.headers)) {
       return _cloneCached(cached.response);
     }
 
-    final revalidationRequest = cached?.etag == null
-        ? request
-        : request.withHeader('if-none-match', cached!.etag!);
+    final revalidationRequest = _revalidationRequest(request, cached);
     final response = await next(
       revalidationRequest,
       cached == null ? context : _allowNotModified(context),
@@ -149,7 +149,7 @@ final class CacheMiddleware implements Middleware {
       return response;
     }
 
-    final buffered = await _tryBuffer(response);
+    final buffered = await _tryBuffer(request, response);
     if (buffered == null) {
       await _store.delete(key);
       return response;
@@ -193,6 +193,14 @@ final class CacheMiddleware implements Middleware {
         },
       ),
     );
+  }
+
+  Request _revalidationRequest(Request request, CachedResponse? cached) {
+    final etag = cached?.etag;
+    if (etag == null || _hasConditionalHeader(request.headers)) {
+      return request;
+    }
+    return request.withHeader('if-none-match', etag);
   }
 
   Response _cloneCached(Response response) {
@@ -275,7 +283,7 @@ final class CacheMiddleware implements Middleware {
         .any((value) => value.trim() == '*');
   }
 
-  Future<Response?> _tryBuffer(Response response) async {
+  Future<Response?> _tryBuffer(Request request, Response response) async {
     final body = response.body;
     if (body == null) {
       return response;
@@ -305,8 +313,17 @@ final class CacheMiddleware implements Middleware {
       return response.copyWith(
         body: ResponseBody.fromBytes(builder.takeBytes()),
       );
-    } catch (_) {
-      return null;
+    } catch (error, trace) {
+      if (error is RequestError) {
+        rethrow;
+      }
+      throw NetworkError(
+        error.toString(),
+        request: request,
+        cause: error,
+        trace: trace,
+        sent: true,
+      );
     }
   }
 
@@ -335,6 +352,13 @@ const Set<String> _cacheKeyIgnoredHeaders = <String>{
   'if-none-match',
   'if-unmodified-since',
 };
+
+bool _hasConditionalHeader(Headers headers) {
+  return headers.has('if-match') ||
+      headers.has('if-modified-since') ||
+      headers.has('if-none-match') ||
+      headers.has('if-unmodified-since');
+}
 
 final class _CacheControl {
   const _CacheControl({

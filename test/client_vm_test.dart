@@ -47,6 +47,10 @@ void main() {
               case '/slow':
                 await Future<void>.delayed(const Duration(milliseconds: 200));
                 request.response.write('slow');
+              case '/redirect307':
+                request.response
+                  ..statusCode = 307
+                  ..headers.set(HttpHeaders.locationHeader, '/echo');
               default:
                 request.response
                   ..statusCode = 404
@@ -106,5 +110,20 @@ void main() {
 
       await expectLater(client.get('/slow'), throwsA(isA<TimeoutError>()));
     });
+
+    test(
+      'follows native 307 redirects with method and body preserved',
+      () async {
+        final client = Client(ClientOptions(baseUrl: baseUrl));
+        addTearDown(client.close);
+
+        final response = await client.put('/redirect307', body: 'payload');
+        final payload = await response.json<Map<String, Object?>>();
+
+        expect(payload['method'], 'PUT');
+        expect(payload['body'], 'payload');
+        expect(response.redirected, isTrue);
+      },
+    );
   });
 }

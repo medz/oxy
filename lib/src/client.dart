@@ -19,6 +19,8 @@ import 'policies.dart';
 import 'transport/default_transport.dart';
 import 'transport/transport.dart';
 
+const Object _jsonOmitted = Object();
+
 final class Client {
   Client([ClientOptions options = const ClientOptions()])
     : options = options,
@@ -158,7 +160,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -193,7 +195,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -235,7 +237,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -258,7 +260,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -281,7 +283,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -304,7 +306,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
@@ -342,7 +344,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
   }) {
     return request(
@@ -362,7 +364,7 @@ final class Client {
     QueryMap? query,
     HeadersInit? headers,
     Object? body,
-    Object? json,
+    Object? json = _jsonOmitted,
     RequestOptions? options,
     Decoder<T>? decoder,
   }) async {
@@ -461,10 +463,120 @@ final class Client {
       ...context.requestOptions.middleware,
     ];
 
-    return _buildPipeline(
+    final next = _buildPipeline(
       middleware,
       (nextRequest, nextContext) => _runOperation(nextRequest, nextContext),
-    )(request, context);
+    );
+    if (_usesClientRedirects(context)) {
+      return _runRedirects(request, context, next);
+    }
+    return next(request, context);
+  }
+
+  bool _usesClientRedirects(Context context) {
+    return context.redirectPolicy.mode == RedirectMode.follow &&
+        context.capability.name != 'web';
+  }
+
+  Future<Response> _runRedirects(
+    Request request,
+    Context context,
+    Next next,
+  ) async {
+    var current = request;
+    var redirected = false;
+    for (var redirects = 0; ; redirects++) {
+      final response = await next(current, _allowRedirectStatus(context));
+      if (!_isRedirectStatus(response.status)) {
+        return redirected ? response.copyWith(redirected: true) : response;
+      }
+
+      final location = response.headers.get('location');
+      if (location == null || location.trim().isEmpty) {
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Redirect response is missing a Location header.',
+        );
+      }
+      if (redirects >= context.redirectPolicy.maxRedirects) {
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Too many redirects.',
+        );
+      }
+
+      await response.drain(maxBytes: null);
+      current = _redirectRequest(current, response, location);
+      redirected = true;
+    }
+  }
+
+  Context _allowRedirectStatus(Context context) {
+    return context.copyWith(
+      statusPolicy: StatusPolicy(
+        accept: (response) {
+          return _isRedirectStatus(response.status) ||
+              context.statusPolicy.accepts(response);
+        },
+      ),
+    );
+  }
+
+  Request _redirectRequest(
+    Request request,
+    Response response,
+    String location,
+  ) {
+    final base = response.url.hasScheme ? response.url : request.uri;
+    final nextUri = base.resolve(location);
+    final sameOrigin = _sameOrigin(request.uri, nextUri);
+    final nextHeaders = request.headers.copy();
+    if (!sameOrigin) {
+      nextHeaders.delete('authorization');
+      nextHeaders.delete('cookie');
+      nextHeaders.delete('proxy-authorization');
+    }
+
+    var method = request.method;
+    var clearBody = false;
+    if (_redirectChangesToGet(response.status, method)) {
+      method = 'GET';
+      clearBody = true;
+      nextHeaders.delete('content-length');
+      nextHeaders.delete('content-type');
+    }
+
+    return request.copyWith(
+      method: method,
+      uri: nextUri,
+      headers: nextHeaders,
+      clearBody: clearBody,
+    );
+  }
+
+  bool _redirectChangesToGet(int status, String method) {
+    final upper = method.toUpperCase();
+    if (status == 303 && upper != 'GET' && upper != 'HEAD') {
+      return true;
+    }
+    return (status == 301 || status == 302) && upper == 'POST';
+  }
+
+  bool _sameOrigin(Uri a, Uri b) {
+    return a.scheme == b.scheme && a.host == b.host && _portOf(a) == _portOf(b);
+  }
+
+  int _portOf(Uri uri) {
+    if (uri.hasPort) {
+      return uri.port;
+    }
+    return switch (uri.scheme) {
+      'http' => 80,
+      'https' => 443,
+      _ => 0,
+    };
   }
 
   Future<Response> _runOperation(Request request, Context context) async {
@@ -557,7 +669,12 @@ final class Client {
 
         return response;
       } catch (error, trace) {
-        final normalized = _normalizeError(error, trace, request, context);
+        final normalized = _normalizeError(
+          error,
+          trace,
+          request,
+          attemptContext,
+        );
         lastError = normalized;
 
         if (_shouldRetryError(request, normalized, attemptContext)) {
@@ -605,6 +722,7 @@ final class Client {
           duration: timeout,
           request: request,
         );
+        context.signal?.abort(timeoutError);
         throw timeoutError;
       },
     );
@@ -672,9 +790,23 @@ final class Client {
       final current = middleware[i];
       final next = runner;
       runner = (request, context) async {
+        Future<Response> guardedNext(Request request, Context context) async {
+          try {
+            return await next(request, context);
+          } catch (error, trace) {
+            if (error is RequestError) {
+              Error.throwWithStackTrace(error, trace);
+            }
+            throw _DownstreamError(error, trace);
+          }
+        }
+
         try {
-          return await current.intercept(request, context, next);
+          return await current.intercept(request, context, guardedNext);
         } catch (error, trace) {
+          if (error is _DownstreamError) {
+            Error.throwWithStackTrace(error.error, error.trace);
+          }
           if (error is RequestError) {
             rethrow;
           }
@@ -727,9 +859,11 @@ final class Client {
 
   bool _isRedirectBlocked(Response response, Context context) {
     return context.redirectPolicy.mode == RedirectMode.error &&
-        response.status >= 300 &&
-        response.status <= 399 &&
-        response.status != 304;
+        _isRedirectStatus(response.status);
+  }
+
+  bool _isRedirectStatus(int status) {
+    return status >= 300 && status <= 399 && status != 304;
   }
 
   Future<void> _beforeRetry(
@@ -966,10 +1100,10 @@ final class Client {
   }
 
   Body? _resolveBody({required Object? body, required Object? json}) {
-    if (body != null && json != null) {
+    if (body != null && !identical(json, _jsonOmitted)) {
       throw ArgumentError('Use either body or json, not both.');
     }
-    if (json != null) {
+    if (!identical(json, _jsonOmitted)) {
       return Body.fromJson(json);
     }
     return Body.from(body);
@@ -983,6 +1117,13 @@ final class _ResolvedRequest {
   final Context context;
 }
 
+final class _DownstreamError {
+  const _DownstreamError(this.error, this.trace);
+
+  final Object error;
+  final StackTrace trace;
+}
+
 final Client client = Client();
 
 Future<Response> fetch(
@@ -991,7 +1132,7 @@ Future<Response> fetch(
   QueryMap? query,
   HeadersInit? headers,
   Object? body,
-  Object? json,
+  Object? json = _jsonOmitted,
   RequestOptions? options,
   ProgressCallback? onSendProgress,
   ProgressCallback? onReceiveProgress,
@@ -1015,7 +1156,7 @@ Future<Result<Response>> fetchResult(
   QueryMap? query,
   HeadersInit? headers,
   Object? body,
-  Object? json,
+  Object? json = _jsonOmitted,
   RequestOptions? options,
   ProgressCallback? onSendProgress,
   ProgressCallback? onReceiveProgress,
