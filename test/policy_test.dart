@@ -191,6 +191,31 @@ void main() {
     );
   });
 
+  test('first-byte timeout remains retryable', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        timeoutPolicy: const TimeoutPolicy(
+          firstByte: Duration(milliseconds: 10),
+          total: null,
+        ),
+        retryPolicy: const RetryPolicy(maxRetries: 1, baseDelay: Duration.zero),
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 100));
+          }
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/flaky-first-byte');
+
+    expect(await response.text(), 'ok');
+    expect(calls, 2);
+  });
+
   test('retry policy honors HTTP-date Retry-After values', () {
     final response = Response.text(
       'busy',

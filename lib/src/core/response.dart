@@ -139,7 +139,13 @@ final class Response {
   }
 
   Future<void> drain({int? maxBytes = 64 * 1024}) async {
-    await bytes(maxBytes: maxBytes);
+    var transferred = 0;
+    await for (final chunk in stream()) {
+      transferred += chunk.length;
+      if (maxBytes != null && transferred > maxBytes) {
+        throw BodyTooLargeError(limit: maxBytes, response: this);
+      }
+    }
   }
 
   Future<Response> buffered({int? maxBytes = 1024 * 1024}) async {

@@ -473,7 +473,11 @@ final class Client {
     Response? lastResponse;
 
     for (var attempt = 0; ; attempt++) {
-      final attemptContext = context.copyWith(attempt: attempt);
+      final attemptSignal = _linkedSignal(context.signal);
+      final attemptContext = context.copyWith(
+        attempt: attempt,
+        signal: attemptSignal,
+      );
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -533,8 +537,9 @@ final class Client {
             response: response,
             random: _random,
           );
-          await _beforeRetry(request, attemptContext, null, response, delay);
-          await _waitRetryDelay(delay, attemptContext);
+          final retryContext = attemptContext.copyWith(signal: context.signal);
+          await _beforeRetry(request, retryContext, null, response, delay);
+          await _waitRetryDelay(delay, retryContext);
           continue;
         }
 
@@ -567,8 +572,9 @@ final class Client {
           }
 
           final delay = retryPolicy.delayFor(attempt, random: _random);
-          await _beforeRetry(request, attemptContext, normalized, null, delay);
-          await _waitRetryDelay(delay, attemptContext);
+          final retryContext = attemptContext.copyWith(signal: context.signal);
+          await _beforeRetry(request, retryContext, normalized, null, delay);
+          await _waitRetryDelay(delay, retryContext);
           continue;
         }
 
@@ -599,7 +605,6 @@ final class Client {
           duration: timeout,
           request: request,
         );
-        context.signal?.abort(timeoutError);
         throw timeoutError;
       },
     );
@@ -624,7 +629,7 @@ final class Client {
 
     return response.copyWith(
       body: ResponseBody.stream(
-        _readTimeoutStream(body.open(), timeout, request, context.signal),
+        _readTimeoutStream(body.open(), timeout, request),
         contentLength: body.contentLength,
       ),
     );
@@ -634,7 +639,6 @@ final class Client {
     Stream<List<int>> source,
     Duration timeout,
     Request request,
-    AbortSignal? signal,
   ) async* {
     final iterator = StreamIterator<List<int>>(source);
     try {
@@ -648,7 +652,6 @@ final class Client {
               request: request,
               sent: true,
             );
-            signal?.abort(timeoutError);
             throw timeoutError;
           },
         );
@@ -725,7 +728,8 @@ final class Client {
   bool _isRedirectBlocked(Response response, Context context) {
     return context.redirectPolicy.mode == RedirectMode.error &&
         response.status >= 300 &&
-        response.status <= 399;
+        response.status <= 399 &&
+        response.status != 304;
   }
 
   Future<void> _beforeRetry(

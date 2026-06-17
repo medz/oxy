@@ -3,7 +3,12 @@ import 'dart:math';
 import 'package:ocookie/ocookie.dart' as ocookie;
 
 export 'package:ocookie/ocookie.dart'
-    show Cookie, CookieCodec, CookiePriority, CookieSameSite;
+    show
+        Cookie,
+        CookieCodec,
+        CookieNullableField,
+        CookiePriority,
+        CookieSameSite;
 
 ocookie.Cookie parseSetCookie(String setCookie, Uri requestUri) {
   final normalized = _normalizeCookie(

@@ -65,16 +65,7 @@ final class NativeTransport implements Transport {
       final total = ioResponse.contentLength < 0
           ? null
           : ioResponse.contentLength;
-      var transferred = 0;
-
-      final body = ioResponse.map((chunk) {
-        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-        transferred += bytes.length;
-        context.onReceiveProgress?.call(
-          TransferProgress(transferred: transferred, total: total),
-        );
-        return bytes;
-      });
+      final body = _responseBody(ioResponse, request, context, total);
 
       if (total == 0) {
         context.onReceiveProgress?.call(
@@ -225,6 +216,44 @@ final class NativeTransport implements Transport {
         throw timeoutError;
       },
     );
+  }
+
+  Stream<Uint8List> _responseBody(
+    HttpClientResponse response,
+    Request request,
+    Context context,
+    int? total,
+  ) async* {
+    var transferred = 0;
+    try {
+      await for (final chunk in response) {
+        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        transferred += bytes.length;
+        context.onReceiveProgress?.call(
+          TransferProgress(transferred: transferred, total: total),
+        );
+        yield bytes;
+      }
+    } catch (error, trace) {
+      if (context.signal?.aborted == true) {
+        throw CancelError(
+          reason: context.signal?.reason,
+          request: request,
+          trace: trace,
+        );
+      }
+      if (error is RequestError) {
+        rethrow;
+      }
+      throw NetworkError(
+        error.toString(),
+        request: request,
+        cause: error,
+        trace: trace,
+        sent: true,
+        retryable: true,
+      );
+    }
   }
 
   void _bindAbort(Context context, HttpClientRequest request) {

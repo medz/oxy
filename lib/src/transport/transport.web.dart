@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import '../core/body.dart';
 import '../core/errors.dart';
@@ -87,41 +89,7 @@ final class WebTransport implements Transport {
 
   @override
   Future<Response> send(Request request, Context context) async {
-    var current = request;
-    var redirects = 0;
-    while (true) {
-      final response = await _sendOnce(current, context);
-      if (!_isRedirect(response.status)) {
-        return response;
-      }
-
-      if (context.redirectPolicy.mode == RedirectMode.error) {
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Redirect blocked by RedirectPolicy.error.',
-        );
-      }
-      if (context.redirectPolicy.mode == RedirectMode.manual) {
-        return response;
-      }
-
-      final location = response.headers.get('location');
-      if (location == null || location.isEmpty) {
-        return response;
-      }
-      if (redirects >= context.redirectPolicy.maxRedirects) {
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Redirect limit exceeded.',
-        );
-      }
-
-      await response.drain(maxBytes: null);
-      current = _redirectRequest(current, response.status, location);
-      redirects += 1;
-    }
+    return _sendOnce(request, context);
   }
 
   Future<Response> _sendOnce(Request request, Context context) async {
@@ -145,14 +113,16 @@ final class WebTransport implements Transport {
     final init = RequestInit(
       method: request.method,
       headers: headers,
-      keepalive: context.clientOptions.keepAlive && !streamBody,
-      redirect: 'manual',
+      keepalive: context.clientOptions.keepAlive && requestBody == null,
+      redirect: _redirectMode(context.redirectPolicy.mode),
       signal: controller.signal,
     );
 
     if (requestBody != null) {
       if (streamBody) {
-        init.body = toWebReadableStream(requestBody.open());
+        init.body = toWebReadableStream(
+          _withSendTimeout(requestBody.open(), context, request),
+        );
         init.duplex = 'half';
       } else {
         final bytesFuture = requestBody.bytes();
@@ -194,7 +164,13 @@ final class WebTransport implements Transport {
               total: total,
             );
 
-      return Response(
+      if (body == null) {
+        context.onReceiveProgress?.call(
+          TransferProgress(transferred: 0, total: total ?? 0),
+        );
+      }
+
+      final response = Response(
         body == null ? null : ResponseBody.stream(body, contentLength: total),
         status: webResponse.status,
         statusText: webResponse.statusText,
@@ -202,6 +178,15 @@ final class WebTransport implements Transport {
         url: Uri.tryParse(webResponse.url),
         redirected: webResponse.redirected,
       );
+      if (context.redirectPolicy.mode == RedirectMode.error &&
+          _isRedirect(response.status)) {
+        throw StatusError(
+          response,
+          request: request,
+          message: 'Redirect blocked by RedirectPolicy.error.',
+        );
+      }
+      return response;
     } catch (error, trace) {
       if (context.signal?.aborted == true) {
         throw CancelError(
@@ -213,12 +198,55 @@ final class WebTransport implements Transport {
       if (error is RequestError) {
         rethrow;
       }
+      if (context.redirectPolicy.mode == RedirectMode.error) {
+        throw StatusError(
+          Response(null, status: 0, statusText: 'Redirect blocked'),
+          request: request,
+          message: 'Redirect blocked by RedirectPolicy.error.',
+          trace: trace,
+        );
+      }
       throw NetworkError(
         error.toString(),
         request: request,
         cause: error,
         trace: trace,
       );
+    }
+  }
+
+  Stream<Uint8List> _withSendTimeout(
+    Stream<Uint8List> source,
+    Context context,
+    Request request,
+  ) async* {
+    final timeout = context.timeoutPolicy.send;
+    if (timeout == null) {
+      yield* source;
+      return;
+    }
+
+    final iterator = StreamIterator<Uint8List>(source);
+    try {
+      while (true) {
+        final hasNext = await iterator.moveNext().timeout(
+          timeout,
+          onTimeout: () {
+            throw TimeoutError(
+              phase: TimeoutPhase.send,
+              duration: timeout,
+              request: request,
+              sent: true,
+            );
+          },
+        );
+        if (!hasNext) {
+          break;
+        }
+        yield iterator.current;
+      }
+    } finally {
+      await iterator.cancel();
     }
   }
 
@@ -264,20 +292,12 @@ final class WebTransport implements Transport {
     });
   }
 
-  Request _redirectRequest(Request request, int status, String location) {
-    final uri = request.uri.resolve(location);
-    if (status == 303 && request.method.toUpperCase() != 'HEAD') {
-      final headers = request.headers.copy()
-        ..delete('content-length')
-        ..delete('content-type');
-      return request.copyWith(
-        method: 'GET',
-        uri: uri,
-        headers: headers,
-        clearBody: true,
-      );
-    }
-    return request.copyWith(uri: uri);
+  String _redirectMode(RedirectMode mode) {
+    return switch (mode) {
+      RedirectMode.follow => 'follow',
+      RedirectMode.manual => 'manual',
+      RedirectMode.error => 'error',
+    };
   }
 
   bool _isRedirect(int status) {

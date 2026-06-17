@@ -105,10 +105,14 @@ final class CacheMiddleware implements Middleware {
       return next(request, context);
     }
 
+    final requestControl = _parseCacheControl(request.headers);
+    if (requestControl.noStore) {
+      return next(request, context);
+    }
+
     final key = keyBuilder(request, context);
     final cached = await _store.read(key);
     final now = DateTime.now().toUtc();
-    final requestControl = _parseCacheControl(request.headers);
     if (cached != null &&
         cached.isFresh(now) &&
         !requestControl.requiresRevalidation) {
@@ -164,13 +168,16 @@ final class CacheMiddleware implements Middleware {
         ),
       );
     }
-    return _cloneCached(buffered);
+    return buffered.copyWith(fromCache: false);
   }
 
   static String _defaultCacheKeyBuilder(Request request, Context _) {
     final headers = request.headers.keys().toList()..sort();
     final headerParts = <String>[];
     for (final name in headers) {
+      if (_cacheKeyIgnoredHeaders.contains(name)) {
+        continue;
+      }
       headerParts.add('$name=${request.headers.getAll(name).join('\u0000')}');
     }
     return '${request.method.toUpperCase()} ${request.url}\n'
@@ -319,6 +326,15 @@ final class CacheMiddleware implements Middleware {
     }
   }
 }
+
+const Set<String> _cacheKeyIgnoredHeaders = <String>{
+  'cache-control',
+  'pragma',
+  'if-match',
+  'if-modified-since',
+  'if-none-match',
+  'if-unmodified-since',
+};
 
 final class _CacheControl {
   const _CacheControl({

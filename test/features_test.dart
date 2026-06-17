@@ -178,6 +178,7 @@ void main() {
 
     expect(await first.text(), 'v1');
     expect(await second.text(), 'v1');
+    expect(first.fromCache, isFalse);
     expect(second.fromCache, isTrue);
     expect(calls, 1);
   });
@@ -249,6 +250,32 @@ void main() {
     expect(calls, 2);
   });
 
+  test('cache middleware honors request no-store', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response.text(
+            'v$calls',
+            headers: Headers({'cache-control': 'max-age=60'}),
+          );
+        }),
+      ),
+    );
+
+    expect(await (await client.get('https://example.com/feed')).text(), 'v1');
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'cache-control': 'no-store'},
+    );
+
+    expect(await second.text(), 'v2');
+    expect(second.fromCache, isFalse);
+    expect(calls, 2);
+  });
+
   test(
     'cache middleware skips oversized entries without failing response',
     () async {
@@ -283,5 +310,12 @@ void main() {
     expect(middleware[2], isA<CookieMiddleware>());
     expect(middleware[3], isA<CacheMiddleware>());
     expect(middleware[4], isA<LoggingMiddleware>());
+  });
+
+  test('exports complete cookie copy API', () {
+    const cookie = Cookie('sid', 'abc', domain: 'example.com');
+    final hostOnly = cookie.copyWith(clear: const {CookieNullableField.domain});
+
+    expect(hostOnly.domain, isNull);
   });
 }
