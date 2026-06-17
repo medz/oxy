@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:oxy/oxy.dart';
 import 'package:oxy/testing.dart';
 import 'package:test/test.dart';
@@ -152,6 +154,7 @@ void main() {
     await client.post('https://example.com', body: 'hello');
 
     expect(captured.headers.has('content-length'), isFalse);
+    expect(captured.headers.has('user-agent'), isFalse);
   });
 
   test('explicit json null sends a JSON null body', () async {
@@ -254,6 +257,52 @@ void main() {
       ),
     );
   });
+
+  test('client redirect loop ignores non-redirect 3xx statuses', () async {
+    final client = Client(
+      ClientOptions(
+        statusPolicy: StatusPolicy.returnResponse,
+        transport: MockTransport((request, context) async {
+          return Response.text('choices', status: 300);
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/choices');
+
+    expect(response.status, 300);
+    expect(await response.text(), 'choices');
+  });
+
+  test(
+    'client redirect loop refuses one-shot preserved-body redirects',
+    () async {
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            return Response(null, status: 307, headers: {'location': '/next'});
+          }),
+        ),
+      );
+
+      await expectLater(
+        client.put(
+          'https://example.com/upload',
+          body: Stream<List<int>>.value([1]),
+        ),
+        throwsA(
+          isA<StatusError>().having(
+            (error) => error.message,
+            'message',
+            'Redirect requires a replayable request body.',
+          ),
+        ),
+      );
+      expect(calls, 1);
+    },
+  );
 
   test('cross-origin redirects strip auth after middleware reruns', () async {
     var calls = 0;

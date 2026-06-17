@@ -47,6 +47,9 @@ void main() {
               case '/slow':
                 await Future<void>.delayed(const Duration(milliseconds: 200));
                 request.response.write('slow');
+              case '/slow-response':
+                await Future<void>.delayed(const Duration(milliseconds: 50));
+                request.response.write('slow response');
               case '/redirect307':
                 request.response
                   ..statusCode = 307
@@ -125,5 +128,23 @@ void main() {
         expect(response.redirected, isTrue);
       },
     );
+
+    test('send timeout does not cover response headers', () async {
+      final client = Client(
+        ClientOptions(
+          baseUrl: baseUrl,
+          timeoutPolicy: const TimeoutPolicy(
+            send: Duration(milliseconds: 10),
+            firstByte: null,
+            total: null,
+          ),
+        ),
+      );
+      addTearDown(client.close);
+
+      final response = await client.get('/slow-response');
+
+      expect(await response.text(), 'slow response');
+    });
   });
 }

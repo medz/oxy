@@ -314,6 +314,38 @@ void main() {
     expect(calls, 2);
   });
 
+  test('cache middleware ignores generated request ids by default', () async {
+    var calls = 0;
+    var requestIds = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [
+          RequestIdMiddleware(
+            requestIdProvider: (_, _) => 'rid-${requestIds++}',
+          ),
+          CacheMiddleware(),
+        ],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response.text(
+            'cached',
+            headers: {'cache-control': 'max-age=60'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached',
+    );
+    final second = await client.get('https://example.com/feed');
+
+    expect(await second.text(), 'cached');
+    expect(second.fromCache, isTrue);
+    expect(calls, 1);
+  });
+
   test('cache middleware revalidates request and response no-cache', () async {
     var calls = 0;
     final client = Client(

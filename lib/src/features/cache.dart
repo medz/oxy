@@ -351,6 +351,7 @@ const Set<String> _cacheKeyIgnoredHeaders = <String>{
   'if-modified-since',
   'if-none-match',
   'if-unmodified-since',
+  'x-request-id',
 };
 
 bool _hasConditionalHeader(Headers headers) {

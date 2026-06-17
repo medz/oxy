@@ -44,7 +44,8 @@ final class NativeTransport implements Transport {
 
     try {
       final openFuture = _client.openUrl(request.method, request.uri);
-      final httpRequest = await _withConnectTimeout(
+      final httpRequest = await _withConnectAbort(
+        _withConnectTimeout(openFuture, context, request),
         openFuture,
         context,
         request,
@@ -52,12 +53,13 @@ final class NativeTransport implements Transport {
 
       _bindAbort(context, httpRequest);
       _configureRequest(httpRequest, request, context);
-      final ioResponse = await _withSendTimeout(
-        _writeAndClose(httpRequest, request, context),
+      await _withSendTimeout(
+        _writeBody(httpRequest, request, context),
         httpRequest,
         request,
         context,
       );
+      final ioResponse = await httpRequest.close();
       final headers = _toHeaders(ioResponse.headers);
       final total = ioResponse.contentLength < 0
           ? null
@@ -118,14 +120,65 @@ final class NativeTransport implements Transport {
           duration: timeout,
           request: request,
         );
-        openFuture.then((lateRequest) {
-          try {
-            lateRequest.abort(timeoutError);
-          } catch (_) {}
-        }).ignore();
+        _abortLate(openFuture, timeoutError);
         throw timeoutError;
       },
     );
+  }
+
+  Future<HttpClientRequest> _withConnectAbort(
+    Future<HttpClientRequest> connectFuture,
+    Future<HttpClientRequest> openFuture,
+    Context context,
+    Request request,
+  ) {
+    final signal = context.signal;
+    if (signal == null) {
+      return connectFuture;
+    }
+
+    if (signal.aborted) {
+      _abortLate(openFuture, signal.reason);
+      return Future<HttpClientRequest>.error(
+        CancelError(reason: signal.reason, request: request),
+      );
+    }
+
+    final completer = Completer<HttpClientRequest>();
+    signal.onAbort(() {
+      _abortLate(openFuture, signal.reason);
+      if (!completer.isCompleted) {
+        completer.completeError(
+          CancelError(reason: signal.reason, request: request),
+        );
+      }
+    });
+
+    connectFuture.then(
+      (httpRequest) {
+        if (completer.isCompleted) {
+          try {
+            httpRequest.abort(signal.reason);
+          } catch (_) {}
+          return;
+        }
+        completer.complete(httpRequest);
+      },
+      onError: (Object error, StackTrace trace) {
+        if (!completer.isCompleted) {
+          completer.completeError(error, trace);
+        }
+      },
+    );
+    return completer.future;
+  }
+
+  void _abortLate(Future<HttpClientRequest> openFuture, Object? reason) {
+    openFuture.then((lateRequest) {
+      try {
+        lateRequest.abort(reason);
+      } catch (_) {}
+    }).ignore();
   }
 
   void _configureRequest(
@@ -151,15 +204,6 @@ final class NativeTransport implements Transport {
     httpRequest.followRedirects = false;
     httpRequest.maxRedirects = 0;
     httpRequest.persistentConnection = _keepAlive;
-  }
-
-  Future<HttpClientResponse> _writeAndClose(
-    HttpClientRequest httpRequest,
-    Request request,
-    Context context,
-  ) async {
-    await _writeBody(httpRequest, request, context);
-    return httpRequest.close();
   }
 
   Future<void> _writeBody(
@@ -188,8 +232,8 @@ final class NativeTransport implements Transport {
     }
   }
 
-  Future<T> _withSendTimeout<T>(
-    Future<T> sendFuture,
+  Future<void> _withSendTimeout(
+    Future<void> sendFuture,
     HttpClientRequest httpRequest,
     Request request,
     Context context,

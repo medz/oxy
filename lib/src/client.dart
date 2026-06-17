@@ -426,7 +426,9 @@ final class Client {
         }
       }
     }
-    if (options.userAgent.isNotEmpty && !headers.has('user-agent')) {
+    if (context.capability.name != 'web' &&
+        options.userAgent.isNotEmpty &&
+        !headers.has('user-agent')) {
       headers.set('user-agent', options.userAgent);
     }
 
@@ -505,6 +507,15 @@ final class Client {
           response,
           request: current,
           message: 'Too many redirects.',
+        );
+      }
+      if (!_redirectChangesToGet(response.status, current.method) &&
+          current.body?.replayable == false) {
+        await response.drain(maxBytes: null);
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Redirect requires a replayable request body.',
         );
       }
 
@@ -907,7 +918,10 @@ final class Client {
   }
 
   bool _isRedirectStatus(int status) {
-    return status >= 300 && status <= 399 && status != 304;
+    return switch (status) {
+      301 || 302 || 303 || 307 || 308 => true,
+      _ => false,
+    };
   }
 
   Future<void> _beforeRetry(
