@@ -1,27 +1,28 @@
 # Oxy
 
-`oxy` is a production-ready HTTP client for Dart and Flutter.
-It provides a clean fetch-style API for quick calls, plus a middleware pipeline for advanced networking.
+`oxy` is a modern HTTP client for Dart and Flutter. It is built around a small
+core model: `Client`, `Request`, `Response`, `Headers`, `Body`, policies,
+middleware, and typed request errors.
 
 [![CI](https://github.com/medz/oxy/actions/workflows/ci.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/ci.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
-## Why Oxy
+## Design Goals
 
-- Easy day-1 API: `get/post/put/delete` with minimal setup
-- Scales to complex clients via `request/send` and rich `RequestOptions`
-- Consistent behavior across Dart VM, Flutter, and Web
-- Middleware-first extensibility (auth, cookies, cache, logging, trace)
-- Built-in resilience: retry, timeout, abort, and clear exceptions
-- Dual error model: `throw` APIs and `safe*` result APIs
-
-Under the hood, `oxy` uses [`ht`](https://pub.dev/packages/ht) request/response primitives for consistent cross-platform behavior.
+- One package, no adapter-package split.
+- Core public types use semantic names: `Client`, `Request`, `Response`.
+- Native and Web transports are built into Oxy.
+- Reusable clients are the production path and keep connections alive by default.
+- Retry, timeout, redirect, status validation, and decoding are explicit policies.
+- `Result.capture(...)`, `sendResult(...)`, and `fetchResult(...)` provide no-throw flows without multiplying every HTTP method.
+- Request bodies carry replayability metadata, so one-shot streams are not retried accidentally.
+- Middleware runs through a clear pipeline: application middleware once per logical request, network middleware once per attempt.
 
 ## Installation
 
 ```yaml
 dependencies:
-  oxy: ^0.2.0
+  oxy: ^0.3.0
 ```
 
 ## Quick Start
@@ -30,183 +31,102 @@ dependencies:
 import 'package:oxy/oxy.dart';
 
 Future<void> main() async {
-  final client = Oxy(
-    OxyConfig(baseUrl: Uri.parse('https://httpbin.org')),
+  final client = Client(
+    ClientOptions(baseUrl: Uri.parse('https://httpbin.org')),
   );
 
-  final response = await client.post(
-    '/post',
-    json: {'name': 'oxy'},
-  );
-
-  final payload = await response.decode<Map<String, Object?>>();
-  print(payload['json']);
-}
-```
-
-## Safe API (No Throw)
-
-```dart
-import 'package:oxy/oxy.dart';
-
-Future<void> main() async {
-  final client = Oxy(
-    OxyConfig(baseUrl: Uri.parse('https://api.example.com')),
-  );
-
-  final result = await client.safeGetDecoded<bool>(
-    '/health',
-    decoder: (value) => (value as Map<String, Object?>)['ok'] as bool,
-  );
-
-  if (result.isFailure) {
-    print('request failed: ${result.error}');
-    return;
-  }
-
-  print('healthy: ${result.value}');
-}
-```
-
-`OxyResult` also provides helpers: `fold(...)`, `map(...)`, `getOrThrow()`.
-
-## HTTP Error Policy
-
-By default, non-2xx responses throw `OxyHttpException`.
-Use `HttpErrorPolicy.returnResponse` when you want to handle status codes manually:
-
-```dart
-import 'package:oxy/oxy.dart';
-
-Future<void> main() async {
-  final client = Oxy(
-    OxyConfig(baseUrl: Uri.parse('https://api.example.com')),
-  );
-
-  final response = await client.get(
-    '/users/404',
-    options: const RequestOptions(
-      httpErrorPolicy: HttpErrorPolicy.returnResponse,
-    ),
-  );
-
-  if (response.status == 404) {
-    // handle as regular response
+  try {
+    final response = await client.post('/post', json: {'name': 'oxy'});
+    final payload = await response.json<Map<String, Object?>>();
+    print(payload['json']);
+  } finally {
+    await client.close();
   }
 }
 ```
 
-## Middleware Composition
+## Result API
 
 ```dart
-import 'package:oxy/oxy.dart';
+final result = await Result.capture(() {
+  return client.get('/health');
+});
 
-Future<void> main() async {
-  final client = Oxy(
-    OxyConfig(
-      baseUrl: Uri.parse('https://api.example.com'),
-      middleware: <OxyMiddleware>[
-        RequestIdMiddleware(),
-        AuthMiddleware.staticToken('token'),
-        CookieMiddleware(MemoryCookieJar()),
-        CacheMiddleware(store: MemoryCacheStore()),
-        LoggingMiddleware(),
-      ],
-    ),
-  );
-
-  await client.get('/feed');
+if (result.isFailure) {
+  print(result.error);
+  return;
 }
+
+print(result.value!.status);
 ```
 
-## Presets
+You can also use `client.sendResult(...)`, `client.requestResult(...)`, or
+top-level `fetchResult(...)`.
 
-`oxy` provides three official presets for different complexity levels:
+## Status Policy
 
-- `OxyPresets.minimal(...)`: `RequestId` only
-- `OxyPresets.standard(...)`: `RequestId + Cache + Logging` by default, optional `Auth/Cookie`
-- `OxyPresets.full(...)`: `RequestId + Cookie + Cache + Logging`, optional `Auth`
-
-Use the `standard` preset for most projects:
+By default Oxy throws `StatusError` for non-2xx responses. Disable validation
+when status codes are part of the expected control flow:
 
 ```dart
-import 'package:oxy/oxy.dart';
-
-Future<void> main() async {
-  final client = Oxy(
-    OxyConfig(
-      baseUrl: Uri.parse('https://api.example.com'),
-      middleware: OxyPresets.standard(
-        authMiddleware: AuthMiddleware.staticToken('token'),
-        cookieJar: MemoryCookieJar(),
-      ),
-    ),
-  );
-
-  await client.get('/feed');
-}
-```
-
-You can also toggle built-ins or override middlewares:
-
-```dart
-final middleware = OxyPresets.standard(
-  includeLogging: false,
-  cacheMiddleware: CacheMiddleware(store: MemoryCacheStore()),
+final response = await client.get(
+  '/users/404',
+  options: const RequestOptions(statusPolicy: StatusPolicy.returnResponse),
 );
 ```
 
-Or apply presets via fluent helpers:
+## Middleware
+
+Application middleware runs once for the logical request. Network middleware
+runs once for every network attempt, including retries.
 
 ```dart
-final client = Oxy()
-    .withStandardPreset(includeLogging: false)
-    .withPreset([AuthMiddleware.staticToken('token')]);
-```
-
-Choose a lower or higher preset as needed:
-
-```dart
-final minimalClient = Oxy().withMinimalPreset();
-
-final fullClient = Oxy().withFullPreset(
-  authMiddleware: AuthMiddleware.staticToken('token'),
+final client = Client(
+  ClientOptions(
+    baseUrl: Uri.parse('https://api.example.com'),
+    middleware: [
+      RequestIdMiddleware(),
+      AuthMiddleware.staticToken('token'),
+      CookieMiddleware(MemoryCookieJar()),
+    ],
+    networkMiddleware: [
+      LoggingMiddleware(),
+    ],
+  ),
 );
 ```
 
-## Advanced `Request/send` API
+## Policies
+
+```dart
+final client = Client(
+  ClientOptions(
+    timeoutPolicy: const TimeoutPolicy(total: Duration(seconds: 20)),
+    retryPolicy: const RetryPolicy(maxRetries: 2),
+    redirectPolicy: RedirectPolicy.follow,
+    statusPolicy: StatusPolicy.throwOnError,
+  ),
+);
+```
+
+Retry is conservative by default: idempotent methods only, retryable network
+errors/timeouts, selected transient status codes, jittered backoff, and no
+retries for non-replayable request bodies.
+
+## Testing
+
+Use the in-package test transport for deterministic client tests:
 
 ```dart
 import 'package:oxy/oxy.dart';
+import 'package:oxy/testing.dart';
 
-Future<void> main() async {
-  final client = Oxy();
+final transport = MockTransport((request, context) async {
+  return Response.json({'ok': true});
+});
 
-  final request = Request(
-    Uri.parse('https://httpbin.org/get'),
-    RequestInit(headers: Headers({'x-from': 'oxy'})),
-  );
-
-  final response = await client.send(
-    request,
-    options: const RequestOptions(
-      requestTimeout: Duration(seconds: 5),
-      retryPolicy: RetryPolicy(maxRetries: 2),
-    ),
-  );
-
-  print(response.status);
-}
+final client = Client(ClientOptions(transport: transport));
 ```
-
-## Top-level Helpers
-
-Use the global client helpers for quick scripts:
-
-- `fetch(...)`
-- `safeFetch(...)`
-- `fetchDecoded<T>(...)`
-- `safeFetchDecoded<T>(...)`
 
 ## License
 

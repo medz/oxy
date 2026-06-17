@@ -1,1 +1,0 @@
-const isWebPlatform = false;

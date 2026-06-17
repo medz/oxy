@@ -1,5 +1,36 @@
 ## Unreleased
 
+### Breaking Changes
+
+- Rebuilt Oxy around semantic core types: `Client`, `Request`, `Response`,
+  `Headers`, `Body`, policy types, middleware, typed errors, and `Result`.
+- Removed the public dependency on `ht` primitives and the old `Oxy`/`OxyConfig`
+  API shape.
+- Replaced the `safe*` method matrix with unified result flows:
+  `Result.capture(...)`, `Client.sendResult(...)`, `Client.requestResult(...)`,
+  and `fetchResult(...)`.
+- Status handling now uses `StatusPolicy`; non-2xx responses throw
+  `StatusError` by default.
+
+### Added
+
+- Built-in native, web, and test transports under Oxy's own single-package
+  transport layer.
+- `Context` with typed `Attributes` for middleware coordination.
+- Replayability-aware `Body` and `ResponseBody` primitives.
+- Application and network middleware layers.
+- Policy-driven timeout, retry, redirect, and status behavior.
+- `MockTransport` via `package:oxy/testing.dart`.
+
+### Changed
+
+- Native clients keep connections alive by default and expose explicit
+  `Client.close()` lifecycle management.
+- Middleware now works with immutable/copy-on-write requests instead of
+  mutating shared request instances.
+- Cache, cookie, auth, logging, and request-id features remain in the single
+  package but sit behind the common middleware pipeline.
+
 ## 0.2.2
 
 ### Fixed
