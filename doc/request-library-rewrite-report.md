@@ -18,7 +18,7 @@ Oxy 的目标不是成为一组 HTTP adapter，也不是成为某个现有 Dart 
 2. **单包交付**：不规划 `oxy_http_adapter`、`oxy_cache`、`oxy_cookie`、`oxy_otel` 等 companion packages。可以有清晰内部模块和可选 imports，但用户安装一个 `oxy` 包就应得到完整一等体验。
 3. **天然跨平台**：跨平台不是外部 adapter 能力，而是 Oxy 的默认事实。VM、Flutter Native、Flutter Web、Dart Web 都应由同一公开 API 覆盖。
 4. **默认高性能**：高性能不是高级配置项。可复用 client、连接复用、streaming、低内存 decode、有限 body preview、明确 close 生命周期、重试 jitter、不可重放 body 保护，都应是默认架构的一部分。
-5. **不把其他 Dart HTTP 包写成传输层方向**：Oxy 不应把 `package:http` 之类作为重写路线的一部分。可以从其他生态学习 client/transport 分层，但 Oxy 的 transport 应是自己内建的 native/web 平台实现。
+5. **不把其他 Dart HTTP 包写成传输层方向**：Oxy 不应把 `package:http` 之类作为重写路线的一部分。可以从其他生态学习 client/transport 分层，但 Oxy 的 transport 应是自己内建的 native/web 平台实现。`ht` 这类成熟 primitives 可以被选择性复用为内部或 body-helper 基础，但不能把 Oxy 的公开 `Request/Response` ABI 锁死到第三方类型。
 6. **心智模型小，但架构完整**：用户只学一套路径：`Client -> Request -> Middleware/Policy -> Transport -> Response/Error`。复杂能力沿着这条路径扩展。
 
 ## 一句话结论

@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
+
+import 'package:ht/ht.dart' as ht;
 
 import 'errors.dart';
 
@@ -9,6 +12,9 @@ enum BodyKind { empty, bytes, text, json, form, multipart, file, stream }
 typedef BodyStreamFactory = Stream<List<int>> Function();
 
 final class Body {
+  static final Random _boundaryRandom = Random();
+  static int _boundaryCounter = 0;
+
   Body._({
     required this.kind,
     required this.replayable,
@@ -105,9 +111,60 @@ final class Body {
       String() => Body.fromText(value),
       Uint8List() => Body.fromBytes(value),
       List<int>() => Body.fromBytes(value),
+      ht.FormData() => Body.fromFormData(value),
+      ht.URLSearchParams() => Body.fromUrlSearchParams(value),
+      ht.Blob() => Body.fromBlob(value),
+      ht.Body() => Body.fromHtBody(value),
       Stream<List<int>>() => Body.stream(value),
       _ => throw ArgumentError.value(value, 'value', 'Unsupported body input.'),
     };
+  }
+
+  static Body fromFormData(ht.FormData formData) {
+    final encoded = formData.encodeMultipart(boundary: _multipartBoundary());
+    return Body._(
+      kind: BodyKind.multipart,
+      replayable: true,
+      contentLength: encoded.contentLength,
+      contentType: encoded.contentType,
+      open: () => encoded.stream,
+    );
+  }
+
+  static Body fromUrlSearchParams(ht.URLSearchParams params) {
+    final data = utf8.encode(params.toString());
+    return Body._(
+      kind: BodyKind.form,
+      replayable: true,
+      contentLength: data.length,
+      contentType: 'application/x-www-form-urlencoded; charset=utf-8',
+      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
+    );
+  }
+
+  static Body fromBlob(ht.Blob blob) {
+    return Body._(
+      kind: blob is ht.File ? BodyKind.file : BodyKind.bytes,
+      replayable: true,
+      contentLength: blob.size,
+      contentType: blob.type.isEmpty ? null : blob.type,
+      open: () => blob.stream(),
+    );
+  }
+
+  static Body fromHtBody(ht.Body body) {
+    return Body._(
+      kind: BodyKind.stream,
+      replayable: true,
+      open: () => body.clone(),
+    );
+  }
+
+  static String _multipartBoundary() {
+    final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
+    final counter = (_boundaryCounter++).toRadixString(16);
+    final random = _boundaryRandom.nextInt(0x3fffffff).toRadixString(16);
+    return '----oxy-$timestamp-$counter-$random';
   }
 
   Stream<Uint8List> open() {

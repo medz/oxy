@@ -28,7 +28,7 @@ final class Client {
   final ClientOptions options;
   final Transport _transport;
   final bool _ownsTransport;
-  final Random _random = Random.secure();
+  final Random _random = Random();
   bool _closed = false;
 
   Transport get transport => _transport;

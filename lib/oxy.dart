@@ -1,5 +1,7 @@
 library;
 
+export 'package:ht/ht.dart' show Blob, FormData, Multipart, URLSearchParams;
+
 export 'src/client.dart';
 export 'src/core/abort.dart';
 export 'src/core/attributes.dart';

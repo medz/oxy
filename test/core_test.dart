@@ -41,6 +41,36 @@ void main() {
       expect(await body.bytes(), [1]);
       expect(body.bytes(), throwsA(isA<BodyStateError>()));
     });
+
+    test('accepts built-in form primitives backed by ht', () async {
+      final form = FormData()
+        ..append('name', const Multipart.text('oxy'))
+        ..append(
+          'file',
+          Multipart.blob(Blob(['hello'], 'text/plain'), 'a.txt'),
+        );
+      final body = Body.from(form)!;
+
+      expect(body.kind, BodyKind.multipart);
+      expect(body.replayable, isTrue);
+      expect(body.contentType, startsWith('multipart/form-data; boundary='));
+      expect(body.contentLength, greaterThan(0));
+
+      final text = utf8.decode(await body.bytes());
+      expect(text, contains('name="name"'));
+      expect(text, contains('oxy'));
+      expect(text, contains('filename="a.txt"'));
+    });
+
+    test('accepts URLSearchParams as replayable form body', () async {
+      final params = URLSearchParams({'q': 'oxy', 'page': '1'});
+      final body = Body.from(params)!;
+
+      expect(body.kind, BodyKind.form);
+      expect(body.contentType, contains('application/x-www-form-urlencoded'));
+      expect(await body.text(), 'q=oxy&page=1');
+      expect(await body.text(), 'q=oxy&page=1');
+    });
   });
 
   group('Response', () {

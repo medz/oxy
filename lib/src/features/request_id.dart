@@ -20,7 +20,7 @@ final class RequestIdMiddleware implements Middleware {
   final String headerName;
   final bool overrideExisting;
 
-  static final Random _random = Random.secure();
+  static final Random _random = Random();
 
   @override
   Future<Response> intercept(

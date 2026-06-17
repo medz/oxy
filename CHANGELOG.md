@@ -18,6 +18,9 @@
   transport layer.
 - `Context` with typed `Attributes` for middleware coordination.
 - Replayability-aware `Body` and `ResponseBody` primitives.
+- Selective `ht` body-helper integration for `Blob`, `FormData`, `Multipart`,
+  and `URLSearchParams` without exposing `ht.Request`/`ht.Response` as Oxy's
+  request model.
 - Application and network middleware layers.
 - Policy-driven timeout, retry, redirect, and status behavior.
 - `MockTransport` via `package:oxy/testing.dart`.

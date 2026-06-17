@@ -113,6 +113,24 @@ Retry is conservative by default: idempotent methods only, retryable network
 errors/timeouts, selected transient status codes, jittered backoff, and no
 retries for non-replayable request bodies.
 
+## Request Bodies
+
+Oxy owns its public `Client`, `Request`, and `Response` model, but it reuses
+mature body helpers from `ht` for form construction. These helpers are exported
+selectively; `ht.Request` and `ht.Response` are not part of Oxy's public API.
+
+```dart
+final form = FormData()
+  ..append('name', const Multipart.text('oxy'))
+  ..append('file', Multipart.blob(Blob(['hello'], 'text/plain'), 'hello.txt'));
+
+await client.post('/upload', body: form);
+```
+
+`String`, `List<int>`, `Uint8List`, `Stream<List<int>>`, `Blob`, `FormData`,
+and `URLSearchParams` are accepted as body inputs. Replayable bodies can be
+retried safely; one-shot streams are never retried implicitly.
+
 ## Testing
 
 Use the in-package test transport for deterministic client tests:
