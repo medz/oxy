@@ -639,6 +639,7 @@ final class Client {
           attemptContext,
         );
         response = _withReadTimeout(response, attemptRequest, attemptContext);
+        response = _withTotalTimeout(response, attemptRequest, attemptContext);
 
         emitEvent(
           attemptContext.onEvent,
@@ -796,13 +797,39 @@ final class Client {
   ) {
     final timeout = context.timeoutPolicy.read;
     final body = response.body;
-    if (timeout == null || body == null) {
+    if (timeout == null || body == null || body.replayable) {
       return response;
     }
 
     return response.copyWith(
       body: ResponseBody.stream(
         _readTimeoutStream(body.open(), timeout, request),
+        contentLength: body.contentLength,
+      ),
+    );
+  }
+
+  Response _withTotalTimeout(
+    Response response,
+    Request request,
+    Context context,
+  ) {
+    final timeout = context.timeoutPolicy.total;
+    final body = response.body;
+    if (timeout == null || body == null || body.replayable) {
+      return response;
+    }
+
+    final deadline = context.createdAt.add(timeout);
+    return response.copyWith(
+      body: ResponseBody.stream(
+        _totalTimeoutStream(
+          body.open(),
+          timeout,
+          deadline,
+          request,
+          context.signal,
+        ),
         contentLength: body.contentLength,
       ),
     );
@@ -836,6 +863,52 @@ final class Client {
     } finally {
       await iterator.cancel();
     }
+  }
+
+  Stream<List<int>> _totalTimeoutStream(
+    Stream<List<int>> source,
+    Duration timeout,
+    DateTime deadline,
+    Request request,
+    AbortSignal? signal,
+  ) async* {
+    final iterator = StreamIterator<List<int>>(source);
+    try {
+      while (true) {
+        final remaining = deadline.difference(DateTime.now().toUtc());
+        if (remaining <= Duration.zero) {
+          throw _abortTotalTimeout(timeout, request, signal);
+        }
+
+        final hasNext = await iterator.moveNext().timeout(
+          remaining,
+          onTimeout: () {
+            throw _abortTotalTimeout(timeout, request, signal);
+          },
+        );
+        if (!hasNext) {
+          break;
+        }
+        yield iterator.current;
+      }
+    } finally {
+      await iterator.cancel();
+    }
+  }
+
+  TimeoutError _abortTotalTimeout(
+    Duration timeout,
+    Request request,
+    AbortSignal? signal,
+  ) {
+    final timeoutError = TimeoutError(
+      phase: TimeoutPhase.total,
+      duration: timeout,
+      request: request,
+      sent: true,
+    );
+    signal?.abort(timeoutError);
+    return timeoutError;
   }
 
   Next _buildPipeline(List<Middleware> middleware, Next terminal) {

@@ -75,6 +75,31 @@ void main() {
     );
   });
 
+  test('cookie middleware preserves duplicate path-scoped cookies', () async {
+    final jar = MemoryCookieJar();
+    await jar.save(Uri.parse('https://example.com/login'), [
+      const Cookie('sid', 'root', path: '/'),
+    ]);
+    await jar.save(Uri.parse('https://example.com/app/login'), [
+      const Cookie('sid', 'app', path: '/app'),
+    ]);
+
+    late Request captured;
+    final client = Client(
+      ClientOptions(
+        middleware: [CookieMiddleware(jar)],
+        transport: MockTransport((request, context) async {
+          captured = request;
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get('https://example.com/app/page');
+
+    expect(captured.headers.get('cookie'), 'sid=app; sid=root');
+  });
+
   test('cookie jar enforces domain and host-only scoping', () async {
     final jar = MemoryCookieJar();
     await jar.save(Uri.parse('https://example.com/login'), [
@@ -280,6 +305,30 @@ void main() {
     expect(first.fromCache, isFalse);
     expect(second.fromCache, isTrue);
     expect(calls, 1);
+  });
+
+  test('cache middleware treats aged max-age responses as stale', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response.text(
+            'v$calls',
+            headers: {'cache-control': 'max-age=60', 'age': '120'},
+          );
+        }),
+      ),
+    );
+
+    final first = await client.get('https://example.com/feed');
+    final second = await client.get('https://example.com/feed');
+
+    expect(await first.text(), 'v1');
+    expect(await second.text(), 'v2');
+    expect(second.fromCache, isFalse);
+    expect(calls, 2);
   });
 
   test('cache middleware keys request header variants', () async {

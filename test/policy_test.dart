@@ -136,6 +136,63 @@ void main() {
     );
   });
 
+  test('total timeout applies while consuming response body', () async {
+    final aborted = Completer<void>();
+    final client = Client(
+      ClientOptions(
+        timeoutPolicy: const TimeoutPolicy(total: Duration(milliseconds: 30)),
+        retryPolicy: const RetryPolicy(maxRetries: 0),
+        transport: MockTransport((request, context) async {
+          context.signal?.onAbort(() {
+            if (!aborted.isCompleted) {
+              aborted.complete();
+            }
+          });
+          return Response.stream(
+            Stream<List<int>>.fromFuture(
+              Future<List<int>>.delayed(
+                const Duration(milliseconds: 100),
+                () => [1],
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/stalled-body');
+
+    await expectLater(
+      response.bytes(),
+      throwsA(
+        isA<TimeoutError>().having(
+          (error) => error.phase,
+          'phase',
+          TimeoutPhase.total,
+        ),
+      ),
+    );
+    await expectLater(
+      aborted.future.timeout(const Duration(seconds: 1)),
+      completes,
+    );
+  });
+
+  test('default total timeout preserves replayable response bodies', () async {
+    final client = Client(
+      ClientOptions(
+        transport: MockTransport((request, context) async {
+          return Response.text('cached');
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/replayable');
+
+    expect(await response.text(), 'cached');
+    expect(await response.text(), 'cached');
+  });
+
   test('retry drains large transient bodies without failing', () async {
     var calls = 0;
     final large = Uint8List(96 * 1024);

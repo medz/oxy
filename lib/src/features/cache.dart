@@ -243,9 +243,25 @@ final class CacheMiddleware implements Middleware {
       return null;
     }
     if (control.maxAge != null) {
-      return now.add(Duration(seconds: control.maxAge!));
+      final freshSeconds = control.maxAge! - _ageSeconds(response.headers);
+      if (freshSeconds <= 0) {
+        return now;
+      }
+      return now.add(Duration(seconds: freshSeconds));
     }
     return null;
+  }
+
+  int _ageSeconds(Headers headers) {
+    final value = headers.get('age');
+    if (value == null) {
+      return 0;
+    }
+    final seconds = int.tryParse(value.trim());
+    if (seconds == null || seconds <= 0) {
+      return 0;
+    }
+    return seconds;
   }
 
   bool _cacheableStatus(int status) {

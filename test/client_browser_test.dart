@@ -2,8 +2,10 @@
 library;
 
 import 'dart:convert';
+import 'dart:js_interop';
 
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/transport/web_stream_utils.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -32,5 +34,27 @@ void main() {
     );
 
     await expectLater(client.get(url), throwsA(isA<PolicyError>()));
+  });
+
+  test('web response stream read failures become NetworkError', () async {
+    void start(ReadableByteStreamController controller) {
+      controller.error('broken'.toJS);
+    }
+
+    final stream = ReadableStream(
+      UnderlyingSource(type: 'bytes', start: start.toJS),
+    );
+
+    await expectLater(
+      toDartStream(
+        stream,
+        request: Request('https://example.com/broken'),
+      ).toList(),
+      throwsA(
+        isA<NetworkError>()
+            .having((error) => error.sent, 'sent', isTrue)
+            .having((error) => error.request?.uri.host, 'host', 'example.com'),
+      ),
+    );
   });
 }

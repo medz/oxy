@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:js_interop';
 import 'dart:typed_data';
 
+import '../core/abort.dart';
+import '../core/errors.dart';
+import '../core/request.dart';
 import '../options.dart';
 
 extension type UnderlyingSource._(JSObject _) implements JSObject {
@@ -69,6 +72,8 @@ ReadableStream toWebReadableStream(Stream<Uint8List> stream) {
 
 Stream<Uint8List> toDartStream(
   ReadableStream stream, {
+  required Request request,
+  AbortSignal? signal,
   ProgressCallback? onProgress,
   int? total,
 }) async* {
@@ -92,6 +97,20 @@ Stream<Uint8List> toDartStream(
       );
       yield bytes;
     }
+  } catch (error, trace) {
+    if (signal?.aborted == true) {
+      throw CancelError(reason: signal?.reason, request: request, trace: trace);
+    }
+    if (error is RequestError) {
+      rethrow;
+    }
+    throw NetworkError(
+      error.toString(),
+      request: request,
+      cause: error,
+      trace: trace,
+      sent: true,
+    );
   } finally {
     reader.releaseLock();
   }

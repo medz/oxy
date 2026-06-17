@@ -50,18 +50,26 @@ final class CookieMiddleware implements Middleware {
       return request;
     }
 
-    final merged = <String, String>{
-      for (final cookie in cookies) cookie.name: cookie.value,
-    };
     final existing = request.headers.get('cookie');
     final hasExplicitCookie =
         !managed && existing != null && existing.isNotEmpty;
-    if (hasExplicitCookie) {
-      merged.addAll(Cookie.parse(existing));
+    final explicitCookies = hasExplicitCookie
+        ? Cookie.parse(
+            existing,
+          ).entries.map((entry) => Cookie(entry.key, entry.value)).toList()
+        : const <Cookie>[];
+    final explicitNames = {for (final cookie in explicitCookies) cookie.name};
+    final jarCookies =
+        cookies.where((cookie) => !explicitNames.contains(cookie.name)).toList()
+          ..sort(_cookieHeaderOrder);
+    final headerCookies = <Cookie>[...explicitCookies, ...jarCookies];
+
+    if (headerCookies.isEmpty) {
+      return request;
     }
 
-    final value = merged.entries
-        .map((entry) => Cookie(entry.key, entry.value).serialize())
+    final value = headerCookies
+        .map((cookie) => cookie.toRequestCookie())
         .join('; ');
 
     final hydrated = request.withHeader('cookie', value);
@@ -70,6 +78,14 @@ final class CookieMiddleware implements Middleware {
           ? hydrated.attributes.remove(cookieHeaderManagedAttribute)
           : hydrated.attributes.set(cookieHeaderManagedAttribute, true),
     );
+  }
+
+  int _cookieHeaderOrder(Cookie a, Cookie b) {
+    final pathOrder = (b.path?.length ?? 0).compareTo(a.path?.length ?? 0);
+    if (pathOrder != 0) {
+      return pathOrder;
+    }
+    return 0;
   }
 
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {

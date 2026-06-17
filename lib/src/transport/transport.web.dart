@@ -162,6 +162,8 @@ final class WebTransport implements Transport {
           ? null
           : toDartStream(
               webResponse.body!,
+              request: request,
+              signal: context.signal,
               onProgress: context.onReceiveProgress,
               total: total,
             );
@@ -308,7 +310,10 @@ final class WebTransport implements Transport {
   }
 
   bool _isRedirect(int status) {
-    return status >= 300 && status <= 399 && status != 304;
+    return switch (status) {
+      301 || 302 || 303 || 307 || 308 => true,
+      _ => false,
+    };
   }
 
   bool _isForbiddenRequestHeader(String name) {
