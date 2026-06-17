@@ -165,6 +165,45 @@ void main() {
     expect(calls, 2);
   });
 
+  test(
+    'cookie middleware rehydrates cookies for cross-origin redirects',
+    () async {
+      final jar = MemoryCookieJar();
+      await jar.save(Uri.parse('https://example.com'), [
+        const Cookie('sid', 'source', path: '/'),
+      ]);
+      await jar.save(Uri.parse('https://other.example'), [
+        const Cookie('sid', 'target', path: '/'),
+      ]);
+
+      var calls = 0;
+      late Request redirected;
+      final client = Client(
+        ClientOptions(
+          middleware: [CookieMiddleware(jar)],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 1) {
+              expect(request.headers.get('cookie'), 'sid=source');
+              return Response(
+                null,
+                status: 302,
+                headers: {'location': 'https://other.example/account'},
+                url: request.uri,
+              );
+            }
+            redirected = request;
+            return Response.text('ok', url: request.uri);
+          }),
+        ),
+      );
+
+      await client.get('https://example.com/login');
+
+      expect(redirected.headers.get('cookie'), 'sid=target');
+    },
+  );
+
   test('cookie middleware stores cookies from status errors', () async {
     final jar = MemoryCookieJar();
     final client = Client(

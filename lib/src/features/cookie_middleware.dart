@@ -2,6 +2,7 @@ import '../core/errors.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
+import '../pipeline/internal_attributes.dart';
 import '../pipeline/middleware.dart';
 import 'cookie.dart';
 
@@ -35,8 +36,17 @@ final class CookieMiddleware implements Middleware {
   }
 
   Future<Request> _attachCookies(Request request) async {
+    final managed =
+        request.attributes.get(cookieHeaderManagedAttribute) == true;
     final cookies = await jar.load(request.uri);
     if (cookies.isEmpty) {
+      if (managed) {
+        final headers = request.headers.copy()..delete('cookie');
+        return request.copyWith(
+          headers: headers,
+          attributes: request.attributes.remove(cookieHeaderManagedAttribute),
+        );
+      }
       return request;
     }
 
@@ -44,7 +54,9 @@ final class CookieMiddleware implements Middleware {
       for (final cookie in cookies) cookie.name: cookie.value,
     };
     final existing = request.headers.get('cookie');
-    if (existing != null && existing.isNotEmpty) {
+    final hasExplicitCookie =
+        !managed && existing != null && existing.isNotEmpty;
+    if (hasExplicitCookie) {
       merged.addAll(Cookie.parse(existing));
     }
 
@@ -52,7 +64,12 @@ final class CookieMiddleware implements Middleware {
         .map((entry) => Cookie(entry.key, entry.value).serialize())
         .join('; ');
 
-    return request.withHeader('cookie', value);
+    final hydrated = request.withHeader('cookie', value);
+    return hydrated.copyWith(
+      attributes: hasExplicitCookie
+          ? hydrated.attributes.remove(cookieHeaderManagedAttribute)
+          : hydrated.attributes.set(cookieHeaderManagedAttribute, true),
+    );
   }
 
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {

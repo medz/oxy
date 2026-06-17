@@ -14,6 +14,7 @@ import 'core/result.dart';
 import 'options.dart';
 import 'pipeline/context.dart';
 import 'pipeline/events.dart';
+import 'pipeline/internal_attributes.dart';
 import 'pipeline/middleware.dart';
 import 'policies.dart';
 import 'transport/default_transport.dart';
@@ -533,10 +534,16 @@ final class Client {
     final nextUri = base.resolve(location);
     final sameOrigin = _sameOrigin(request.uri, nextUri);
     final nextHeaders = request.headers.copy();
+    var nextAttributes = request.attributes.remove(
+      redirectCrossOriginAttribute,
+    );
     if (!sameOrigin) {
       nextHeaders.delete('authorization');
       nextHeaders.delete('cookie');
       nextHeaders.delete('proxy-authorization');
+      nextAttributes = nextAttributes
+          .remove(cookieHeaderManagedAttribute)
+          .set(redirectCrossOriginAttribute, true);
     }
 
     var method = request.method;
@@ -553,6 +560,7 @@ final class Client {
       uri: nextUri,
       headers: nextHeaders,
       clearBody: clearBody,
+      attributes: nextAttributes,
     );
   }
 
@@ -590,6 +598,7 @@ final class Client {
         attempt: attempt,
         signal: attemptSignal,
       );
+      final attemptRequest = _sanitizeRedirectHeaders(request);
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -606,21 +615,24 @@ final class Client {
       }
 
       try {
-        _throwIfAborted(attemptContext.signal, request);
+        _throwIfAborted(attemptContext.signal, attemptRequest);
         emitEvent(
           attemptContext.onEvent,
           RequestEventType.attemptStart,
-          request: request,
+          request: attemptRequest,
           attempt: attempt,
         );
 
-        var response = await _runNetworkPipeline(request, attemptContext);
-        response = _withReadTimeout(response, request, attemptContext);
+        var response = await _runNetworkPipeline(
+          attemptRequest,
+          attemptContext,
+        );
+        response = _withReadTimeout(response, attemptRequest, attemptContext);
 
         emitEvent(
           attemptContext.onEvent,
           RequestEventType.attemptEnd,
-          request: request,
+          request: attemptRequest,
           attempt: attempt,
           response: response,
         );
@@ -628,18 +640,18 @@ final class Client {
         if (_isRedirectBlocked(response, attemptContext)) {
           throw StatusError(
             response,
-            request: request,
+            request: attemptRequest,
             message: 'Redirect blocked by RedirectPolicy.error.',
           );
         }
 
-        if (_shouldRetryResponse(request, response, attemptContext)) {
+        if (_shouldRetryResponse(attemptRequest, response, attemptContext)) {
           lastResponse = response;
           if (attempt >= retryPolicy.maxRetries) {
             throw RetryError(
               attempts: attempt + 1,
               lastResponse: response,
-              request: request,
+              request: attemptRequest,
             );
           }
 
@@ -650,7 +662,13 @@ final class Client {
             random: _random,
           );
           final retryContext = attemptContext.copyWith(signal: context.signal);
-          await _beforeRetry(request, retryContext, null, response, delay);
+          await _beforeRetry(
+            attemptRequest,
+            retryContext,
+            null,
+            response,
+            delay,
+          );
           await _waitRetryDelay(delay, retryContext);
           continue;
         }
@@ -660,11 +678,15 @@ final class Client {
           emitEvent(
             attemptContext.onEvent,
             RequestEventType.statusFailed,
-            request: request,
+            request: attemptRequest,
             attempt: attempt,
             response: response,
           );
-          throw StatusError(response, request: request, bodyPreview: preview);
+          throw StatusError(
+            response,
+            request: attemptRequest,
+            bodyPreview: preview,
+          );
         }
 
         return response;
@@ -672,25 +694,31 @@ final class Client {
         final normalized = _normalizeError(
           error,
           trace,
-          request,
+          attemptRequest,
           attemptContext,
         );
         lastError = normalized;
 
-        if (_shouldRetryError(request, normalized, attemptContext)) {
+        if (_shouldRetryError(attemptRequest, normalized, attemptContext)) {
           if (attempt >= retryPolicy.maxRetries) {
             throw RetryError(
               attempts: attempt + 1,
               lastError: normalized,
               lastResponse: lastResponse,
-              request: request,
+              request: attemptRequest,
               trace: trace,
             );
           }
 
           final delay = retryPolicy.delayFor(attempt, random: _random);
           final retryContext = attemptContext.copyWith(signal: context.signal);
-          await _beforeRetry(request, retryContext, normalized, null, delay);
+          await _beforeRetry(
+            attemptRequest,
+            retryContext,
+            normalized,
+            null,
+            delay,
+          );
           await _waitRetryDelay(delay, retryContext);
           continue;
         }
@@ -700,16 +728,32 @@ final class Client {
     }
   }
 
+  Request _sanitizeRedirectHeaders(Request request) {
+    if (request.attributes.get(redirectCrossOriginAttribute) != true) {
+      return request;
+    }
+
+    final headers = request.headers.copy()
+      ..delete('authorization')
+      ..delete('proxy-authorization');
+    if (request.attributes.get(cookieHeaderManagedAttribute) != true) {
+      headers.delete('cookie');
+    }
+    return request.copyWith(headers: headers);
+  }
+
   Future<Response> _runNetworkPipeline(Request request, Context context) {
     final middleware = <Middleware>[
       ...options.networkMiddleware,
       ...context.requestOptions.networkMiddleware,
     ];
 
-    final operation = _buildPipeline(
-      middleware,
-      (nextRequest, nextContext) => _transport.send(nextRequest, nextContext),
-    )(request, context);
+    final operation = _buildPipeline(middleware, (nextRequest, nextContext) {
+      return _transport.send(
+        _sanitizeRedirectHeaders(nextRequest),
+        nextContext,
+      );
+    })(request, context);
     final timeout = context.timeoutPolicy.firstByte;
     if (timeout == null) {
       return operation;
