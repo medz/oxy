@@ -15,9 +15,14 @@ final class CookieMiddleware implements Middleware {
     Context context,
     Next next,
   ) async {
+    if (context.capability.name == 'web') {
+      return next(request, context);
+    }
+
     final hydrated = await _attachCookies(request);
     final response = await next(hydrated, context);
-    await _storeResponseCookies(hydrated.uri, response);
+    final cookieUri = response.url.hasScheme ? response.url : hydrated.uri;
+    await _storeResponseCookies(cookieUri, response);
     return response;
   }
 

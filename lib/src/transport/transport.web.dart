@@ -87,31 +87,91 @@ final class WebTransport implements Transport {
 
   @override
   Future<Response> send(Request request, Context context) async {
-    context.signal?.throwIfAborted();
+    var current = request;
+    var redirects = 0;
+    while (true) {
+      final response = await _sendOnce(current, context);
+      if (!_isRedirect(response.status)) {
+        return response;
+      }
+
+      if (context.redirectPolicy.mode == RedirectMode.error) {
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Redirect blocked by RedirectPolicy.error.',
+        );
+      }
+      if (context.redirectPolicy.mode == RedirectMode.manual) {
+        return response;
+      }
+
+      final location = response.headers.get('location');
+      if (location == null || location.isEmpty) {
+        return response;
+      }
+      if (redirects >= context.redirectPolicy.maxRedirects) {
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Redirect limit exceeded.',
+        );
+      }
+
+      await response.drain(maxBytes: null);
+      current = _redirectRequest(current, response.status, location);
+      redirects += 1;
+    }
+  }
+
+  Future<Response> _sendOnce(Request request, Context context) async {
+    if (context.signal?.aborted == true) {
+      throw CancelError(reason: context.signal?.reason, request: request);
+    }
 
     final headers = WebHeaders();
     for (final entry in request.headers) {
+      if (_isForbiddenRequestHeader(entry.key)) {
+        continue;
+      }
       headers.append(entry.key, entry.value);
     }
 
     final controller = WebAbortController();
     _bindAbort(controller, context);
 
+    final requestBody = request.body;
+    final streamBody = requestBody?.kind == BodyKind.stream;
     final init = RequestInit(
       method: request.method,
       headers: headers,
-      keepalive: context.clientOptions.keepAlive,
-      redirect: _redirectMode(context.redirectPolicy.mode),
+      keepalive: context.clientOptions.keepAlive && !streamBody,
+      redirect: 'manual',
       signal: controller.signal,
     );
 
-    final requestBody = request.body;
     if (requestBody != null) {
-      if (requestBody.kind == BodyKind.stream) {
+      if (streamBody) {
         init.body = toWebReadableStream(requestBody.open());
         init.duplex = 'half';
       } else {
-        init.body = (await requestBody.bytes()).toJS;
+        final bytesFuture = requestBody.bytes();
+        final sendTimeout = context.timeoutPolicy.send;
+        init.body =
+            (sendTimeout == null
+                    ? await bytesFuture
+                    : await bytesFuture.timeout(
+                        sendTimeout,
+                        onTimeout: () {
+                          throw TimeoutError(
+                            phase: TimeoutPhase.send,
+                            duration: sendTimeout,
+                            request: request,
+                            sent: true,
+                          );
+                        },
+                      ))
+                .toJS;
       }
     }
 
@@ -204,11 +264,53 @@ final class WebTransport implements Transport {
     });
   }
 
-  String _redirectMode(RedirectMode mode) {
-    return switch (mode) {
-      RedirectMode.follow => 'follow',
-      RedirectMode.manual => 'manual',
-      RedirectMode.error => 'error',
-    };
+  Request _redirectRequest(Request request, int status, String location) {
+    final uri = request.uri.resolve(location);
+    if (status == 303 && request.method.toUpperCase() != 'HEAD') {
+      final headers = request.headers.copy()
+        ..delete('content-length')
+        ..delete('content-type');
+      return request.copyWith(
+        method: 'GET',
+        uri: uri,
+        headers: headers,
+        clearBody: true,
+      );
+    }
+    return request.copyWith(uri: uri);
+  }
+
+  bool _isRedirect(int status) {
+    return status >= 300 && status <= 399;
+  }
+
+  bool _isForbiddenRequestHeader(String name) {
+    final lower = name.toLowerCase();
+    return lower.startsWith('proxy-') ||
+        lower.startsWith('sec-') ||
+        _forbiddenRequestHeaders.contains(lower);
   }
 }
+
+const Set<String> _forbiddenRequestHeaders = <String>{
+  'accept-charset',
+  'accept-encoding',
+  'access-control-request-headers',
+  'access-control-request-method',
+  'connection',
+  'content-length',
+  'cookie',
+  'cookie2',
+  'date',
+  'dnt',
+  'expect',
+  'host',
+  'keep-alive',
+  'origin',
+  'referer',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'via',
+};

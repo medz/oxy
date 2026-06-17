@@ -53,7 +53,12 @@ final class NativeTransport implements Transport {
 
       _bindAbort(context, httpRequest);
       _configureRequest(httpRequest, request, context);
-      await _writeBody(httpRequest, request, context);
+      await _withSendTimeout(
+        _writeBody(httpRequest, request, context),
+        httpRequest,
+        request,
+        context,
+      );
 
       final ioResponse = await httpRequest.close();
       final headers = _toHeaders(ioResponse.headers);
@@ -192,6 +197,34 @@ final class NativeTransport implements Transport {
         TransferProgress(transferred: transferred, total: total),
       );
     }
+  }
+
+  Future<void> _withSendTimeout(
+    Future<void> sendFuture,
+    HttpClientRequest httpRequest,
+    Request request,
+    Context context,
+  ) {
+    final timeout = context.timeoutPolicy.send;
+    if (timeout == null) {
+      return sendFuture;
+    }
+
+    return sendFuture.timeout(
+      timeout,
+      onTimeout: () {
+        final timeoutError = TimeoutError(
+          phase: TimeoutPhase.send,
+          duration: timeout,
+          request: request,
+          sent: true,
+        );
+        try {
+          httpRequest.abort(timeoutError);
+        } catch (_) {}
+        throw timeoutError;
+      },
+    );
   }
 
   void _bindAbort(Context context, HttpClientRequest request) {

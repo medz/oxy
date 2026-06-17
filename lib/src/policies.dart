@@ -91,7 +91,7 @@ final class RetryPolicy {
     final jitterSpan = (cappedMs * jitterRatio).round();
     final jitter = jitterSpan == 0
         ? 0
-        : (random ?? Random.secure()).nextInt(jitterSpan * 2 + 1) - jitterSpan;
+        : (random ?? Random()).nextInt(jitterSpan * 2 + 1) - jitterSpan;
     return Duration(milliseconds: max(0, cappedMs + jitter));
   }
 
@@ -106,7 +106,7 @@ final class RetryPolicy {
       return Duration(seconds: max(0, seconds));
     }
 
-    final date = DateTime.tryParse(value);
+    final date = _parseHttpDate(value.trim()) ?? DateTime.tryParse(value);
     if (date == null) {
       return null;
     }
@@ -114,7 +114,46 @@ final class RetryPolicy {
     final delta = date.toUtc().difference(DateTime.now().toUtc());
     return delta.isNegative ? Duration.zero : delta;
   }
+
+  DateTime? _parseHttpDate(String value) {
+    final match = RegExp(
+      r'^[A-Za-z]{3}, (\d{2}) ([A-Za-z]{3}) (\d{4}) '
+      r'(\d{2}):(\d{2}):(\d{2}) GMT$',
+    ).firstMatch(value);
+    if (match == null) {
+      return null;
+    }
+
+    final month = _httpMonths[match.group(2)!.toLowerCase()];
+    if (month == null) {
+      return null;
+    }
+
+    return DateTime.utc(
+      int.parse(match.group(3)!),
+      month,
+      int.parse(match.group(1)!),
+      int.parse(match.group(4)!),
+      int.parse(match.group(5)!),
+      int.parse(match.group(6)!),
+    );
+  }
 }
+
+const Map<String, int> _httpMonths = <String, int>{
+  'jan': 1,
+  'feb': 2,
+  'mar': 3,
+  'apr': 4,
+  'may': 5,
+  'jun': 6,
+  'jul': 7,
+  'aug': 8,
+  'sep': 9,
+  'oct': 10,
+  'nov': 11,
+  'dec': 12,
+};
 
 enum RedirectMode { follow, manual, error }
 

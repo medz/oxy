@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'core/abort.dart';
 import 'core/attributes.dart';
 import 'core/body.dart';
 import 'core/errors.dart';
@@ -62,7 +64,14 @@ final class Client {
 
     final resolved = _resolve(request, options);
     final prepared = resolved.request;
-    final context = resolved.context;
+    var context = resolved.context;
+    final totalTimeout = context.timeoutPolicy.total;
+    final timeoutSignal = _needsInternalSignal(context.timeoutPolicy)
+        ? _linkedSignal(context.signal)
+        : null;
+    if (timeoutSignal != null) {
+      context = context.copyWith(signal: timeoutSignal);
+    }
     final hooks = this.options.hooks.merge(context.requestOptions.hooks);
 
     emitEvent(
@@ -95,7 +104,6 @@ final class Client {
       }
     }
 
-    final totalTimeout = context.timeoutPolicy.total;
     if (totalTimeout == null) {
       return run();
     }
@@ -103,20 +111,38 @@ final class Client {
     return run().timeout(
       totalTimeout,
       onTimeout: () {
-        context.signal?.abort(
-          TimeoutError(
-            phase: TimeoutPhase.total,
-            duration: totalTimeout,
-            request: prepared,
-          ),
-        );
-        throw TimeoutError(
+        final timeoutError = TimeoutError(
           phase: TimeoutPhase.total,
           duration: totalTimeout,
           request: prepared,
         );
+        timeoutSignal?.abort(timeoutError);
+        throw timeoutError;
       },
     );
+  }
+
+  AbortSignal _linkedSignal(AbortSignal? parent) {
+    final signal = AbortSignal();
+    if (parent == null) {
+      return signal;
+    }
+
+    if (parent.aborted) {
+      signal.abort(parent.reason);
+    } else {
+      parent.onAbort(() {
+        signal.abort(parent.reason);
+      });
+    }
+    return signal;
+  }
+
+  bool _needsInternalSignal(TimeoutPolicy policy) {
+    return policy.total != null ||
+        policy.send != null ||
+        policy.firstByte != null ||
+        policy.read != null;
   }
 
   Future<Result<Response>> sendResult(
@@ -382,8 +408,11 @@ final class Client {
 
     final resolvedUrl = _resolveUrl(_mergeQuery(request.uri, incoming.query));
     final headers = Headers(options.defaultHeaders);
-    for (final entry in request.headers) {
-      headers.append(entry.key, entry.value);
+    for (final name in request.headers.keys()) {
+      headers.delete(name);
+      for (final value in request.headers.getAll(name)) {
+        headers.append(name, value);
+      }
     }
     if (incoming.headers != null) {
       final override = Headers(incoming.headers);
@@ -402,7 +431,9 @@ final class Client {
     if (body?.contentType != null && !headers.has('content-type')) {
       headers.set('content-type', body!.contentType!);
     }
-    if (body?.contentLength != null && !headers.has('content-length')) {
+    if (context.capability.name != 'web' &&
+        body?.contentLength != null &&
+        !headers.has('content-length')) {
       headers.set('content-length', body!.contentLength!);
     }
 
@@ -443,7 +474,6 @@ final class Client {
 
     for (var attempt = 0; ; attempt++) {
       final attemptContext = context.copyWith(attempt: attempt);
-      attemptContext.signal?.throwIfAborted();
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -460,6 +490,7 @@ final class Client {
       }
 
       try {
+        _throwIfAborted(attemptContext.signal, request);
         emitEvent(
           attemptContext.onEvent,
           RequestEventType.attemptStart,
@@ -467,7 +498,8 @@ final class Client {
           attempt: attempt,
         );
 
-        final response = await _runNetworkPipeline(request, attemptContext);
+        var response = await _runNetworkPipeline(request, attemptContext);
+        response = _withReadTimeout(response, request, attemptContext);
 
         emitEvent(
           attemptContext.onEvent,
@@ -495,7 +527,7 @@ final class Client {
             );
           }
 
-          await response.drain();
+          await response.drain(maxBytes: null);
           final delay = retryPolicy.delayFor(
             attempt,
             response: response,
@@ -551,10 +583,83 @@ final class Client {
       ...context.requestOptions.networkMiddleware,
     ];
 
-    return _buildPipeline(
+    final operation = _buildPipeline(
       middleware,
       (nextRequest, nextContext) => _transport.send(nextRequest, nextContext),
     )(request, context);
+    final timeout = context.timeoutPolicy.firstByte;
+    if (timeout == null) {
+      return operation;
+    }
+    return operation.timeout(
+      timeout,
+      onTimeout: () {
+        final timeoutError = TimeoutError(
+          phase: TimeoutPhase.firstByte,
+          duration: timeout,
+          request: request,
+        );
+        context.signal?.abort(timeoutError);
+        throw timeoutError;
+      },
+    );
+  }
+
+  void _throwIfAborted(AbortSignal? signal, Request request) {
+    if (signal?.aborted == true) {
+      throw CancelError(reason: signal?.reason, request: request);
+    }
+  }
+
+  Response _withReadTimeout(
+    Response response,
+    Request request,
+    Context context,
+  ) {
+    final timeout = context.timeoutPolicy.read;
+    final body = response.body;
+    if (timeout == null || body == null) {
+      return response;
+    }
+
+    return response.copyWith(
+      body: ResponseBody.stream(
+        _readTimeoutStream(body.open(), timeout, request, context.signal),
+        contentLength: body.contentLength,
+      ),
+    );
+  }
+
+  Stream<List<int>> _readTimeoutStream(
+    Stream<List<int>> source,
+    Duration timeout,
+    Request request,
+    AbortSignal? signal,
+  ) async* {
+    final iterator = StreamIterator<List<int>>(source);
+    try {
+      while (true) {
+        final hasNext = await iterator.moveNext().timeout(
+          timeout,
+          onTimeout: () {
+            final timeoutError = TimeoutError(
+              phase: TimeoutPhase.read,
+              duration: timeout,
+              request: request,
+              sent: true,
+            );
+            signal?.abort(timeoutError);
+            throw timeoutError;
+          },
+        );
+        if (!hasNext) {
+          break;
+        }
+        yield iterator.current;
+      }
+    } finally {
+      await iterator.cancel();
+    }
   }
 
   Next _buildPipeline(List<Middleware> middleware, Next terminal) {
@@ -676,6 +781,12 @@ final class Client {
     Context context,
   ) {
     if (context.signal?.aborted == true) {
+      if (context.signal?.reason case final TimeoutError timeoutError) {
+        return timeoutError;
+      }
+      if (error is TimeoutError) {
+        return error;
+      }
       return CancelError(
         reason: context.signal?.reason,
         request: request,
@@ -704,16 +815,50 @@ final class Client {
 
   Future<String?> _previewStatusBody(Response response, Context context) async {
     final limit = context.clientOptions.errorBodyPreviewLimit;
-    if (limit <= 0 || response.body == null) {
+    final body = response.body;
+    if (limit <= 0 || body == null) {
       return null;
     }
 
     try {
-      final buffered = await response.buffered(maxBytes: limit);
-      response.body = buffered.body;
-      return utf8.decode(await buffered.bytes());
+      final iterator = StreamIterator<Uint8List>(body.open());
+      final chunks = <Uint8List>[];
+      final builder = BytesBuilder(copy: false);
+
+      while (await iterator.moveNext()) {
+        final chunk = iterator.current;
+        chunks.add(chunk);
+        builder.add(chunk);
+        if (builder.length > limit) {
+          response.body = ResponseBody.stream(
+            _restorePreviewStream(chunks, iterator),
+            contentLength: body.contentLength,
+          );
+          return null;
+        }
+      }
+
+      final data = builder.takeBytes();
+      response.body = ResponseBody.fromBytes(data);
+      return utf8.decode(data);
     } catch (_) {
       return null;
+    }
+  }
+
+  Stream<List<int>> _restorePreviewStream(
+    List<Uint8List> chunks,
+    StreamIterator<Uint8List> iterator,
+  ) async* {
+    try {
+      for (final chunk in chunks) {
+        yield chunk;
+      }
+      while (await iterator.moveNext()) {
+        yield iterator.current;
+      }
+    } finally {
+      await iterator.cancel();
     }
   }
 

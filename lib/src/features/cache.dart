@@ -1,8 +1,13 @@
+import 'dart:async';
+import 'dart:typed_data';
+
+import '../core/body.dart';
 import '../core/headers.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
+import '../policies.dart';
 
 typedef CacheKeyBuilder = String Function(Request request, Context context);
 
@@ -103,22 +108,29 @@ final class CacheMiddleware implements Middleware {
     final key = keyBuilder(request, context);
     final cached = await _store.read(key);
     final now = DateTime.now().toUtc();
-    if (cached != null && cached.isFresh(now)) {
+    final requestControl = _parseCacheControl(request.headers);
+    if (cached != null &&
+        cached.isFresh(now) &&
+        !requestControl.requiresRevalidation) {
       return _cloneCached(cached.response);
     }
 
     final revalidationRequest = cached?.etag == null
         ? request
         : request.withHeader('if-none-match', cached!.etag!);
-    final response = await next(revalidationRequest, context);
+    final response = await next(
+      revalidationRequest,
+      cached == null ? context : _allowNotModified(context),
+    );
+    final receivedAt = DateTime.now().toUtc();
     if (response.status == 304 && cached != null) {
       final merged = _mergeNotModified(cached.response, response);
       await _store.write(
         key,
         CachedResponse(
           response: merged,
-          storedAt: now,
-          expiresAt: _expiresAt(merged, now),
+          storedAt: receivedAt,
+          expiresAt: _expiresAt(merged, receivedAt),
           etag: merged.headers.get('etag') ?? cached.etag,
         ),
       );
@@ -126,20 +138,27 @@ final class CacheMiddleware implements Middleware {
     }
 
     final cacheControl = _parseCacheControl(response.headers);
-    if (cacheControl.noStore || !_cacheableStatus(response.status)) {
+    if (cacheControl.noStore ||
+        _hasVaryStar(response.headers) ||
+        !_cacheableStatus(response.status)) {
       await _store.delete(key);
       return response;
     }
 
-    final buffered = await response.buffered(maxBytes: maxEntryBytes);
-    final expiresAt = _expiresAt(buffered, now);
+    final buffered = await _tryBuffer(response);
+    if (buffered == null) {
+      await _store.delete(key);
+      return response;
+    }
+
+    final expiresAt = _expiresAt(buffered, receivedAt);
     final etag = buffered.headers.get('etag');
     if (expiresAt != null || etag != null) {
       await _store.write(
         key,
         CachedResponse(
           response: buffered,
-          storedAt: now,
+          storedAt: receivedAt,
           expiresAt: expiresAt,
           etag: etag,
         ),
@@ -149,7 +168,24 @@ final class CacheMiddleware implements Middleware {
   }
 
   static String _defaultCacheKeyBuilder(Request request, Context _) {
-    return '${request.method.toUpperCase()} ${request.url}';
+    final headers = request.headers.keys().toList()..sort();
+    final headerParts = <String>[];
+    for (final name in headers) {
+      headerParts.add('$name=${request.headers.getAll(name).join('\u0000')}');
+    }
+    return '${request.method.toUpperCase()} ${request.url}\n'
+        '${headerParts.join('\n')}';
+  }
+
+  Context _allowNotModified(Context context) {
+    return context.copyWith(
+      statusPolicy: StatusPolicy(
+        accept: (response) {
+          return response.status == 304 ||
+              context.statusPolicy.accepts(response);
+        },
+      ),
+    );
   }
 
   Response _cloneCached(Response response) {
@@ -188,7 +224,7 @@ final class CacheMiddleware implements Middleware {
 
   DateTime? _expiresAt(Response response, DateTime now) {
     final control = _parseCacheControl(response.headers);
-    if (control.noStore) {
+    if (control.noStore || control.noCache) {
       return null;
     }
     if (control.maxAge != null) {
@@ -208,23 +244,92 @@ final class CacheMiddleware implements Middleware {
     }
 
     var noStore = false;
+    var noCache = false;
     int? maxAge;
     for (final part in value.split(',')) {
       final trimmed = part.trim().toLowerCase();
       if (trimmed == 'no-store') {
         noStore = true;
       }
+      if (trimmed == 'no-cache') {
+        noCache = true;
+      }
       if (trimmed.startsWith('max-age=')) {
         maxAge = int.tryParse(trimmed.substring('max-age='.length));
       }
     }
-    return _CacheControl(noStore: noStore, maxAge: maxAge);
+    return _CacheControl(noStore: noStore, noCache: noCache, maxAge: maxAge);
+  }
+
+  bool _hasVaryStar(Headers headers) {
+    return headers
+        .getAll('vary')
+        .expand((value) => value.split(','))
+        .any((value) => value.trim() == '*');
+  }
+
+  Future<Response?> _tryBuffer(Response response) async {
+    final body = response.body;
+    if (body == null) {
+      return response;
+    }
+
+    final contentLength = body.contentLength;
+    if (contentLength != null && contentLength > maxEntryBytes) {
+      return null;
+    }
+
+    final iterator = StreamIterator<Uint8List>(body.open());
+    final chunks = <Uint8List>[];
+    final builder = BytesBuilder(copy: false);
+    try {
+      while (await iterator.moveNext()) {
+        final chunk = iterator.current;
+        chunks.add(chunk);
+        builder.add(chunk);
+        if (builder.length > maxEntryBytes) {
+          response.body = ResponseBody.stream(
+            _restoreBody(chunks, iterator),
+            contentLength: body.contentLength,
+          );
+          return null;
+        }
+      }
+      return response.copyWith(
+        body: ResponseBody.fromBytes(builder.takeBytes()),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Stream<List<int>> _restoreBody(
+    List<Uint8List> chunks,
+    StreamIterator<Uint8List> iterator,
+  ) async* {
+    try {
+      for (final chunk in chunks) {
+        yield chunk;
+      }
+      while (await iterator.moveNext()) {
+        yield iterator.current;
+      }
+    } finally {
+      await iterator.cancel();
+    }
   }
 }
 
 final class _CacheControl {
-  const _CacheControl({this.noStore = false, this.maxAge});
+  const _CacheControl({
+    this.noStore = false,
+    this.noCache = false,
+    this.maxAge,
+  });
 
   final bool noStore;
+  final bool noCache;
   final int? maxAge;
+
+  bool get requiresRevalidation => noCache || maxAge == 0;
 }

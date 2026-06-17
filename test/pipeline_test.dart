@@ -2,6 +2,23 @@ import 'package:oxy/oxy.dart';
 import 'package:oxy/testing.dart';
 import 'package:test/test.dart';
 
+final class CapabilityTransport implements Transport {
+  CapabilityTransport(this.capability, this._responder);
+
+  @override
+  final PlatformCapability capability;
+
+  final Future<Response> Function(Request request, Context context) _responder;
+
+  @override
+  Future<void> close() async {}
+
+  @override
+  Future<Response> send(Request request, Context context) {
+    return _responder(request, context);
+  }
+}
+
 final class HeaderMiddleware implements Middleware {
   HeaderMiddleware(this.name, this.value, this.events);
 
@@ -87,5 +104,44 @@ void main() {
     final result = await client.sendResult(Request('https://example.com'));
     expect(result.isFailure, isTrue);
     expect(result.error, isA<NetworkError>());
+  });
+
+  test('per-request headers override client defaults', () async {
+    late Request captured;
+    final client = Client(
+      ClientOptions(
+        defaultHeaders: {'authorization': 'Bearer default'},
+        transport: MockTransport((request, context) async {
+          captured = request;
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get(
+      'https://example.com',
+      headers: {'authorization': 'Bearer request'},
+    );
+
+    expect(captured.headers.getAll('authorization'), ['Bearer request']);
+  });
+
+  test('web capability does not auto-add content-length', () async {
+    late Request captured;
+    final client = Client(
+      ClientOptions(
+        transport: CapabilityTransport(PlatformCapability.web, (
+          request,
+          context,
+        ) async {
+          captured = request;
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.post('https://example.com', body: 'hello');
+
+    expect(captured.headers.has('content-length'), isFalse);
   });
 }

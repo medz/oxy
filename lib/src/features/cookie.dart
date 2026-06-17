@@ -6,7 +6,18 @@ export 'package:ocookie/ocookie.dart'
     show Cookie, CookieCodec, CookiePriority, CookieSameSite;
 
 ocookie.Cookie parseSetCookie(String setCookie, Uri requestUri) {
-  return _normalizeCookie(ocookie.Cookie.fromString(setCookie), requestUri);
+  final normalized = _normalizeCookie(
+    ocookie.Cookie.fromString(setCookie),
+    requestUri,
+  );
+  if (!normalized.hostOnly) {
+    return normalized.cookie;
+  }
+  return normalized.cookie.copyWith(
+    clear: const <ocookie.CookieNullableField>{
+      ocookie.CookieNullableField.domain,
+    },
+  );
 }
 
 extension CookieRequestExtension on ocookie.Cookie {
@@ -23,7 +34,7 @@ extension CookieRequestExtension on ocookie.Cookie {
 
   bool matchesUri(Uri uri) {
     final host = uri.host.toLowerCase();
-    final domain = _cookieDomain(this, uri);
+    final domain = _cookieDomain(this, uri.host);
     if (host != domain && !host.endsWith('.$domain')) {
       return false;
     }
@@ -53,7 +64,7 @@ abstract interface class CookieJar {
 }
 
 final class MemoryCookieJar implements CookieJar {
-  final List<ocookie.Cookie> _cookies = <ocookie.Cookie>[];
+  final List<_StoredCookie> _cookies = <_StoredCookie>[];
 
   @override
   Future<void> clear() async {
@@ -63,31 +74,71 @@ final class MemoryCookieJar implements CookieJar {
   @override
   Future<List<ocookie.Cookie>> load(Uri uri) async {
     final now = DateTime.now().toUtc();
-    _cookies.removeWhere((cookie) => cookie.isExpired(now));
-    return _cookies.where((cookie) => cookie.matchesUri(uri)).toList();
+    _cookies.removeWhere((cookie) => cookie.cookie.isExpired(now));
+    return _cookies
+        .where((cookie) => cookie.matchesUri(uri))
+        .map((cookie) => cookie.cookie)
+        .toList();
   }
 
   @override
   Future<void> save(Uri uri, List<ocookie.Cookie> cookies) async {
     final now = DateTime.now().toUtc();
-    _cookies.removeWhere((cookie) => cookie.isExpired(now));
+    _cookies.removeWhere((cookie) => cookie.cookie.isExpired(now));
 
     for (final cookie in cookies) {
       final normalized = _normalizeCookie(cookie, uri);
       _cookies.removeWhere((item) {
-        return item.name == normalized.name &&
-            _cookieDomain(item, uri) == _cookieDomain(normalized, uri) &&
-            _cookiePath(item, uri) == _cookiePath(normalized, uri);
+        return item.cookie.name == normalized.cookie.name &&
+            item.domain == normalized.domain &&
+            item.path == normalized.path;
       });
 
-      if (!normalized.isExpired(now)) {
+      if (!normalized.cookie.isExpired(now)) {
         _cookies.add(normalized);
       }
     }
   }
 }
 
-ocookie.Cookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
+final class _StoredCookie {
+  const _StoredCookie({
+    required this.cookie,
+    required this.domain,
+    required this.path,
+    required this.hostOnly,
+  });
+
+  final ocookie.Cookie cookie;
+  final String domain;
+  final String path;
+  final bool hostOnly;
+
+  bool matchesUri(Uri uri) {
+    final host = uri.host.toLowerCase();
+    if (hostOnly) {
+      if (host != domain) {
+        return false;
+      }
+    } else if (host != domain && !host.endsWith('.$domain')) {
+      return false;
+    }
+
+    final requestPath = uri.path.isEmpty ? '/' : uri.path;
+    if (requestPath != path &&
+        !(requestPath.startsWith(path) &&
+            (path.endsWith('/') || requestPath[path.length] == '/'))) {
+      return false;
+    }
+
+    if (cookie.secure && uri.scheme != 'https') {
+      return false;
+    }
+    return true;
+  }
+}
+
+_StoredCookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
   final now = DateTime.now().toUtc();
   final maxAge = cookie.maxAge == null
       ? null
@@ -97,18 +148,44 @@ ocookie.Cookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
     Duration.zero => DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     _ => now.add(maxAge),
   };
+  final host = uri.host.toLowerCase();
+  final rawDomain = cookie.domain?.trim();
+  final hostOnly = rawDomain == null || rawDomain.isEmpty;
+  final domain = hostOnly ? host : _normalizeDomain(rawDomain);
+  if (!hostOnly && !_domainMatches(host, domain)) {
+    throw ArgumentError.value(
+      cookie.domain,
+      'cookie.domain',
+      'Cookie domain does not match request host.',
+    );
+  }
+  final path = _cookiePath(cookie, uri);
 
-  return cookie.copyWith(
-    domain: _cookieDomain(cookie, uri),
-    path: _cookiePath(cookie, uri),
-    maxAge: maxAge,
-    expires: expires,
+  return _StoredCookie(
+    cookie: cookie.copyWith(
+      domain: domain,
+      path: path,
+      maxAge: maxAge,
+      expires: expires,
+    ),
+    domain: domain,
+    path: path,
+    hostOnly: hostOnly,
   );
 }
 
-String _cookieDomain(ocookie.Cookie cookie, Uri uri) {
-  final value = (cookie.domain ?? uri.host).toLowerCase();
-  return value.startsWith('.') ? value.substring(1) : value;
+String _cookieDomain(ocookie.Cookie cookie, String fallbackHost) {
+  final value = (cookie.domain ?? fallbackHost).toLowerCase();
+  return _normalizeDomain(value);
+}
+
+String _normalizeDomain(String value) {
+  final trimmed = value.trim().toLowerCase();
+  return trimmed.startsWith('.') ? trimmed.substring(1) : trimmed;
+}
+
+bool _domainMatches(String host, String domain) {
+  return host == domain || host.endsWith('.$domain');
 }
 
 String _cookiePath(ocookie.Cookie cookie, Uri uri) {

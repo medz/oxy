@@ -138,11 +138,11 @@ final class Response {
     }
   }
 
-  Future<void> drain({int maxBytes = 64 * 1024}) async {
+  Future<void> drain({int? maxBytes = 64 * 1024}) async {
     await bytes(maxBytes: maxBytes);
   }
 
-  Future<Response> buffered({int maxBytes = 1024 * 1024}) async {
+  Future<Response> buffered({int? maxBytes = 1024 * 1024}) async {
     final data = await bytes(maxBytes: maxBytes);
     return Response.bytes(
       data,
