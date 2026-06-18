@@ -189,7 +189,7 @@ void main() {
     late Request finalRequest;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        networkMiddleware: [CookieMiddleware(jar)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
@@ -231,7 +231,7 @@ void main() {
       late Request redirected;
       final client = Client(
         ClientOptions(
-          middleware: [CookieMiddleware(jar)],
+          networkMiddleware: [CookieMiddleware(jar)],
           transport: MockTransport((request, context) async {
             calls += 1;
             if (calls == 1) {
@@ -1012,6 +1012,30 @@ void main() {
       expect(calls, 1);
     },
   );
+
+  test('cache middleware does not prebuffer uncacheable streams', () async {
+    var listened = false;
+    final stream = Stream<List<int>>.multi((controller) {
+      listened = true;
+      controller.add('ok'.codeUnits);
+      controller.close();
+    });
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          return Response.stream(stream);
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/download');
+
+    expect(listened, isFalse);
+    expect(await response.text(), 'ok');
+    expect(listened, isTrue);
+    expect(response.fromCache, isFalse);
+  });
 
   test('presets remain single-package feature composition', () {
     final middleware = Presets.full(auth: AuthMiddleware.staticToken('token'));

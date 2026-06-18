@@ -135,7 +135,16 @@ final class Client {
       try {
         await hooks.onRequest?.call(prepared, context);
         throwIfLifecycleClosed();
-        final response = await _runApplicationPipeline(prepared, context);
+        final pipelineResult = await _runApplicationPipeline(prepared, context);
+        var response = pipelineResult.response;
+        throwIfLifecycleClosed();
+        if (!pipelineResult.reachedTerminal) {
+          response = await _completeShortCircuitedResponse(
+            prepared,
+            response,
+            context,
+          );
+        }
         throwIfLifecycleClosed();
         final policyResponse = await _applyResponsePolicies(
           prepared,
@@ -511,20 +520,50 @@ final class Client {
     return _ResolvedRequest(prepared, context);
   }
 
-  Future<Response> _runApplicationPipeline(Request request, Context context) {
+  Future<_ApplicationPipelineResult> _runApplicationPipeline(
+    Request request,
+    Context context,
+  ) async {
     final middleware = <Middleware>[
       ...options.middleware,
       ...context.requestOptions.middleware,
     ];
 
-    final next = _buildPipeline(
-      middleware,
-      (nextRequest, nextContext) => _runOperation(nextRequest, nextContext),
+    var reachedTerminal = false;
+    final next = _buildPipeline(middleware, (nextRequest, nextContext) {
+      reachedTerminal = true;
+      if (_usesClientRedirects(nextContext)) {
+        return _runRedirects(nextRequest, nextContext, (
+          redirectRequest,
+          redirectContext,
+        ) {
+          return _runOperation(redirectRequest, redirectContext);
+        });
+      }
+      return _runOperation(nextRequest, nextContext);
+    });
+    final response = await next(request, context);
+    return _ApplicationPipelineResult(
+      response: response,
+      reachedTerminal: reachedTerminal,
     );
-    if (_usesClientRedirects(context)) {
-      return _runRedirects(request, context, next);
+  }
+
+  Future<Response> _completeShortCircuitedResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) {
+    if (context.redirectPolicy.mode == RedirectMode.follow &&
+        _isRedirectStatus(response.status)) {
+      return _runRedirects(request, context, (
+        redirectRequest,
+        redirectContext,
+      ) {
+        return _runOperation(redirectRequest, redirectContext);
+      }, firstResponse: response);
     }
-    return next(request, context);
+    return Future.value(_withResponseTimeouts(response, request, context));
   }
 
   Future<Response> _applyResponsePolicies(
@@ -563,12 +602,14 @@ final class Client {
   Future<Response> _runRedirects(
     Request request,
     Context context,
-    Next next,
-  ) async {
+    Next next, {
+    Response? firstResponse,
+  }) async {
     var current = request;
     var redirected = false;
+    var response = firstResponse;
     for (var redirects = 0; ; redirects++) {
-      final response = await next(current, _allowRedirectStatus(context));
+      response ??= await next(current, _allowRedirectStatus(context));
       if (!_isRedirectStatus(response.status)) {
         return redirected ? response.copyWith(redirected: true) : response;
       }
@@ -599,8 +640,18 @@ final class Client {
       }
 
       await response.drain(maxBytes: null);
-      current = _redirectRequest(current, response, location);
+      try {
+        current = _redirectRequest(current, response, location);
+      } on FormatException catch (_, trace) {
+        throw StatusError(
+          response,
+          request: current,
+          message: 'Redirect response has an invalid Location header.',
+          trace: trace,
+        );
+      }
       redirected = true;
+      response = null;
     }
   }
 
@@ -750,7 +801,10 @@ final class Client {
             response: response,
             random: _random,
           );
-          final retryContext = attemptContext.copyWith(signal: context.signal);
+          final retryContext = attemptContext.copyWith(
+            signal: context.signal,
+            clearSignal: context.signal == null,
+          );
           await _beforeRetry(
             attemptRequest,
             retryContext,
@@ -800,7 +854,10 @@ final class Client {
           }
 
           final delay = retryPolicy.delayFor(attempt, random: _random);
-          final retryContext = attemptContext.copyWith(signal: context.signal);
+          final retryContext = attemptContext.copyWith(
+            signal: context.signal,
+            clearSignal: context.signal == null,
+          );
           await _beforeRetry(
             attemptRequest,
             retryContext,
@@ -868,6 +925,18 @@ final class Client {
         _readTimeoutStream(body.open(), timeout, request),
         contentLength: body.contentLength,
       ),
+    );
+  }
+
+  Response _withResponseTimeouts(
+    Response response,
+    Request request,
+    Context context,
+  ) {
+    return _withTotalTimeout(
+      _withReadTimeout(response, request, context),
+      request,
+      context,
     );
   }
 
@@ -1335,6 +1404,16 @@ final class _ResolvedRequest {
 
   final Request request;
   final Context context;
+}
+
+final class _ApplicationPipelineResult {
+  const _ApplicationPipelineResult({
+    required this.response,
+    required this.reachedTerminal,
+  });
+
+  final Response response;
+  final bool reachedTerminal;
 }
 
 final class _DownstreamError {

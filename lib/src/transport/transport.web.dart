@@ -240,28 +240,45 @@ final class WebTransport implements Transport {
     }
 
     final iterator = StreamIterator<Uint8List>(source);
+    Future<void>? cancelFuture;
+    Future<void> cancelIterator() {
+      return cancelFuture ??= iterator.cancel();
+    }
+
+    TimeoutError? sendTimeoutError;
+    final sendTimer = Timer(timeout, () {
+      final timeoutError = TimeoutError(
+        phase: TimeoutPhase.send,
+        duration: timeout,
+        request: request,
+        sent: true,
+      );
+      sendTimeoutError = timeoutError;
+      context.signal?.abort(timeoutError);
+      unawaited(cancelIterator());
+    });
+
     try {
-      while (true) {
-        final hasNext = await iterator.moveNext().timeout(
-          timeout,
-          onTimeout: () {
-            final timeoutError = TimeoutError(
-              phase: TimeoutPhase.send,
-              duration: timeout,
-              request: request,
-              sent: true,
-            );
-            context.signal?.abort(timeoutError);
-            throw timeoutError;
-          },
-        );
-        if (!hasNext) {
-          break;
+      while (await iterator.moveNext()) {
+        final timeoutError = sendTimeoutError;
+        if (timeoutError != null) {
+          throw timeoutError;
         }
         yield iterator.current;
       }
+      final timeoutError = sendTimeoutError;
+      if (timeoutError != null) {
+        throw timeoutError;
+      }
+    } catch (_) {
+      final timeoutError = sendTimeoutError;
+      if (timeoutError != null) {
+        throw timeoutError;
+      }
+      rethrow;
     } finally {
-      await iterator.cancel();
+      sendTimer.cancel();
+      await cancelIterator();
     }
   }
 
@@ -394,7 +411,7 @@ final class WebTransport implements Transport {
 
   bool _shouldStreamRequestBody(Body? body) {
     return switch (body?.kind) {
-      BodyKind.stream => true,
+      BodyKind.stream || BodyKind.multipart || BodyKind.file => true,
       _ => false,
     };
   }

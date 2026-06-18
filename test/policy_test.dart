@@ -108,6 +108,34 @@ void main() {
     );
   });
 
+  test('retry clears aborted attempt signals between attempts', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        retryPolicy: const RetryPolicy(maxRetries: 1, baseDelay: Duration.zero),
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            final timeout = TimeoutError(
+              phase: TimeoutPhase.send,
+              duration: const Duration(milliseconds: 10),
+              request: request,
+              sent: true,
+            );
+            context.signal?.abort(timeout);
+            throw timeout;
+          }
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/flaky-send');
+
+    expect(await response.text(), 'ok');
+    expect(calls, 2);
+  });
+
   test('pre-aborted signal returns typed CancelError', () async {
     final signal = AbortSignal()..abort('stop');
     final client = Client(

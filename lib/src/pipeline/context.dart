@@ -50,8 +50,10 @@ final class Context {
     Attributes? attributes,
     int? attempt,
     AbortSignal? signal,
+    bool clearSignal = false,
     EventSink? onEvent,
   }) {
+    assert(!clearSignal || signal == null, 'clearSignal and signal conflict');
     return Context(
       clientOptions: clientOptions,
       requestOptions: requestOptions ?? this.requestOptions,
@@ -63,7 +65,7 @@ final class Context {
       attributes: attributes ?? this.attributes,
       createdAt: createdAt,
       attempt: attempt ?? this.attempt,
-      signal: signal ?? this.signal,
+      signal: clearSignal ? null : signal ?? this.signal,
       onEvent: onEvent ?? this.onEvent,
     );
   }

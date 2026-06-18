@@ -402,6 +402,118 @@ void main() {
     expect(calls, 2);
   });
 
+  test('client redirect loop does not rerun application middleware', () async {
+    var calls = 0;
+    final events = <String>[];
+    final client = Client(
+      ClientOptions(
+        baseUrl: Uri.parse('https://example.com'),
+        middleware: [HeaderMiddleware('x-app', '1', events)],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            return Response(null, status: 302, headers: {'location': '/next'});
+          }
+          return Response.text(request.headers.get('x-app') ?? '');
+        }),
+      ),
+    );
+
+    final response = await client.get('/start');
+
+    expect(await response.text(), '1');
+    expect(events, ['x-app:0']);
+    expect(calls, 2);
+  });
+
+  test('short-circuited middleware redirects are followed on web', () async {
+    late Request redirected;
+    final client = Client(
+      ClientOptions(
+        baseUrl: Uri.parse('https://example.com'),
+        middleware: [
+          ShortCircuitMiddleware(
+            Response(null, status: 302, headers: {'location': '/next'}),
+          ),
+        ],
+        transport: CapabilityTransport(PlatformCapability.web, (
+          request,
+          context,
+        ) async {
+          redirected = request;
+          return Response.text('ok', url: request.uri);
+        }),
+      ),
+    );
+
+    final response = await client.get('/start');
+
+    expect(await response.text(), 'ok');
+    expect(response.redirected, isTrue);
+    expect(redirected.uri.path, '/next');
+  });
+
+  test('malformed redirect locations throw typed status errors', () async {
+    final client = Client(
+      ClientOptions(
+        baseUrl: Uri.parse('https://example.com'),
+        transport: MockTransport((request, context) async {
+          return Response(null, status: 302, headers: {'location': 'http://['});
+        }),
+      ),
+    );
+
+    await expectLater(
+      client.get('/start'),
+      throwsA(
+        isA<StatusError>()
+            .having(
+              (error) => error.message,
+              'message',
+              'Redirect response has an invalid Location header.',
+            )
+            .having((error) => error.statusResponse.status, 'status', 302),
+      ),
+    );
+  });
+
+  test('short-circuited streaming responses honor read timeout', () async {
+    final client = Client(
+      ClientOptions(
+        timeoutPolicy: const TimeoutPolicy(
+          read: Duration(milliseconds: 10),
+          total: null,
+        ),
+        middleware: [
+          ShortCircuitMiddleware(
+            Response.stream(
+              Stream<List<int>>.periodic(
+                const Duration(seconds: 1),
+                (_) => [1],
+              ),
+            ),
+          ),
+        ],
+        transport: MockTransport((request, context) async {
+          fail('transport should not be reached');
+        }),
+      ),
+    );
+
+    final response = await client.get('https://example.com/stream');
+
+    await expectLater(
+      response.bytes(),
+      throwsA(
+        isA<TimeoutError>().having(
+          (error) => error.phase,
+          'phase',
+          TimeoutPhase.read,
+        ),
+      ),
+    );
+  });
+
   test('client redirect loop honors maxRedirects', () async {
     final client = Client(
       ClientOptions(
@@ -474,37 +586,40 @@ void main() {
     },
   );
 
-  test('cross-origin redirects strip auth after middleware reruns', () async {
-    var calls = 0;
-    late Request redirected;
-    final events = <String>[];
-    final client = Client(
-      ClientOptions(
-        middleware: [AuthMiddleware.staticToken('secret')],
-        networkMiddleware: [
-          HeaderMiddleware('authorization', 'Bearer network', events),
-        ],
-        transport: MockTransport((request, context) async {
-          calls += 1;
-          if (calls == 1) {
-            return Response(
-              null,
-              status: 302,
-              headers: {'location': 'https://other.example/target'},
-              url: request.uri,
-            );
-          }
-          redirected = request;
-          return Response.text('ok', url: request.uri);
-        }),
-      ),
-    );
+  test(
+    'cross-origin redirects strip auth without rerunning app middleware',
+    () async {
+      var calls = 0;
+      late Request redirected;
+      final events = <String>[];
+      final client = Client(
+        ClientOptions(
+          middleware: [AuthMiddleware.staticToken('secret')],
+          networkMiddleware: [
+            HeaderMiddleware('authorization', 'Bearer network', events),
+          ],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 1) {
+              return Response(
+                null,
+                status: 302,
+                headers: {'location': 'https://other.example/target'},
+                url: request.uri,
+              );
+            }
+            redirected = request;
+            return Response.text('ok', url: request.uri);
+          }),
+        ),
+      );
 
-    await client.get('https://example.com/start');
+      await client.get('https://example.com/start');
 
-    expect(redirected.uri.host, 'other.example');
-    expect(redirected.headers.has('authorization'), isFalse);
-  });
+      expect(redirected.uri.host, 'other.example');
+      expect(redirected.headers.has('authorization'), isFalse);
+    },
+  );
 
   test(
     'cross-origin redirect marker survives redirected-origin chain',

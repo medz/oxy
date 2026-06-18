@@ -231,6 +231,34 @@ final class NativeTransport implements Transport {
       return cancelFuture ??= chunks.cancel();
     }
 
+    final abortSignal = context.signal;
+    final abortCompleter = Completer<void>();
+    if (abortSignal != null) {
+      if (abortSignal.aborted) {
+        unawaited(cancelChunks());
+        throw CancelError(reason: abortSignal.reason, request: request);
+      }
+      abortSignal.onAbort(() {
+        if (!abortCompleter.isCompleted) {
+          abortCompleter.complete();
+        }
+        unawaited(cancelChunks());
+      });
+    }
+
+    Future<bool> moveNextChunk() {
+      final moveNext = chunks.moveNext();
+      if (abortSignal == null) {
+        return moveNext;
+      }
+      return Future.any<bool>([
+        moveNext,
+        abortCompleter.future.then((_) {
+          throw CancelError(reason: abortSignal.reason, request: request);
+        }),
+      ]);
+    }
+
     TimeoutError? sendTimeoutError;
     final sendTimeout = context.timeoutPolicy.send;
     final sendTimer = sendTimeout == null
@@ -251,7 +279,7 @@ final class NativeTransport implements Transport {
           });
 
     try {
-      while (await chunks.moveNext()) {
+      while (await moveNextChunk()) {
         final timeoutError = sendTimeoutError;
         if (timeoutError != null) {
           throw timeoutError;

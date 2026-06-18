@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/transport/transport.stub.dart' as stub;
 import 'package:test/test.dart';
 
 void main() {
@@ -145,6 +146,37 @@ void main() {
       expect(result.value, 42);
       expect(failed.isFailure, isTrue);
       expect(failed.error, isA<StateError>());
+    });
+  });
+
+  group('Transport', () {
+    test('unsupported transport failures are non-retryable', () async {
+      final transport = stub.createTransport();
+
+      await expectLater(
+        transport.send(
+          Request('https://example.com'),
+          Context(
+            clientOptions: const ClientOptions(),
+            requestOptions: const RequestOptions(),
+            timeoutPolicy: const TimeoutPolicy(),
+            retryPolicy: const RetryPolicy(),
+            redirectPolicy: RedirectPolicy.follow,
+            statusPolicy: StatusPolicy.throwOnError,
+            capability: transport.capability,
+            attributes: const Attributes(),
+            createdAt: DateTime.now().toUtc(),
+            attempt: 0,
+          ),
+        ),
+        throwsA(
+          isA<NetworkError>().having(
+            (error) => error.retryable,
+            'retryable',
+            isFalse,
+          ),
+        ),
+      );
     });
   });
 }

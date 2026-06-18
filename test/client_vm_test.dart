@@ -195,6 +195,53 @@ void main() {
       );
     });
 
+    test('abort signal cancels slow upload streams', () async {
+      final signal = AbortSignal();
+      final started = Completer<void>();
+      final cancelled = Completer<void>();
+      Stream<List<int>> slowBody() async* {
+        try {
+          if (!started.isCompleted) {
+            started.complete();
+          }
+          await Future<void>.delayed(const Duration(seconds: 1));
+          yield utf8.encode('late');
+        } finally {
+          if (!cancelled.isCompleted) {
+            cancelled.complete();
+          }
+        }
+      }
+
+      final client = Client(
+        ClientOptions(
+          baseUrl: baseUrl,
+          timeoutPolicy: const TimeoutPolicy(total: null),
+          retryPolicy: const RetryPolicy(maxRetries: 0),
+        ),
+      );
+      addTearDown(client.close);
+      final request = client.post(
+        '/echo',
+        body: slowBody(),
+        options: RequestOptions(signal: signal),
+      );
+
+      await started.future.timeout(const Duration(seconds: 1));
+      signal.abort('stop');
+
+      await expectLater(
+        request,
+        throwsA(
+          isA<CancelError>().having((error) => error.reason, 'reason', 'stop'),
+        ),
+      );
+      await expectLater(
+        cancelled.future.timeout(const Duration(seconds: 1)),
+        completes,
+      );
+    });
+
     test('first-byte timeout starts after upload is sent', () async {
       final client = Client(
         ClientOptions(

@@ -177,25 +177,28 @@ final class CacheMiddleware implements Middleware {
       return response;
     }
 
+    final expiresAt = _expiresAt(response, receivedAt);
+    final etag = response.headers.get('etag');
+    if (expiresAt == null && etag == null) {
+      await _store.delete(key);
+      return response;
+    }
+
     final buffered = await _tryBuffer(request, response);
     if (buffered == null) {
       await _store.delete(key);
       return response;
     }
 
-    final expiresAt = _expiresAt(buffered, receivedAt);
-    final etag = buffered.headers.get('etag');
-    if (expiresAt != null || etag != null) {
-      await _store.write(
-        key,
-        CachedResponse(
-          response: buffered,
-          storedAt: receivedAt,
-          expiresAt: expiresAt,
-          etag: etag,
-        ),
-      );
-    }
+    await _store.write(
+      key,
+      CachedResponse(
+        response: buffered,
+        storedAt: receivedAt,
+        expiresAt: expiresAt,
+        etag: etag,
+      ),
+    );
     return buffered.copyWith(fromCache: false);
   }
 

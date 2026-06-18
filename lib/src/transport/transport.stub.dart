@@ -27,6 +27,7 @@ final class _UnsupportedTransport implements Transport {
     throw NetworkError(
       'No Oxy transport is available on this platform.',
       request: request,
+      retryable: false,
     );
   }
 }

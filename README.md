@@ -87,9 +87,9 @@ final client = Client(
     middleware: [
       RequestIdMiddleware(),
       AuthMiddleware.staticToken('token'),
-      CookieMiddleware(MemoryCookieJar()),
     ],
     networkMiddleware: [
+      CookieMiddleware(MemoryCookieJar()),
       LoggingMiddleware(),
     ],
   ),
