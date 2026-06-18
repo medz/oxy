@@ -126,6 +126,12 @@ void main() {
       ]),
       throwsArgumentError,
     );
+    await expectLater(
+      jar.save(Uri.parse('https://api.example.com/login'), [
+        const Cookie('attack', '1', domain: 'com', path: '/'),
+      ]),
+      throwsArgumentError,
+    );
   });
 
   test('cookie middleware stores response cookies against final URL', () async {
@@ -331,6 +337,51 @@ void main() {
     expect(calls, 2);
   });
 
+  test(
+    'cache middleware revalidates entries older than request max-age',
+    () async {
+      final store = MemoryCacheStore();
+      final now = DateTime.now().toUtc();
+      await store.write(
+        'feed',
+        CachedResponse(
+          response: Response.text(
+            'cached',
+            headers: {'cache-control': 'max-age=3600'},
+          ),
+          storedAt: now.subtract(const Duration(seconds: 120)),
+          expiresAt: now.add(const Duration(seconds: 3600)),
+          etag: null,
+        ),
+      );
+
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          middleware: [
+            CacheMiddleware(store: store, keyBuilder: (_, _) => 'feed'),
+          ],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            return Response.text(
+              'fresh',
+              headers: {'cache-control': 'max-age=3600'},
+            );
+          }),
+        ),
+      );
+
+      final response = await client.get(
+        'https://example.com/feed',
+        headers: {'cache-control': 'max-age=60'},
+      );
+
+      expect(await response.text(), 'fresh');
+      expect(response.fromCache, isFalse);
+      expect(calls, 1);
+    },
+  );
+
   test('cache middleware keys request header variants', () async {
     var calls = 0;
     final client = Client(
@@ -482,14 +533,50 @@ void main() {
     );
     final second = await client.get(
       'https://example.com/feed',
-      headers: {'if-none-match': 'caller'},
+      headers: {'if-none-match': 'v1'},
     );
 
     expect(await second.text(), 'cached');
     expect(second.fromCache, isTrue);
-    expect(conditionalHeader, 'caller');
+    expect(conditionalHeader, 'v1');
     expect(calls, 2);
   });
+
+  test(
+    'cache middleware does not merge unrelated caller 304 validators',
+    () async {
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          middleware: [CacheMiddleware()],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 2) {
+              expect(request.headers.get('if-none-match'), 'v2');
+              return Response(null, status: 304, headers: {'etag': 'v2'});
+            }
+            return Response.text(
+              'cached-v1',
+              headers: {'cache-control': 'max-age=60', 'etag': 'v1'},
+            );
+          }),
+        ),
+      );
+
+      expect(
+        await (await client.get('https://example.com/feed')).text(),
+        'cached-v1',
+      );
+      final second = await client.get(
+        'https://example.com/feed',
+        headers: {'if-none-match': 'v2'},
+      );
+
+      expect(second.status, 304);
+      expect(second.fromCache, isFalse);
+      expect(calls, 2);
+    },
+  );
 
   test('cache middleware surfaces stream buffering failures', () async {
     final client = Client(
@@ -550,6 +637,28 @@ void main() {
     expect(middleware[2], isA<CookieMiddleware>());
     expect(middleware[3], isA<CacheMiddleware>());
     expect(middleware[4], isA<LoggingMiddleware>());
+  });
+
+  test('logging middleware redacts userinfo query and fragment', () async {
+    final messages = <String>[];
+    final client = Client(
+      ClientOptions(
+        middleware: [LoggingMiddleware(printer: messages.add)],
+        transport: MockTransport((request, context) async {
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get('https://user:pass@example.com/feed?token=secret#frag');
+
+    expect(messages, isNotEmpty);
+    expect(messages.first, contains('https://%3Credacted%3E@example.com/feed'));
+    expect(messages.first, contains('?%3Credacted%3E'));
+    expect(messages.first, contains('#%3Credacted%3E'));
+    expect(messages.first, isNot(contains('user:pass')));
+    expect(messages.first, isNot(contains('secret')));
+    expect(messages.first, isNot(contains('frag')));
   });
 
   test('exports complete cookie copy API', () {

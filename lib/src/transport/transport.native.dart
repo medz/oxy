@@ -230,6 +230,7 @@ final class NativeTransport implements Transport {
         TransferProgress(transferred: transferred, total: total),
       );
     }
+    await httpRequest.flush();
   }
 
   Future<void> _withSendTimeout(

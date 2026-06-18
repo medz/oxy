@@ -335,4 +335,45 @@ void main() {
     expect(redirected.uri.host, 'other.example');
     expect(redirected.headers.has('authorization'), isFalse);
   });
+
+  test(
+    'cross-origin redirect marker survives redirected-origin chain',
+    () async {
+      var calls = 0;
+      late Request finalRequest;
+      final client = Client(
+        ClientOptions(
+          middleware: [AuthMiddleware.staticToken('secret')],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 1) {
+              return Response(
+                null,
+                status: 302,
+                headers: {'location': 'https://other.example/step'},
+                url: request.uri,
+              );
+            }
+            if (calls == 2) {
+              expect(request.uri.host, 'other.example');
+              expect(request.headers.has('authorization'), isFalse);
+              return Response(
+                null,
+                status: 302,
+                headers: {'location': '/final'},
+                url: request.uri,
+              );
+            }
+            finalRequest = request;
+            return Response.text('ok', url: request.uri);
+          }),
+        ),
+      );
+
+      await client.get('https://api.example.com/start');
+
+      expect(finalRequest.uri.toString(), 'https://other.example/final');
+      expect(finalRequest.headers.has('authorization'), isFalse);
+    },
+  );
 }

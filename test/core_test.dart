@@ -60,6 +60,7 @@ void main() {
       expect(text, contains('name="name"'));
       expect(text, contains('oxy'));
       expect(text, contains('filename="a.txt"'));
+      expect(utf8.decode(await body.bytes()), text);
     });
 
     test('accepts URLSearchParams as replayable form body', () async {
@@ -70,6 +71,17 @@ void main() {
       expect(body.contentType, contains('application/x-www-form-urlencoded'));
       expect(await body.text(), 'q=oxy&page=1');
       expect(await body.text(), 'q=oxy&page=1');
+    });
+  });
+
+  group('AbortSignal', () {
+    test('swallows late abort callback failures consistently', () {
+      final signal = AbortSignal()..abort('done');
+
+      expect(
+        () => signal.onAbort(() => throw StateError('late')),
+        returnsNormally,
+      );
     });
   });
 

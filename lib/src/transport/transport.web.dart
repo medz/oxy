@@ -149,7 +149,7 @@ final class WebTransport implements Transport {
 
     context.onSendProgress?.call(
       TransferProgress(
-        transferred: requestBody?.contentLength ?? 0,
+        transferred: streamBody ? 0 : (requestBody?.contentLength ?? 0),
         total: requestBody?.contentLength,
       ),
     );
@@ -194,6 +194,9 @@ final class WebTransport implements Transport {
       return response;
     } catch (error, trace) {
       if (context.signal?.aborted == true) {
+        if (context.signal?.reason case final TimeoutError timeoutError) {
+          throw timeoutError;
+        }
         throw CancelError(
           reason: context.signal?.reason,
           request: request,
@@ -229,12 +232,14 @@ final class WebTransport implements Transport {
         final hasNext = await iterator.moveNext().timeout(
           timeout,
           onTimeout: () {
-            throw TimeoutError(
+            final timeoutError = TimeoutError(
               phase: TimeoutPhase.send,
               duration: timeout,
               request: request,
               sent: true,
             );
+            context.signal?.abort(timeoutError);
+            throw timeoutError;
           },
         );
         if (!hasNext) {

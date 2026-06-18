@@ -40,9 +40,16 @@ final class LoggingMiddleware implements Middleware {
   }
 
   String _redact(Uri uri) {
-    if (!uri.hasQuery) {
-      return uri.toString();
+    var sanitized = uri;
+    if (sanitized.userInfo.isNotEmpty) {
+      sanitized = sanitized.replace(userInfo: '<redacted>');
     }
-    return uri.replace(query: '<redacted>').toString();
+    if (sanitized.hasQuery) {
+      sanitized = sanitized.replace(query: '<redacted>');
+    }
+    if (sanitized.hasFragment) {
+      sanitized = sanitized.replace(fragment: '<redacted>');
+    }
+    return sanitized.toString();
   }
 }

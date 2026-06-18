@@ -25,6 +25,7 @@ extension type ReadableStreamDefaultReaderResult._(JSObject _)
 extension type ReadableStreamDefaultReader._(JSObject _) {
   external void releaseLock();
   external JSPromise<ReadableStreamDefaultReaderResult> read();
+  external JSPromise<JSAny?> cancel([JSAny? reason]);
 }
 
 @JS('ReadableStream')
@@ -79,11 +80,13 @@ Stream<Uint8List> toDartStream(
 }) async* {
   final reader = stream.getReader();
   var transferred = 0;
+  var done = false;
 
   try {
     while (true) {
       final result = await reader.read().toDart;
       if (result.done) {
+        done = true;
         break;
       }
       final value = result.value;
@@ -112,6 +115,13 @@ Stream<Uint8List> toDartStream(
       sent: true,
     );
   } finally {
+    if (!done) {
+      try {
+        unawaited(
+          reader.cancel('cancelled'.toJS).toDart.catchError((_) => null),
+        );
+      } catch (_) {}
+    }
     reader.releaseLock();
   }
 }

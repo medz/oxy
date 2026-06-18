@@ -157,7 +157,8 @@ _StoredCookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
   final rawDomain = cookie.domain?.trim();
   final hostOnly = rawDomain == null || rawDomain.isEmpty;
   final domain = hostOnly ? host : _normalizeDomain(rawDomain);
-  if (!hostOnly && !_domainMatches(host, domain)) {
+  if (!hostOnly &&
+      (!_domainMatches(host, domain) || !_isCookieDomain(domain))) {
     throw ArgumentError.value(
       cookie.domain,
       'cookie.domain',
@@ -193,6 +194,10 @@ bool _domainMatches(String host, String domain) {
   return host == domain || host.endsWith('.$domain');
 }
 
+bool _isCookieDomain(String domain) {
+  return domain.contains('.') && !_ipv4Pattern.hasMatch(domain);
+}
+
 String _cookiePath(ocookie.Cookie cookie, Uri uri) {
   return cookie.path ?? _defaultPath(uri.path);
 }
@@ -207,3 +212,5 @@ String _defaultPath(String requestPath) {
   }
   return requestPath.substring(0, slashIndex);
 }
+
+final RegExp _ipv4Pattern = RegExp(r'^\d{1,3}(?:\.\d{1,3}){3}$');

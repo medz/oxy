@@ -294,4 +294,16 @@ void main() {
 
     expect(delay, greaterThan(const Duration(days: 1)));
   });
+
+  test('retry policy rejects negative delay configuration', () {
+    expect(
+      () =>
+          RetryPolicy(baseDelay: const Duration(milliseconds: -1)).delayFor(0),
+      throwsA(isA<AssertionError>()),
+    );
+    expect(
+      () => RetryPolicy(maxDelay: const Duration(milliseconds: -1)).delayFor(0),
+      throwsA(isA<AssertionError>()),
+    );
+  });
 }

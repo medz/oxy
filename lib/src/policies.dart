@@ -79,6 +79,9 @@ final class RetryPolicy {
   }
 
   Duration delayFor(int attempt, {Response? response, Random? random}) {
+    assert(!baseDelay.isNegative, 'baseDelay must be >= 0');
+    assert(!maxDelay.isNegative, 'maxDelay must be >= 0');
+
     final retryAfter = response == null || !respectRetryAfter
         ? null
         : _retryAfter(response);

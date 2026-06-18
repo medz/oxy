@@ -98,7 +98,8 @@ final class CookieMiddleware implements Middleware {
     for (final setCookie in setCookies) {
       try {
         parsed.add(parseSetCookie(setCookie, requestUrl));
-      } catch (_) {}
+      } on FormatException catch (_) {
+      } on ArgumentError catch (_) {}
     }
 
     if (parsed.isNotEmpty) {

@@ -28,6 +28,14 @@ final class CachedResponse {
   bool isFresh(DateTime nowUtc) {
     return expiresAt != null && nowUtc.isBefore(expiresAt!);
   }
+
+  bool _satisfiesRequest(_CacheControl requestControl, DateTime nowUtc) {
+    final maxAge = requestControl.maxAge;
+    if (maxAge == null) {
+      return true;
+    }
+    return nowUtc.difference(storedAt) <= Duration(seconds: maxAge);
+  }
 }
 
 abstract interface class CacheStore {
@@ -116,6 +124,7 @@ final class CacheMiddleware implements Middleware {
     final now = DateTime.now().toUtc();
     if (cached != null &&
         cached.isFresh(now) &&
+        cached._satisfiesRequest(requestControl, now) &&
         !requestControl.requiresRevalidation &&
         !_hasConditionalHeader(request.headers)) {
       return _cloneCached(cached.response);
@@ -128,6 +137,9 @@ final class CacheMiddleware implements Middleware {
     );
     final receivedAt = DateTime.now().toUtc();
     if (response.status == 304 && cached != null) {
+      if (!_notModifiedMatchesCached(request, cached)) {
+        return response;
+      }
       final merged = _mergeNotModified(cached.response, response);
       await _store.write(
         key,
@@ -201,6 +213,31 @@ final class CacheMiddleware implements Middleware {
       return request;
     }
     return request.withHeader('if-none-match', etag);
+  }
+
+  bool _notModifiedMatchesCached(Request request, CachedResponse cached) {
+    if (!_hasConditionalHeader(request.headers)) {
+      return cached.etag != null;
+    }
+
+    final ifNoneMatch = request.headers.get('if-none-match');
+    if (ifNoneMatch != null) {
+      return cached.etag != null && _etagMatches(ifNoneMatch, cached.etag!);
+    }
+
+    final ifModifiedSince = request.headers.get('if-modified-since');
+    final lastModified = cached.response.headers.get('last-modified');
+    return ifModifiedSince != null &&
+        lastModified != null &&
+        ifModifiedSince.trim() == lastModified.trim();
+  }
+
+  bool _etagMatches(String header, String etag) {
+    return header
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .contains(etag);
   }
 
   Response _cloneCached(Response response) {

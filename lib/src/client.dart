@@ -545,9 +545,7 @@ final class Client {
     final nextUri = base.resolve(location);
     final sameOrigin = _sameOrigin(request.uri, nextUri);
     final nextHeaders = request.headers.copy();
-    var nextAttributes = request.attributes.remove(
-      redirectCrossOriginAttribute,
-    );
+    var nextAttributes = request.attributes;
     if (!sameOrigin) {
       nextHeaders.delete('authorization');
       nextHeaders.delete('cookie');

@@ -44,7 +44,11 @@ class _AbortSignalImpl implements AbortSignal {
   @override
   void onAbort(void Function() callback) {
     if (_aborted) {
-      callback();
+      try {
+        callback();
+      } catch (_) {
+        // Cancellation callbacks must not escape after the signal is settled.
+      }
       return;
     }
 

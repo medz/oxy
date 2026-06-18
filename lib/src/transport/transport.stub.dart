@@ -23,7 +23,7 @@ final class _UnsupportedTransport implements Transport {
   Future<void> close() async {}
 
   @override
-  Future<Response> send(Request request, Context context) {
+  Future<Response> send(Request request, Context context) async {
     throw NetworkError(
       'No Oxy transport is available on this platform.',
       request: request,
