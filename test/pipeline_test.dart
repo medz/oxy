@@ -167,6 +167,71 @@ void main() {
     );
   });
 
+  test('emits middleware lifecycle events with middleware detail', () async {
+    final events = <RequestEvent>[];
+    final headerEvents = <String>[];
+    final client = Client(
+      ClientOptions(
+        onEvent: events.add,
+        middleware: const [PassThroughMiddleware()],
+        networkMiddleware: [HeaderMiddleware('x-net', '1', headerEvents)],
+        transport: MockTransport((request, context) async {
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get('https://example.com/events');
+
+    final middlewareEvents = events
+        .where(
+          (event) =>
+              event.type == RequestEventType.middlewareStart ||
+              event.type == RequestEventType.middlewareEnd,
+        )
+        .map((event) => '${event.type.name}:${event.detail}:${event.attempt}')
+        .toList();
+    expect(middlewareEvents, [
+      'middlewareStart:PassThroughMiddleware:0',
+      'middlewareStart:HeaderMiddleware:0',
+      'middlewareEnd:HeaderMiddleware:0',
+      'middlewareEnd:PassThroughMiddleware:0',
+    ]);
+  });
+
+  test('complete event reports the successful retry attempt', () async {
+    var calls = 0;
+    final events = <RequestEvent>[];
+    final client = Client(
+      ClientOptions(
+        onEvent: events.add,
+        retryPolicy: const RetryPolicy(maxRetries: 1, baseDelay: Duration.zero),
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            return Response.text('retry', status: 503);
+          }
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get('https://example.com/retry');
+
+    expect(
+      events
+          .where((event) => event.type == RequestEventType.attemptEnd)
+          .map((event) => event.attempt),
+      [0, 1],
+    );
+    expect(
+      events
+          .singleWhere((event) => event.type == RequestEventType.complete)
+          .attempt,
+      1,
+    );
+  });
+
   test('web capability does not auto-add content-length', () async {
     late Request captured;
     final client = Client(

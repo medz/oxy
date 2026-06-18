@@ -115,6 +115,9 @@ void main() {
     );
 
     expect(rootCookies.map((cookie) => cookie.name), contains('sid'));
+    final rootSid = rootCookies.singleWhere((cookie) => cookie.name == 'sid');
+    expect(rootSid.domain, isNull);
+    expect(rootSid.matchesUri(Uri.parse('https://example.com/home')), isFalse);
     expect(
       subdomainCookies.map((cookie) => cookie.name),
       isNot(contains('sid')),
@@ -399,6 +402,38 @@ void main() {
     },
   );
 
+  test(
+    'cache middleware counts response Age against request max-age',
+    () async {
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          middleware: [CacheMiddleware()],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            return Response.text(
+              'v$calls',
+              headers: {
+                'cache-control': 'max-age=300',
+                'age': calls == 1 ? '120' : '0',
+              },
+            );
+          }),
+        ),
+      );
+
+      expect(await (await client.get('https://example.com/feed')).text(), 'v1');
+      final second = await client.get(
+        'https://example.com/feed',
+        headers: {'cache-control': 'max-age=60'},
+      );
+
+      expect(await second.text(), 'v2');
+      expect(second.fromCache, isFalse);
+      expect(calls, 2);
+    },
+  );
+
   test('cache middleware keys request header variants', () async {
     var calls = 0;
     final client = Client(
@@ -517,6 +552,32 @@ void main() {
     final second = await client.get(
       'https://example.com/feed',
       headers: {'cache-control': 'no-store'},
+    );
+
+    expect(await second.text(), 'v2');
+    expect(second.fromCache, isFalse);
+    expect(calls, 2);
+  });
+
+  test('cache middleware honors request pragma no-cache', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response.text(
+            'v$calls',
+            headers: {'cache-control': 'max-age=60'},
+          );
+        }),
+      ),
+    );
+
+    expect(await (await client.get('https://example.com/feed')).text(), 'v1');
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'pragma': 'no-cache'},
     );
 
     expect(await second.text(), 'v2');

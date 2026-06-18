@@ -34,7 +34,10 @@ final class CachedResponse {
     if (maxAge == null) {
       return true;
     }
-    return nowUtc.difference(storedAt) <= Duration(seconds: maxAge);
+    final currentAge =
+        nowUtc.difference(storedAt) +
+        Duration(seconds: _ageSeconds(response.headers));
+    return currentAge <= Duration(seconds: maxAge);
   }
 }
 
@@ -300,43 +303,39 @@ final class CacheMiddleware implements Middleware {
     return null;
   }
 
-  int _ageSeconds(Headers headers) {
-    final value = headers.get('age');
-    if (value == null) {
-      return 0;
-    }
-    final seconds = int.tryParse(value.trim());
-    if (seconds == null || seconds <= 0) {
-      return 0;
-    }
-    return seconds;
-  }
-
   bool _cacheableStatus(int status) {
     return const <int>{200, 203, 204, 206, 300, 301, 308}.contains(status);
   }
 
   _CacheControl _parseCacheControl(Headers headers) {
-    final value = headers.get('cache-control');
-    if (value == null) {
-      return const _CacheControl();
-    }
-
     var noStore = false;
     var noCache = false;
     int? maxAge;
-    for (final part in value.split(',')) {
-      final trimmed = part.trim().toLowerCase();
-      if (trimmed == 'no-store') {
-        noStore = true;
-      }
-      if (trimmed == 'no-cache') {
-        noCache = true;
-      }
-      if (trimmed.startsWith('max-age=')) {
-        maxAge = int.tryParse(trimmed.substring('max-age='.length));
+
+    final cacheControl = headers.get('cache-control');
+    if (cacheControl != null) {
+      for (final part in cacheControl.split(',')) {
+        final trimmed = part.trim().toLowerCase();
+        if (trimmed == 'no-store') {
+          noStore = true;
+        }
+        if (trimmed == 'no-cache') {
+          noCache = true;
+        }
+        if (trimmed.startsWith('max-age=')) {
+          maxAge = int.tryParse(trimmed.substring('max-age='.length));
+        }
       }
     }
+
+    for (final value in headers.getAll('pragma')) {
+      for (final part in value.split(',')) {
+        if (part.trim().toLowerCase() == 'no-cache') {
+          noCache = true;
+        }
+      }
+    }
+
     return _CacheControl(noStore: noStore, noCache: noCache, maxAge: maxAge);
   }
 
@@ -423,6 +422,18 @@ bool _hasConditionalHeader(Headers headers) {
       headers.has('if-modified-since') ||
       headers.has('if-none-match') ||
       headers.has('if-unmodified-since');
+}
+
+int _ageSeconds(Headers headers) {
+  final value = headers.get('age');
+  if (value == null) {
+    return 0;
+  }
+  final seconds = int.tryParse(value.trim());
+  if (seconds == null || seconds <= 0) {
+    return 0;
+  }
+  return seconds;
 }
 
 final class _CacheControl {

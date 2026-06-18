@@ -26,6 +26,27 @@ void main() {
     );
   });
 
+  test('status policy preserves invalid UTF-8 preview bodies', () async {
+    final payload = Uint8List.fromList([0xff, 0xfe, 0x61]);
+    final client = Client(
+      ClientOptions(
+        errorBodyPreviewLimit: 64,
+        transport: MockTransport((request, context) async {
+          return Response.bytes(payload, status: 400);
+        }),
+      ),
+    );
+
+    try {
+      await client.get('https://example.com/binary-error');
+      fail('Expected StatusError.');
+    } on StatusError catch (error) {
+      expect(error.bodyPreview, isNull);
+      expect(await error.statusResponse.bytes(), orderedEquals(payload));
+      expect(await error.statusResponse.bytes(), orderedEquals(payload));
+    }
+  });
+
   test('status policy can return non-2xx responses', () async {
     final client = Client(
       ClientOptions(

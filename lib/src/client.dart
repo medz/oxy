@@ -75,6 +75,20 @@ final class Client {
     if (timeoutSignal != null) {
       context = context.copyWith(signal: timeoutSignal);
     }
+    var finalAttempt = context.attempt;
+    final onEvent = context.onEvent;
+    if (onEvent != null) {
+      // Attempts are owned by _runOperation; keep the request-level complete
+      // event aligned with the attempt that actually returned.
+      context = context.copyWith(
+        onEvent: (event) {
+          if (event.type == RequestEventType.attemptEnd) {
+            finalAttempt = event.attempt;
+          }
+          onEvent(event);
+        },
+      );
+    }
     final hooks = this.options.hooks.merge(context.requestOptions.hooks);
 
     emitEvent(
@@ -101,7 +115,7 @@ final class Client {
           context.onEvent,
           RequestEventType.complete,
           request: prepared,
-          attempt: context.attempt,
+          attempt: finalAttempt,
           response: nextResponse,
         );
         return nextResponse;
@@ -900,6 +914,7 @@ final class Client {
       final current = middleware[i];
       final next = runner;
       runner = (request, context) async {
+        final middlewareName = current.runtimeType.toString();
         Future<Response> guardedNext(Request request, Context context) async {
           try {
             return await next(request, context);
@@ -911,23 +926,49 @@ final class Client {
           }
         }
 
+        void emitMiddlewareEnd({Response? response, Object? error}) {
+          emitEvent(
+            context.onEvent,
+            RequestEventType.middlewareEnd,
+            request: request,
+            attempt: context.attempt,
+            response: response,
+            error: error,
+            detail: middlewareName,
+          );
+        }
+
+        emitEvent(
+          context.onEvent,
+          RequestEventType.middlewareStart,
+          request: request,
+          attempt: context.attempt,
+          detail: middlewareName,
+        );
+        late Response response;
         try {
-          return await current.intercept(request, context, guardedNext);
+          response = await current.intercept(request, context, guardedNext);
         } catch (error, trace) {
           if (error is _DownstreamError) {
+            emitMiddlewareEnd(error: error.error);
             Error.throwWithStackTrace(error.error, error.trace);
           }
           if (error is RequestError) {
+            emitMiddlewareEnd(error: error);
             rethrow;
           }
-          throw MiddlewareError(
-            middleware: current.runtimeType.toString(),
+          final middlewareError = MiddlewareError(
+            middleware: middlewareName,
             message: 'Middleware execution failed.',
             request: request,
             cause: error,
             trace: trace,
           );
+          emitMiddlewareEnd(error: middlewareError);
+          throw middlewareError;
         }
+        emitMiddlewareEnd(response: response);
+        return response;
       };
     }
 

@@ -11,18 +11,10 @@ export 'package:ocookie/ocookie.dart'
         CookieSameSite;
 
 ocookie.Cookie parseSetCookie(String setCookie, Uri requestUri) {
-  final normalized = _normalizeCookie(
+  return _normalizeCookie(
     ocookie.Cookie.fromString(setCookie),
     requestUri,
-  );
-  if (!normalized.hostOnly) {
-    return normalized.cookie;
-  }
-  return normalized.cookie.copyWith(
-    clear: const <ocookie.CookieNullableField>{
-      ocookie.CookieNullableField.domain,
-    },
-  );
+  ).cookie;
 }
 
 extension CookieRequestExtension on ocookie.Cookie {
@@ -169,14 +161,24 @@ _StoredCookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
     );
   }
   final path = _cookiePath(cookie, uri);
+  final normalizedCookie = hostOnly
+      ? cookie.copyWith(
+          path: path,
+          maxAge: maxAge,
+          expires: expires,
+          clear: const <ocookie.CookieNullableField>{
+            ocookie.CookieNullableField.domain,
+          },
+        )
+      : cookie.copyWith(
+          domain: domain,
+          path: path,
+          maxAge: maxAge,
+          expires: expires,
+        );
 
   return _StoredCookie(
-    cookie: cookie.copyWith(
-      domain: domain,
-      path: path,
-      maxAge: maxAge,
-      expires: expires,
-    ),
+    cookie: normalizedCookie,
     domain: domain,
     path: path,
     hostOnly: hostOnly,
