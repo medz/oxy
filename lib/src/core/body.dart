@@ -144,7 +144,7 @@ final class Body {
 
   static Body fromBlob(ht.Blob blob) {
     return Body._(
-      kind: blob is ht.File ? BodyKind.file : BodyKind.bytes,
+      kind: BodyKind.file,
       replayable: true,
       contentLength: blob.size,
       contentType: blob.type.isEmpty ? null : blob.type,

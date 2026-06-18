@@ -111,7 +111,11 @@ final class WebTransport implements Transport {
     _bindAbort(controller, context);
 
     final requestBody = request.body;
-    final streamBody = requestBody?.kind == BodyKind.stream;
+    final streamBody = _shouldStreamRequestBody(requestBody);
+    final requestBodySent =
+        streamBody && context.timeoutPolicy.firstByte != null
+        ? Completer<void>()
+        : null;
     final init = RequestInit(
       method: request.method,
       headers: headers,
@@ -122,8 +126,11 @@ final class WebTransport implements Transport {
 
     if (requestBody != null) {
       if (streamBody) {
+        final stream = _withSendTimeout(requestBody.open(), context, request);
         init.body = toWebReadableStream(
-          _withSendTimeout(requestBody.open(), context, request),
+          requestBodySent == null
+              ? stream
+              : _trackRequestBodySent(stream, requestBodySent),
         );
         init.duplex = 'half';
       } else {
@@ -155,7 +162,13 @@ final class WebTransport implements Transport {
     );
 
     try {
-      final webResponse = await webFetch(WebRequest(request.url, init)).toDart;
+      final webResponse = await _withFirstByteTimeout(
+        webFetch(WebRequest(request.url, init)).toDart,
+        requestBodySent?.future,
+        controller,
+        request,
+        context,
+      );
       final responseHeaders = _readHeaders(webResponse.headers);
       final total = int.tryParse(responseHeaders.get('content-length') ?? '');
       final body = webResponse.body == null
@@ -252,6 +265,64 @@ final class WebTransport implements Transport {
     }
   }
 
+  Stream<Uint8List> _trackRequestBodySent(
+    Stream<Uint8List> source,
+    Completer<void> sent,
+  ) async* {
+    try {
+      await for (final chunk in source) {
+        yield chunk;
+      }
+      if (!sent.isCompleted) {
+        sent.complete();
+      }
+    } catch (error, trace) {
+      if (!sent.isCompleted) {
+        sent.completeError(error, trace);
+      }
+      rethrow;
+    }
+  }
+
+  Future<WebResponse> _withFirstByteTimeout(
+    Future<WebResponse> fetchFuture,
+    Future<void>? requestBodySent,
+    WebAbortController controller,
+    Request request,
+    Context context,
+  ) async {
+    final timeout = context.timeoutPolicy.firstByte;
+    if (timeout == null) {
+      return fetchFuture;
+    }
+
+    if (requestBodySent != null) {
+      final fetchReady = Object();
+      final first = await Future.any<Object>([
+        fetchFuture.then((_) => fetchReady),
+        requestBodySent.then((_) => Object(), onError: (_, _) => Object()),
+      ]);
+      if (identical(first, fetchReady)) {
+        return fetchFuture;
+      }
+    }
+
+    return fetchFuture.timeout(
+      timeout,
+      onTimeout: () {
+        final timeoutError = TimeoutError(
+          phase: TimeoutPhase.firstByte,
+          duration: timeout,
+          request: request,
+          sent: true,
+        );
+        context.signal?.abort(timeoutError);
+        controller.abort(timeoutError.toString().toJS);
+        throw timeoutError;
+      },
+    );
+  }
+
   Headers _readHeaders(WebHeaders source) {
     final headers = Headers();
     final iterator = source.entries();
@@ -317,6 +388,13 @@ final class WebTransport implements Transport {
   bool _isRedirect(int status) {
     return switch (status) {
       301 || 302 || 303 || 307 || 308 => true,
+      _ => false,
+    };
+  }
+
+  bool _shouldStreamRequestBody(Body? body) {
+    return switch (body?.kind) {
+      BodyKind.stream || BodyKind.multipart || BodyKind.file => true,
       _ => false,
     };
   }

@@ -59,7 +59,12 @@ final class NativeTransport implements Transport {
         request,
         context,
       );
-      final ioResponse = await httpRequest.close();
+      final ioResponse = await _withFirstByteTimeout(
+        httpRequest.close(),
+        httpRequest,
+        request,
+        context,
+      );
       final headers = _toHeaders(ioResponse.headers);
       final total = ioResponse.contentLength < 0
           ? null
@@ -83,6 +88,9 @@ final class NativeTransport implements Transport {
       );
     } catch (error, trace) {
       if (context.signal?.aborted == true) {
+        if (context.signal?.reason case final TimeoutError timeoutError) {
+          throw timeoutError;
+        }
         throw CancelError(
           reason: context.signal?.reason,
           request: request,
@@ -249,6 +257,34 @@ final class NativeTransport implements Transport {
       onTimeout: () {
         final timeoutError = TimeoutError(
           phase: TimeoutPhase.send,
+          duration: timeout,
+          request: request,
+          sent: true,
+        );
+        try {
+          httpRequest.abort(timeoutError);
+        } catch (_) {}
+        throw timeoutError;
+      },
+    );
+  }
+
+  Future<HttpClientResponse> _withFirstByteTimeout(
+    Future<HttpClientResponse> responseFuture,
+    HttpClientRequest httpRequest,
+    Request request,
+    Context context,
+  ) {
+    final timeout = context.timeoutPolicy.firstByte;
+    if (timeout == null) {
+      return responseFuture;
+    }
+
+    return responseFuture.timeout(
+      timeout,
+      onTimeout: () {
+        final timeoutError = TimeoutError(
+          phase: TimeoutPhase.firstByte,
           duration: timeout,
           request: request,
           sent: true,

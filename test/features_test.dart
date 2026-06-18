@@ -134,6 +134,23 @@ void main() {
     );
   });
 
+  test('standalone host-only parsed cookies fail closed for URI matching', () {
+    final cookie = parseSetCookie(
+      'sid=abc; Path=/; HttpOnly',
+      Uri.parse('https://example.com/login'),
+    );
+
+    expect(cookie.domain, isNull);
+    expect(
+      cookie.matchesUri(Uri.parse('https://example.com/profile')),
+      isFalse,
+    );
+    expect(
+      cookie.matchesUri(Uri.parse('https://other.example/profile')),
+      isFalse,
+    );
+  });
+
   test('cookie middleware stores response cookies against final URL', () async {
     final jar = MemoryCookieJar();
     var calls = 0;

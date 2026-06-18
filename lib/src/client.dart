@@ -83,6 +83,12 @@ final class Client {
       request: prepared,
       attempt: 0,
     );
+    emitEvent(
+      context.onEvent,
+      RequestEventType.prepared,
+      request: prepared,
+      attempt: 0,
+    );
 
     Future<Response> run() async {
       try {
@@ -450,13 +456,6 @@ final class Client {
       attributes: attributes,
     );
 
-    emitEvent(
-      context.onEvent,
-      RequestEventType.prepared,
-      request: prepared,
-      attempt: 0,
-    );
-
     return _ResolvedRequest(prepared, context);
   }
 
@@ -764,22 +763,7 @@ final class Client {
         nextContext,
       );
     })(request, context);
-    final timeout = context.timeoutPolicy.firstByte;
-    if (timeout == null) {
-      return operation;
-    }
-    return operation.timeout(
-      timeout,
-      onTimeout: () {
-        final timeoutError = TimeoutError(
-          phase: TimeoutPhase.firstByte,
-          duration: timeout,
-          request: request,
-        );
-        context.signal?.abort(timeoutError);
-        throw timeoutError;
-      },
-    );
+    return operation;
   }
 
   void _throwIfAborted(AbortSignal? signal, Request request) {

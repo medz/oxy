@@ -13,6 +13,7 @@ void main() {
     late HttpServer server;
     late Uri baseUrl;
     var flakyCalls = 0;
+    var firstByteCalls = 0;
 
     setUpAll(() async {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -50,6 +51,12 @@ void main() {
               case '/slow-response':
                 await Future<void>.delayed(const Duration(milliseconds: 50));
                 request.response.write('slow response');
+              case '/flaky-first-byte':
+                firstByteCalls += 1;
+                if (firstByteCalls == 1) {
+                  await Future<void>.delayed(const Duration(milliseconds: 80));
+                }
+                request.response.write('ok');
               case '/redirect307':
                 request.response
                   ..statusCode = 307
@@ -145,6 +152,56 @@ void main() {
       final response = await client.get('/slow-response');
 
       expect(await response.text(), 'slow response');
+    });
+
+    test('first-byte timeout starts after upload is sent', () async {
+      final client = Client(
+        ClientOptions(
+          baseUrl: baseUrl,
+          timeoutPolicy: const TimeoutPolicy(
+            firstByte: Duration(milliseconds: 10),
+            total: Duration(seconds: 1),
+          ),
+          retryPolicy: const RetryPolicy(maxRetries: 0),
+        ),
+      );
+      addTearDown(client.close);
+      final body = Body.replayableStream(
+        () async* {
+          await Future<void>.delayed(const Duration(milliseconds: 50));
+          yield utf8.encode('payload');
+        },
+        contentLength: 7,
+        contentType: 'text/plain',
+      );
+
+      final response = await client.post('/echo', body: body);
+      final payload = await response.json<Map<String, Object?>>();
+
+      expect(payload['body'], 'payload');
+    });
+
+    test('first-byte timeout retries delayed response headers', () async {
+      firstByteCalls = 0;
+      final client = Client(
+        ClientOptions(
+          baseUrl: baseUrl,
+          timeoutPolicy: const TimeoutPolicy(
+            firstByte: Duration(milliseconds: 10),
+            total: null,
+          ),
+          retryPolicy: const RetryPolicy(
+            maxRetries: 1,
+            baseDelay: Duration.zero,
+          ),
+        ),
+      );
+      addTearDown(client.close);
+
+      final response = await client.get('/flaky-first-byte');
+
+      expect(await response.text(), 'ok');
+      expect(firstByteCalls, 2);
     });
   });
 }

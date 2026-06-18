@@ -137,6 +137,36 @@ void main() {
     expect(captured.headers.getAll('authorization'), ['Bearer request']);
   });
 
+  test('emits start before prepared lifecycle events', () async {
+    final events = <RequestEventType>[];
+    final client = Client(
+      ClientOptions(
+        onEvent: (event) => events.add(event.type),
+        transport: MockTransport((request, context) async {
+          return Response.text('ok');
+        }),
+      ),
+    );
+
+    await client.get('https://example.com/events');
+
+    expect(
+      events,
+      containsAllInOrder([
+        RequestEventType.start,
+        RequestEventType.prepared,
+        RequestEventType.attemptStart,
+        RequestEventType.attemptEnd,
+        RequestEventType.complete,
+      ]),
+    );
+    expect(events.indexOf(RequestEventType.start), 0);
+    expect(
+      events.indexOf(RequestEventType.prepared),
+      greaterThan(events.indexOf(RequestEventType.start)),
+    );
+  });
+
   test('web capability does not auto-add content-length', () async {
     late Request captured;
     final client = Client(

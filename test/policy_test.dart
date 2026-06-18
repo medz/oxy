@@ -250,23 +250,18 @@ void main() {
 
   test('first-byte timeout remains retryable', () async {
     var calls = 0;
-    final aborted = Completer<void>();
     final client = Client(
       ClientOptions(
-        timeoutPolicy: const TimeoutPolicy(
-          firstByte: Duration(milliseconds: 10),
-          total: null,
-        ),
         retryPolicy: const RetryPolicy(maxRetries: 1, baseDelay: Duration.zero),
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
-            context.signal?.onAbort(() {
-              if (!aborted.isCompleted) {
-                aborted.complete();
-              }
-            });
-            await Future<void>.delayed(const Duration(milliseconds: 100));
+            throw TimeoutError(
+              phase: TimeoutPhase.firstByte,
+              duration: const Duration(milliseconds: 10),
+              request: request,
+              sent: true,
+            );
           }
           return Response.text('ok');
         }),
@@ -277,10 +272,6 @@ void main() {
 
     expect(await response.text(), 'ok');
     expect(calls, 2);
-    await expectLater(
-      aborted.future.timeout(const Duration(seconds: 1)),
-      completes,
-    );
   });
 
   test('retry policy honors HTTP-date Retry-After values', () {

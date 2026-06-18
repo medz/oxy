@@ -63,6 +63,17 @@ void main() {
       expect(utf8.decode(await body.bytes()), text);
     });
 
+    test('treats Blob bodies as streaming file-like bodies', () async {
+      final body = Body.from(Blob(['hello'], 'text/plain'))!;
+
+      expect(body.kind, BodyKind.file);
+      expect(body.replayable, isTrue);
+      expect(body.contentLength, 5);
+      expect(body.contentType, 'text/plain');
+      expect(await body.text(), 'hello');
+      expect(await body.text(), 'hello');
+    });
+
     test('accepts URLSearchParams as replayable form body', () async {
       final params = URLSearchParams({'q': 'oxy', 'page': '1'});
       final body = Body.from(params)!;

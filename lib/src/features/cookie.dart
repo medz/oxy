@@ -39,7 +39,10 @@ extension CookieRequestExtension on ocookie.Cookie {
 
   bool matchesUri(Uri uri) {
     final host = uri.host.toLowerCase();
-    final domain = _cookieDomain(this, uri.host);
+    final domain = _cookieDomain(this);
+    if (domain == null) {
+      return false;
+    }
     if (host != domain && !host.endsWith('.$domain')) {
       return false;
     }
@@ -180,8 +183,12 @@ _StoredCookie _normalizeCookie(ocookie.Cookie cookie, Uri uri) {
   );
 }
 
-String _cookieDomain(ocookie.Cookie cookie, String fallbackHost) {
-  final value = (cookie.domain ?? fallbackHost).toLowerCase();
+String? _cookieDomain(ocookie.Cookie cookie) {
+  final rawDomain = cookie.domain;
+  if (rawDomain == null || rawDomain.trim().isEmpty) {
+    return null;
+  }
+  final value = rawDomain.toLowerCase();
   return _normalizeDomain(value);
 }
 
