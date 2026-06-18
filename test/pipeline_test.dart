@@ -44,6 +44,21 @@ final class PassThroughMiddleware implements Middleware {
   }
 }
 
+final class ShortCircuitMiddleware implements Middleware {
+  const ShortCircuitMiddleware(this.response);
+
+  final Response response;
+
+  @override
+  Future<Response> intercept(
+    Request request,
+    Context context,
+    Next next,
+  ) async {
+    return response;
+  }
+}
+
 void main() {
   test(
     'runs application middleware once and network middleware per attempt',
@@ -294,6 +309,66 @@ void main() {
 
       expect(await response.text(), 'ok');
       expect(calls, 2);
+    },
+  );
+
+  test(
+    'short-circuited middleware responses still honor status policy',
+    () async {
+      final client = Client(
+        ClientOptions(
+          middleware: [
+            ShortCircuitMiddleware(Response.text('fail', status: 500)),
+          ],
+          transport: MockTransport((request, context) async {
+            fail('transport should not be reached');
+          }),
+        ),
+      );
+
+      await expectLater(
+        client.get('https://example.com/fail'),
+        throwsA(
+          isA<StatusError>()
+              .having((error) => error.statusResponse.status, 'status', 500)
+              .having((error) => error.bodyPreview, 'bodyPreview', 'fail'),
+        ),
+      );
+    },
+  );
+
+  test(
+    'short-circuited middleware responses still honor redirect policy',
+    () async {
+      final client = Client(
+        ClientOptions(
+          middleware: [
+            ShortCircuitMiddleware(
+              Response(null, status: 302, headers: {'location': '/next'}),
+            ),
+          ],
+          transport: MockTransport((request, context) async {
+            fail('transport should not be reached');
+          }),
+        ),
+      );
+
+      await expectLater(
+        client.get(
+          'https://example.com/start',
+          options: const RequestOptions(
+            redirectPolicy: RedirectPolicy.error,
+            statusPolicy: StatusPolicy.returnResponse,
+          ),
+        ),
+        throwsA(
+          isA<StatusError>().having(
+            (error) => error.message,
+            'message',
+            'Redirect blocked by RedirectPolicy.error.',
+          ),
+        ),
+      );
     },
   );
 

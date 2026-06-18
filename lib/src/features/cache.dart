@@ -49,8 +49,10 @@ abstract interface class CacheStore {
 }
 
 final class MemoryCacheStore implements CacheStore {
-  MemoryCacheStore({this.maxEntries})
+  MemoryCacheStore({this.maxEntries = defaultMaxEntries})
     : assert(maxEntries == null || maxEntries > 0, 'maxEntries must be > 0');
+
+  static const int defaultMaxEntries = 128;
 
   final int? maxEntries;
   final Map<String, CachedResponse> _entries = <String, CachedResponse>{};
@@ -148,6 +150,13 @@ final class CacheMiddleware implements Middleware {
         return response;
       }
       final merged = _mergeNotModified(cached.response, response);
+      final mergedControl = _parseCacheControl(merged.headers);
+      if (mergedControl.noStore ||
+          _hasVaryStar(merged.headers) ||
+          !_cacheableStatus(merged.status)) {
+        await _store.delete(key);
+        return _validateCachedResponse(request, context, _cloneCached(merged));
+      }
       await _store.write(
         key,
         CachedResponse(
@@ -215,11 +224,21 @@ final class CacheMiddleware implements Middleware {
   }
 
   Request _revalidationRequest(Request request, CachedResponse? cached) {
-    final etag = cached?.etag;
-    if (etag == null || _hasConditionalHeader(request.headers)) {
+    if (cached == null || _hasConditionalHeader(request.headers)) {
       return request;
     }
-    return request.withHeader('if-none-match', etag);
+
+    final etag = cached.etag;
+    if (etag != null) {
+      return request.withHeader('if-none-match', etag);
+    }
+
+    final lastModified = cached.response.headers.get('last-modified');
+    if (lastModified != null && lastModified.trim().isNotEmpty) {
+      return request.withHeader('if-modified-since', lastModified);
+    }
+
+    return request;
   }
 
   bool _notModifiedMatchesCached(
@@ -236,7 +255,8 @@ final class CacheMiddleware implements Middleware {
     }
 
     if (!_hasConditionalHeader(request.headers)) {
-      return cached.etag != null;
+      return cached.etag != null ||
+          cached.response.headers.has('last-modified');
     }
 
     final ifNoneMatch = request.headers.get('if-none-match');

@@ -394,7 +394,7 @@ final class WebTransport implements Transport {
 
   bool _shouldStreamRequestBody(Body? body) {
     return switch (body?.kind) {
-      BodyKind.stream || BodyKind.multipart || BodyKind.file => true,
+      BodyKind.stream => true,
       _ => false,
     };
   }

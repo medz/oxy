@@ -137,9 +137,15 @@ final class Client {
         throwIfLifecycleClosed();
         final response = await _runApplicationPipeline(prepared, context);
         throwIfLifecycleClosed();
+        final policyResponse = await _applyResponsePolicies(
+          prepared,
+          response,
+          context,
+        );
+        throwIfLifecycleClosed();
         final nextResponse =
-            await hooks.onResponse?.call(prepared, response, context) ??
-            response;
+            await hooks.onResponse?.call(prepared, policyResponse, context) ??
+            policyResponse;
         throwIfLifecycleClosed();
         emitEvent(
           context.onEvent,
@@ -519,6 +525,34 @@ final class Client {
       return _runRedirects(request, context, next);
     }
     return next(request, context);
+  }
+
+  Future<Response> _applyResponsePolicies(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    if (_isRedirectBlocked(response, context)) {
+      throw StatusError(
+        response,
+        request: request,
+        message: 'Redirect blocked by RedirectPolicy.error.',
+      );
+    }
+
+    if (!context.statusPolicy.accepts(response)) {
+      final preview = await _previewStatusBody(response, context);
+      emitEvent(
+        context.onEvent,
+        RequestEventType.statusFailed,
+        request: request,
+        attempt: context.attempt,
+        response: response,
+      );
+      throw StatusError(response, request: request, bodyPreview: preview);
+    }
+
+    return response;
   }
 
   bool _usesClientRedirects(Context context) {

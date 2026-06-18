@@ -679,6 +679,7 @@ void main() {
     final second = await client.get(
       'https://example.com/feed',
       headers: {'if-none-match': '*'},
+      options: const RequestOptions(statusPolicy: StatusPolicy.returnResponse),
     );
 
     expect(second.status, 304);
@@ -712,6 +713,7 @@ void main() {
     final second = await client.get(
       'https://example.com/feed',
       headers: {'cache-control': 'max-age=0'},
+      options: const RequestOptions(statusPolicy: StatusPolicy.returnResponse),
     );
     final third = await client.get('https://example.com/feed');
 
@@ -750,6 +752,9 @@ void main() {
       final second = await client.get(
         'https://example.com/feed',
         headers: {'if-none-match': '"v1", "v2"'},
+        options: const RequestOptions(
+          statusPolicy: StatusPolicy.returnResponse,
+        ),
       );
       final third = await client.get('https://example.com/feed');
 
@@ -789,6 +794,9 @@ void main() {
       final second = await client.get(
         'https://example.com/feed',
         headers: {'if-none-match': 'v2'},
+        options: const RequestOptions(
+          statusPolicy: StatusPolicy.returnResponse,
+        ),
       );
 
       expect(second.status, 304);
@@ -796,6 +804,115 @@ void main() {
       expect(calls, 2);
     },
   );
+
+  test('cache middleware bounds the default memory store', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response.text(
+            'v$calls',
+            headers: {'cache-control': 'max-age=60'},
+          );
+        }),
+      ),
+    );
+
+    for (var i = 0; i <= MemoryCacheStore.defaultMaxEntries; i++) {
+      await client.get('https://example.com/item/$i');
+    }
+    final firstAgain = await client.get('https://example.com/item/0');
+
+    expect(
+      await firstAgain.text(),
+      'v${MemoryCacheStore.defaultMaxEntries + 2}',
+    );
+    expect(firstAgain.fromCache, isFalse);
+    expect(calls, MemoryCacheStore.defaultMaxEntries + 2);
+  });
+
+  test('cache middleware revalidates last-modified-only entries', () async {
+    const lastModified = 'Wed, 21 Oct 2015 07:28:00 GMT';
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 2) {
+            expect(request.headers.get('if-modified-since'), lastModified);
+            return Response(
+              null,
+              status: 304,
+              headers: {'last-modified': lastModified},
+            );
+          }
+          return Response.text(
+            'cached-v1',
+            headers: {
+              'cache-control': 'max-age=0',
+              'last-modified': lastModified,
+            },
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached-v1',
+    );
+    final second = await client.get('https://example.com/feed');
+
+    expect(await second.text(), 'cached-v1');
+    expect(second.fromCache, isTrue);
+    expect(calls, 2);
+  });
+
+  test('cache middleware evicts entries when 304 returns no-store', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 1) {
+            return Response.text(
+              'cached-v1',
+              headers: {'cache-control': 'max-age=0', 'etag': '"v1"'},
+            );
+          }
+          if (calls == 2) {
+            expect(request.headers.get('if-none-match'), '"v1"');
+            return Response(
+              null,
+              status: 304,
+              headers: {'cache-control': 'no-store', 'etag': '"v1"'},
+            );
+          }
+          return Response.text(
+            'fresh-v3',
+            headers: {'cache-control': 'max-age=60'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached-v1',
+    );
+    final second = await client.get('https://example.com/feed');
+    final third = await client.get('https://example.com/feed');
+
+    expect(await second.text(), 'cached-v1');
+    expect(second.fromCache, isTrue);
+    expect(await third.text(), 'fresh-v3');
+    expect(third.fromCache, isFalse);
+    expect(calls, 3);
+  });
 
   test('cache middleware reapplies redirect policy to fresh hits', () async {
     var calls = 0;

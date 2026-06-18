@@ -154,6 +154,47 @@ void main() {
       expect(await response.text(), 'slow response');
     });
 
+    test('send timeout cancels slow upload streams', () async {
+      final cancelled = Completer<void>();
+      Stream<List<int>> slowBody() async* {
+        try {
+          await Future<void>.delayed(const Duration(seconds: 1));
+          yield utf8.encode('late');
+        } finally {
+          if (!cancelled.isCompleted) {
+            cancelled.complete();
+          }
+        }
+      }
+
+      final client = Client(
+        ClientOptions(
+          baseUrl: baseUrl,
+          timeoutPolicy: const TimeoutPolicy(
+            send: Duration(milliseconds: 10),
+            total: null,
+          ),
+          retryPolicy: const RetryPolicy(maxRetries: 0),
+        ),
+      );
+      addTearDown(client.close);
+
+      await expectLater(
+        client.post('/echo', body: slowBody()),
+        throwsA(
+          isA<TimeoutError>().having(
+            (error) => error.phase,
+            'phase',
+            TimeoutPhase.send,
+          ),
+        ),
+      );
+      await expectLater(
+        cancelled.future.timeout(const Duration(seconds: 1)),
+        completes,
+      );
+    });
+
     test('first-byte timeout starts after upload is sent', () async {
       final client = Client(
         ClientOptions(

@@ -53,12 +53,7 @@ final class NativeTransport implements Transport {
 
       _bindAbort(context, httpRequest);
       _configureRequest(httpRequest, request, context);
-      await _withSendTimeout(
-        _writeBody(httpRequest, request, context),
-        httpRequest,
-        request,
-        context,
-      );
+      await _writeBody(httpRequest, request, context);
       final ioResponse = await _withFirstByteTimeout(
         httpRequest.close(),
         httpRequest,
@@ -230,43 +225,60 @@ final class NativeTransport implements Transport {
     final total = body.contentLength;
     var transferred = 0;
 
-    await for (final chunk in body.open()) {
-      context.signal?.throwIfAborted();
-      transferred += chunk.length;
-      httpRequest.add(chunk);
-      context.onSendProgress?.call(
-        TransferProgress(transferred: transferred, total: total),
-      );
-    }
-    await httpRequest.flush();
-  }
-
-  Future<void> _withSendTimeout(
-    Future<void> sendFuture,
-    HttpClientRequest httpRequest,
-    Request request,
-    Context context,
-  ) {
-    final timeout = context.timeoutPolicy.send;
-    if (timeout == null) {
-      return sendFuture;
+    final chunks = StreamIterator<Uint8List>(body.open());
+    Future<void>? cancelFuture;
+    Future<void> cancelChunks() {
+      return cancelFuture ??= chunks.cancel();
     }
 
-    return sendFuture.timeout(
-      timeout,
-      onTimeout: () {
-        final timeoutError = TimeoutError(
-          phase: TimeoutPhase.send,
-          duration: timeout,
-          request: request,
-          sent: true,
+    TimeoutError? sendTimeoutError;
+    final sendTimeout = context.timeoutPolicy.send;
+    final sendTimer = sendTimeout == null
+        ? null
+        : Timer(sendTimeout, () {
+            final timeoutError = TimeoutError(
+              phase: TimeoutPhase.send,
+              duration: sendTimeout,
+              request: request,
+              sent: true,
+            );
+            sendTimeoutError = timeoutError;
+            context.signal?.abort(timeoutError);
+            try {
+              httpRequest.abort(timeoutError);
+            } catch (_) {}
+            unawaited(cancelChunks());
+          });
+
+    try {
+      while (await chunks.moveNext()) {
+        final timeoutError = sendTimeoutError;
+        if (timeoutError != null) {
+          throw timeoutError;
+        }
+        context.signal?.throwIfAborted();
+        final chunk = chunks.current;
+        transferred += chunk.length;
+        httpRequest.add(chunk);
+        context.onSendProgress?.call(
+          TransferProgress(transferred: transferred, total: total),
         );
-        try {
-          httpRequest.abort(timeoutError);
-        } catch (_) {}
+      }
+      final timeoutError = sendTimeoutError;
+      if (timeoutError != null) {
         throw timeoutError;
-      },
-    );
+      }
+      await httpRequest.flush();
+    } catch (_) {
+      final timeoutError = sendTimeoutError;
+      if (timeoutError != null) {
+        throw timeoutError;
+      }
+      rethrow;
+    } finally {
+      sendTimer?.cancel();
+      await cancelChunks();
+    }
   }
 
   Future<HttpClientResponse> _withFirstByteTimeout(
