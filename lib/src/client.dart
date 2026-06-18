@@ -90,6 +90,33 @@ final class Client {
       );
     }
     final hooks = this.options.hooks.merge(context.requestOptions.hooks);
+    var lifecycleClosed = false;
+
+    Future<void> closeLifecycle({Object? error}) async {
+      if (lifecycleClosed) {
+        return;
+      }
+      lifecycleClosed = true;
+      if (error == null) {
+        await hooks.onFinally?.call(prepared, context);
+        return;
+      }
+      try {
+        await hooks.onError?.call(prepared, error, context);
+      } finally {
+        await hooks.onFinally?.call(prepared, context);
+      }
+    }
+
+    void throwIfLifecycleClosed() {
+      if (!lifecycleClosed) {
+        return;
+      }
+      if (context.signal?.reason case final TimeoutError timeoutError) {
+        throw timeoutError;
+      }
+      throw CancelError(reason: context.signal?.reason, request: prepared);
+    }
 
     emitEvent(
       context.onEvent,
@@ -107,10 +134,13 @@ final class Client {
     Future<Response> run() async {
       try {
         await hooks.onRequest?.call(prepared, context);
+        throwIfLifecycleClosed();
         final response = await _runApplicationPipeline(prepared, context);
+        throwIfLifecycleClosed();
         final nextResponse =
             await hooks.onResponse?.call(prepared, response, context) ??
             response;
+        throwIfLifecycleClosed();
         emitEvent(
           context.onEvent,
           RequestEventType.complete,
@@ -120,10 +150,10 @@ final class Client {
         );
         return nextResponse;
       } catch (error) {
-        await hooks.onError?.call(prepared, error, context);
+        await closeLifecycle(error: error);
         rethrow;
       } finally {
-        await hooks.onFinally?.call(prepared, context);
+        await closeLifecycle();
       }
     }
 
@@ -140,7 +170,9 @@ final class Client {
           request: prepared,
         );
         timeoutSignal?.abort(timeoutError);
-        throw timeoutError;
+        return closeLifecycle(error: timeoutError).then<Response>((_) {
+          throw timeoutError;
+        });
       },
     );
   }

@@ -40,7 +40,7 @@ final class Body {
       kind: kind,
       replayable: true,
       contentLength: data.length,
-      open: () => Stream<List<int>>.value(data),
+      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
     );
   }
 
@@ -224,7 +224,7 @@ final class ResponseBody {
     return ResponseBody._(
       replayable: true,
       contentLength: data.length,
-      open: () => Stream<List<int>>.value(data),
+      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
     );
   }
 

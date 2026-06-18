@@ -130,7 +130,11 @@ final class CacheMiddleware implements Middleware {
         cached._satisfiesRequest(requestControl, now) &&
         !requestControl.requiresRevalidation &&
         !_hasConditionalHeader(request.headers)) {
-      return _cloneCached(cached.response);
+      return _validateCachedResponse(
+        request,
+        context,
+        _cloneCached(cached.response),
+      );
     }
 
     final revalidationRequest = _revalidationRequest(request, cached);
@@ -140,7 +144,7 @@ final class CacheMiddleware implements Middleware {
     );
     final receivedAt = DateTime.now().toUtc();
     if (response.status == 304 && cached != null) {
-      if (!_notModifiedMatchesCached(request, cached)) {
+      if (!_notModifiedMatchesCached(request, cached, response)) {
         return response;
       }
       final merged = _mergeNotModified(cached.response, response);
@@ -153,7 +157,7 @@ final class CacheMiddleware implements Middleware {
           etag: merged.headers.get('etag') ?? cached.etag,
         ),
       );
-      return _cloneCached(merged);
+      return _validateCachedResponse(request, context, _cloneCached(merged));
     }
 
     final cacheControl = _parseCacheControl(response.headers);
@@ -218,14 +222,42 @@ final class CacheMiddleware implements Middleware {
     return request.withHeader('if-none-match', etag);
   }
 
-  bool _notModifiedMatchesCached(Request request, CachedResponse cached) {
+  bool _notModifiedMatchesCached(
+    Request request,
+    CachedResponse cached,
+    Response notModified,
+  ) {
+    final responseEtag = notModified.headers.get('etag');
+    final cachedEtag = cached.etag;
+    if (responseEtag != null &&
+        cachedEtag != null &&
+        !_etagMatches(responseEtag, cachedEtag)) {
+      return false;
+    }
+
     if (!_hasConditionalHeader(request.headers)) {
       return cached.etag != null;
     }
 
     final ifNoneMatch = request.headers.get('if-none-match');
     if (ifNoneMatch != null) {
-      return cached.etag != null && _etagMatches(ifNoneMatch, cached.etag!);
+      if (cachedEtag == null) {
+        return false;
+      }
+      final values = _etagValues(ifNoneMatch).toList();
+      final hasWildcard = values.contains('*');
+      final requestedEtags = values
+          .where((value) => value != '*')
+          .map(_weakEtagValue)
+          .toSet();
+      if (!requestedEtags.contains(_weakEtagValue(cachedEtag))) {
+        return false;
+      }
+
+      if (responseEtag != null) {
+        return _etagMatches(responseEtag, cachedEtag);
+      }
+      return !hasWildcard && requestedEtags.length == 1;
     }
 
     final ifModifiedSince = request.headers.get('if-modified-since');
@@ -237,16 +269,19 @@ final class CacheMiddleware implements Middleware {
 
   bool _etagMatches(String header, String etag) {
     final normalizedEtag = _weakEtagValue(etag);
-    return header
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
+    return _etagValues(header)
         .where((value) {
           // A wildcard 304 proves a representation exists, not that it matches
           // the stored response body.
           return value != '*';
         })
         .any((value) => _weakEtagValue(value) == normalizedEtag);
+  }
+
+  Iterable<String> _etagValues(String header) {
+    return header.split(',').map((value) => value.trim()).where((value) {
+      return value.isNotEmpty;
+    });
   }
 
   String _weakEtagValue(String etag) {
@@ -264,6 +299,25 @@ final class CacheMiddleware implements Middleware {
       redirected: response.redirected,
       fromCache: true,
     );
+  }
+
+  Response _validateCachedResponse(
+    Request request,
+    Context context,
+    Response response,
+  ) {
+    if (context.redirectPolicy.mode == RedirectMode.error &&
+        _isRedirectStatus(response.status)) {
+      throw StatusError(
+        response,
+        request: request,
+        message: 'Redirect blocked by RedirectPolicy.error.',
+      );
+    }
+    if (!context.statusPolicy.accepts(response)) {
+      throw StatusError(response, request: request);
+    }
+    return response;
   }
 
   Response _mergeNotModified(Response cached, Response notModified) {
@@ -305,6 +359,13 @@ final class CacheMiddleware implements Middleware {
 
   bool _cacheableStatus(int status) {
     return const <int>{200, 203, 204, 206, 300, 301, 308}.contains(status);
+  }
+
+  bool _isRedirectStatus(int status) {
+    return switch (status) {
+      301 || 302 || 303 || 307 || 308 => true,
+      _ => false,
+    };
   }
 
   _CacheControl _parseCacheControl(Headers headers) {

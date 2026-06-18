@@ -686,6 +686,81 @@ void main() {
     expect(calls, 2);
   });
 
+  test('cache middleware does not merge mismatched 304 etags', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 2) {
+            expect(request.headers.get('if-none-match'), '"v1"');
+            return Response(null, status: 304, headers: {'etag': '"v2"'});
+          }
+          return Response.text(
+            'cached-v1',
+            headers: {'cache-control': 'max-age=60', 'etag': '"v1"'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached-v1',
+    );
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'cache-control': 'max-age=0'},
+    );
+    final third = await client.get('https://example.com/feed');
+
+    expect(second.status, 304);
+    expect(second.fromCache, isFalse);
+    expect(await third.text(), 'cached-v1');
+    expect(third.fromCache, isTrue);
+    expect(calls, 2);
+  });
+
+  test(
+    'cache middleware does not merge ambiguous caller etag validators',
+    () async {
+      var calls = 0;
+      final client = Client(
+        ClientOptions(
+          middleware: [CacheMiddleware()],
+          transport: MockTransport((request, context) async {
+            calls += 1;
+            if (calls == 2) {
+              expect(request.headers.get('if-none-match'), '"v1", "v2"');
+              return Response(null, status: 304, headers: {'etag': '"v2"'});
+            }
+            return Response.text(
+              'cached-v1',
+              headers: {'cache-control': 'max-age=60', 'etag': '"v1"'},
+            );
+          }),
+        ),
+      );
+
+      expect(
+        await (await client.get('https://example.com/feed')).text(),
+        'cached-v1',
+      );
+      final second = await client.get(
+        'https://example.com/feed',
+        headers: {'if-none-match': '"v1", "v2"'},
+      );
+      final third = await client.get('https://example.com/feed');
+
+      expect(second.status, 304);
+      expect(second.fromCache, isFalse);
+      expect(await third.text(), 'cached-v1');
+      expect(third.fromCache, isTrue);
+      expect(calls, 2);
+    },
+  );
+
   test(
     'cache middleware does not merge unrelated caller 304 validators',
     () async {
@@ -721,6 +796,54 @@ void main() {
       expect(calls, 2);
     },
   );
+
+  test('cache middleware reapplies redirect policy to fresh hits', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          return Response(
+            null,
+            status: 301,
+            statusText: 'Moved Permanently',
+            headers: {
+              'cache-control': 'max-age=60',
+              'location': 'https://example.com/next',
+            },
+          );
+        }),
+      ),
+    );
+
+    final first = await client.get(
+      'https://example.com/start',
+      options: const RequestOptions(
+        redirectPolicy: RedirectPolicy.manual,
+        statusPolicy: StatusPolicy.returnResponse,
+      ),
+    );
+
+    expect(first.status, 301);
+    await expectLater(
+      client.get(
+        'https://example.com/start',
+        options: const RequestOptions(
+          redirectPolicy: RedirectPolicy.error,
+          statusPolicy: StatusPolicy.returnResponse,
+        ),
+      ),
+      throwsA(
+        isA<StatusError>().having(
+          (error) => error.message,
+          'message',
+          'Redirect blocked by RedirectPolicy.error.',
+        ),
+      ),
+    );
+    expect(calls, 1);
+  });
 
   test('cache middleware surfaces stream buffering failures', () async {
     final client = Client(

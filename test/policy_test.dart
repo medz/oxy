@@ -157,6 +157,58 @@ void main() {
     );
   });
 
+  test('total timeout closes hooks promptly once', () async {
+    final release = Completer<void>();
+    final errors = <Object>[];
+    var finallyCalls = 0;
+    var responseCalls = 0;
+    var completeEvents = 0;
+    final client = Client(
+      ClientOptions(
+        timeoutPolicy: const TimeoutPolicy(total: Duration(milliseconds: 20)),
+        retryPolicy: const RetryPolicy(maxRetries: 0),
+        hooks: Hooks(
+          onResponse: (request, response, context) {
+            responseCalls += 1;
+            return response;
+          },
+          onError: (request, error, context) {
+            errors.add(error);
+          },
+          onFinally: (request, context) {
+            finallyCalls += 1;
+          },
+        ),
+        onEvent: (event) {
+          if (event.type == RequestEventType.complete) {
+            completeEvents += 1;
+          }
+        },
+        transport: MockTransport((request, context) async {
+          await release.future;
+          return Response.text('late');
+        }),
+      ),
+    );
+
+    await expectLater(
+      client.get('https://example.com/slow-hooks'),
+      throwsA(isA<TimeoutError>()),
+    );
+
+    expect(errors, hasLength(1));
+    expect(errors.single, isA<TimeoutError>());
+    expect(finallyCalls, 1);
+
+    release.complete();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(responseCalls, 0);
+    expect(completeEvents, 0);
+    expect(errors, hasLength(1));
+    expect(finallyCalls, 1);
+  });
+
   test('total timeout applies while consuming response body', () async {
     final aborted = Completer<void>();
     final client = Client(

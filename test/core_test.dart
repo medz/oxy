@@ -30,6 +30,15 @@ void main() {
       expect(utf8.decode(await json.bytes()), '{"ok":true}');
     });
 
+    test('isolates replayable byte reads from caller mutation', () async {
+      final body = Body.fromBytes([1, 2, 3]);
+
+      final first = await body.bytes();
+      first[0] = 9;
+
+      expect(await body.bytes(), [1, 2, 3]);
+    });
+
     test('protects one-shot streams from accidental replay', () async {
       final body = Body.stream(
         Stream<Uint8List>.fromIterable([
@@ -111,6 +120,17 @@ void main() {
     test('throws DecodeError for invalid json', () async {
       final response = Response.text('not-json');
       await expectLater(response.json<Object?>(), throwsA(isA<DecodeError>()));
+    });
+
+    test('isolates replayable response bytes from caller mutation', () async {
+      final response = Response.bytes([1, 2, 3]);
+
+      final first = await response.bytes();
+      first[0] = 9;
+      final chunk = await response.stream().single;
+      chunk[1] = 8;
+
+      expect(await response.bytes(), [1, 2, 3]);
     });
   });
 
