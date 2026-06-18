@@ -542,6 +542,72 @@ void main() {
     expect(calls, 2);
   });
 
+  test('cache middleware weakly matches caller etag validators', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 2) {
+            expect(request.headers.get('if-none-match'), 'W/"v1"');
+            return Response(null, status: 304, headers: {'etag': '"v1"'});
+          }
+          return Response.text(
+            'cached-v1',
+            headers: {'cache-control': 'max-age=60', 'etag': '"v1"'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached-v1',
+    );
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'if-none-match': 'W/"v1"'},
+    );
+
+    expect(await second.text(), 'cached-v1');
+    expect(second.fromCache, isTrue);
+    expect(calls, 2);
+  });
+
+  test('cache middleware does not merge wildcard 304 validators', () async {
+    var calls = 0;
+    final client = Client(
+      ClientOptions(
+        middleware: [CacheMiddleware()],
+        transport: MockTransport((request, context) async {
+          calls += 1;
+          if (calls == 2) {
+            expect(request.headers.get('if-none-match'), '*');
+            return Response(null, status: 304, headers: {'etag': '"v2"'});
+          }
+          return Response.text(
+            'cached-v1',
+            headers: {'cache-control': 'max-age=60', 'etag': '"v1"'},
+          );
+        }),
+      ),
+    );
+
+    expect(
+      await (await client.get('https://example.com/feed')).text(),
+      'cached-v1',
+    );
+    final second = await client.get(
+      'https://example.com/feed',
+      headers: {'if-none-match': '*'},
+    );
+
+    expect(second.status, 304);
+    expect(second.fromCache, isFalse);
+    expect(calls, 2);
+  });
+
   test(
     'cache middleware does not merge unrelated caller 304 validators',
     () async {

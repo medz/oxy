@@ -233,11 +233,22 @@ final class CacheMiddleware implements Middleware {
   }
 
   bool _etagMatches(String header, String etag) {
+    final normalizedEtag = _weakEtagValue(etag);
     return header
         .split(',')
         .map((value) => value.trim())
         .where((value) => value.isNotEmpty)
-        .contains(etag);
+        .where((value) {
+          // A wildcard 304 proves a representation exists, not that it matches
+          // the stored response body.
+          return value != '*';
+        })
+        .any((value) => _weakEtagValue(value) == normalizedEtag);
+  }
+
+  String _weakEtagValue(String etag) {
+    final trimmed = etag.trim();
+    return trimmed.startsWith('W/') ? trimmed.substring(2) : trimmed;
   }
 
   Response _cloneCached(Response response) {
