@@ -16,7 +16,6 @@ export 'src/features/cache.dart';
 export 'src/features/cookie.dart';
 export 'src/features/cookie_middleware.dart';
 export 'src/features/logging.dart';
-export 'src/features/presets.dart';
 export 'src/features/request_id.dart';
 export 'src/options.dart';
 export 'src/pipeline/context.dart';

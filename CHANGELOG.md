@@ -1,3 +1,10 @@
+## Unreleased
+
+### Breaking Changes
+
+- Removed middleware presets; compose middleware explicitly from the built-in
+  middleware types instead.
+
 ## 0.3.0
 
 ### Breaking Changes

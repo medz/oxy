@@ -1037,16 +1037,6 @@ void main() {
     expect(response.fromCache, isFalse);
   });
 
-  test('presets remain single-package feature composition', () {
-    final middleware = Presets.full(auth: AuthMiddleware.staticToken('token'));
-
-    expect(middleware[0], isA<RequestIdMiddleware>());
-    expect(middleware[1], isA<AuthMiddleware>());
-    expect(middleware[2], isA<CookieMiddleware>());
-    expect(middleware[3], isA<CacheMiddleware>());
-    expect(middleware[4], isA<LoggingMiddleware>());
-  });
-
   test('logging middleware redacts userinfo query and fragment', () async {
     final messages = <String>[];
     final client = Client(
