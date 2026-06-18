@@ -1,14 +1,15 @@
 import 'package:oxy/oxy.dart';
 
 Future<void> main() async {
-  final form = FormData()
-    ..append('key', const Multipart.text('Value'))
-    ..append(
-      'file',
-      Multipart.blob(Blob(['hello from oxy'], 'text/plain'), 'hello.txt'),
-    );
+  final client = Client(
+    ClientOptions(baseUrl: Uri.parse('https://httpbin.org')),
+  );
 
-  final res = await oxy.post('https://httpbin.org/post', body: form);
-
-  print(await res.text());
+  try {
+    final response = await client.post('/post', json: {'name': 'oxy'});
+    final payload = await response.json<Map<String, Object?>>();
+    print(payload['json']);
+  } finally {
+    await client.close();
+  }
 }

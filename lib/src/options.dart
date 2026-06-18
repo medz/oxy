@@ -1,197 +1,164 @@
-import 'dart:async';
-
-import 'package:ht/ht.dart';
-
-import 'abort.dart';
+import 'core/abort.dart';
+import 'core/attributes.dart';
+import 'core/headers.dart';
+import 'pipeline/events.dart';
+import 'pipeline/middleware.dart';
+import 'policies.dart';
+import 'transport/transport.dart';
 
 typedef JsonMap = Map<String, Object?>;
 typedef QueryMap = Map<String, Object?>;
 typedef Decoder<T> = T Function(Object? value);
 typedef ProgressCallback = void Function(TransferProgress progress);
 
-enum RedirectPolicy { follow, manual, error }
-
-enum HttpErrorPolicy { throwException, returnResponse }
-
-class RetryPolicy {
-  const RetryPolicy({
-    this.maxRetries = 2,
-    this.idempotentMethodsOnly = true,
-    this.retryableStatusCodes = const {408, 429, 500, 502, 503, 504},
-    this.baseDelay = const Duration(milliseconds: 200),
-    this.maxDelay = const Duration(seconds: 2),
-  }) : assert(maxRetries >= 0, 'maxRetries must be >= 0');
-
-  final int maxRetries;
-  final bool idempotentMethodsOnly;
-  final Set<int> retryableStatusCodes;
-  final Duration baseDelay;
-  final Duration maxDelay;
-
-  RetryPolicy copyWith({
-    int? maxRetries,
-    bool? idempotentMethodsOnly,
-    Set<int>? retryableStatusCodes,
-    Duration? baseDelay,
-    Duration? maxDelay,
-  }) {
-    return RetryPolicy(
-      maxRetries: maxRetries ?? this.maxRetries,
-      idempotentMethodsOnly:
-          idempotentMethodsOnly ?? this.idempotentMethodsOnly,
-      retryableStatusCodes: retryableStatusCodes ?? this.retryableStatusCodes,
-      baseDelay: baseDelay ?? this.baseDelay,
-      maxDelay: maxDelay ?? this.maxDelay,
-    );
-  }
-}
-
-class TransferProgress {
+final class TransferProgress {
   const TransferProgress({required this.transferred, required this.total});
 
   final int transferred;
   final int? total;
 
   double? get percent {
+    final total = this.total;
     if (total == null || total == 0) {
       return null;
     }
-
-    return transferred / total!;
+    return transferred / total;
   }
 }
 
-typedef Next =
-    Future<Response> Function(Request request, RequestOptions options);
-
-abstract interface class OxyMiddleware {
-  Future<Response> intercept(
-    Request request,
-    RequestOptions options,
-    Next next,
-  );
-}
-
-class RequestOptions {
-  const RequestOptions({
-    this.headers,
-    this.query,
-    this.connectTimeout,
-    this.requestTimeout,
-    this.signal,
-    this.redirectPolicy,
-    this.maxRedirects,
-    this.keepAlive,
-    this.retryPolicy,
-    this.httpErrorPolicy,
-    this.middleware = const [],
-    this.onSendProgress,
-    this.onReceiveProgress,
-    this.extra = const {},
+final class ClientOptions {
+  const ClientOptions({
+    this.baseUrl,
+    this.defaultHeaders,
+    this.timeoutPolicy = const TimeoutPolicy(),
+    this.retryPolicy = const RetryPolicy(),
+    this.redirectPolicy = RedirectPolicy.follow,
+    this.statusPolicy = StatusPolicy.throwOnError,
+    this.middleware = const <Middleware>[],
+    this.networkMiddleware = const <Middleware>[],
+    this.hooks = const Hooks(),
+    this.transport,
+    this.keepAlive = true,
+    this.userAgent = 'oxy/0.3.0',
+    this.errorBodyPreviewLimit = 4096,
+    this.attributes = const Attributes(),
+    this.onEvent,
   });
 
-  final HeadersInit? headers;
-  final QueryMap? query;
-  final Duration? connectTimeout;
-  final Duration? requestTimeout;
-  final AbortSignal? signal;
-  final RedirectPolicy? redirectPolicy;
-  final int? maxRedirects;
-  final bool? keepAlive;
-  final RetryPolicy? retryPolicy;
-  final HttpErrorPolicy? httpErrorPolicy;
-  final List<OxyMiddleware> middleware;
-  final ProgressCallback? onSendProgress;
-  final ProgressCallback? onReceiveProgress;
-  final Map<String, Object?> extra;
+  final Uri? baseUrl;
+  final HeadersInit? defaultHeaders;
+  final TimeoutPolicy timeoutPolicy;
+  final RetryPolicy retryPolicy;
+  final RedirectPolicy redirectPolicy;
+  final StatusPolicy statusPolicy;
+  final List<Middleware> middleware;
+  final List<Middleware> networkMiddleware;
+  final Hooks hooks;
+  final Transport? transport;
+  final bool keepAlive;
+  final String userAgent;
+  final int errorBodyPreviewLimit;
+  final Attributes attributes;
+  final EventSink? onEvent;
 
-  RequestOptions copyWith({
-    HeadersInit? headers,
-    QueryMap? query,
-    Duration? connectTimeout,
-    Duration? requestTimeout,
-    AbortSignal? signal,
-    RedirectPolicy? redirectPolicy,
-    int? maxRedirects,
-    bool? keepAlive,
+  ClientOptions copyWith({
+    Uri? baseUrl,
+    HeadersInit? defaultHeaders,
+    TimeoutPolicy? timeoutPolicy,
     RetryPolicy? retryPolicy,
-    HttpErrorPolicy? httpErrorPolicy,
-    List<OxyMiddleware>? middleware,
-    ProgressCallback? onSendProgress,
-    ProgressCallback? onReceiveProgress,
-    Map<String, Object?>? extra,
+    RedirectPolicy? redirectPolicy,
+    StatusPolicy? statusPolicy,
+    List<Middleware>? middleware,
+    List<Middleware>? networkMiddleware,
+    Hooks? hooks,
+    Transport? transport,
+    bool? keepAlive,
+    String? userAgent,
+    int? errorBodyPreviewLimit,
+    Attributes? attributes,
+    EventSink? onEvent,
   }) {
-    return RequestOptions(
-      headers: headers ?? this.headers,
-      query: query ?? this.query,
-      connectTimeout: connectTimeout ?? this.connectTimeout,
-      requestTimeout: requestTimeout ?? this.requestTimeout,
-      signal: signal ?? this.signal,
-      redirectPolicy: redirectPolicy ?? this.redirectPolicy,
-      maxRedirects: maxRedirects ?? this.maxRedirects,
-      keepAlive: keepAlive ?? this.keepAlive,
+    return ClientOptions(
+      baseUrl: baseUrl ?? this.baseUrl,
+      defaultHeaders: defaultHeaders ?? this.defaultHeaders,
+      timeoutPolicy: timeoutPolicy ?? this.timeoutPolicy,
       retryPolicy: retryPolicy ?? this.retryPolicy,
-      httpErrorPolicy: httpErrorPolicy ?? this.httpErrorPolicy,
+      redirectPolicy: redirectPolicy ?? this.redirectPolicy,
+      statusPolicy: statusPolicy ?? this.statusPolicy,
       middleware: middleware ?? this.middleware,
-      onSendProgress: onSendProgress ?? this.onSendProgress,
-      onReceiveProgress: onReceiveProgress ?? this.onReceiveProgress,
-      extra: extra ?? this.extra,
+      networkMiddleware: networkMiddleware ?? this.networkMiddleware,
+      hooks: hooks ?? this.hooks,
+      transport: transport ?? this.transport,
+      keepAlive: keepAlive ?? this.keepAlive,
+      userAgent: userAgent ?? this.userAgent,
+      errorBodyPreviewLimit:
+          errorBodyPreviewLimit ?? this.errorBodyPreviewLimit,
+      attributes: attributes ?? this.attributes,
+      onEvent: onEvent ?? this.onEvent,
     );
   }
 }
 
-class OxyConfig {
-  const OxyConfig({
-    this.baseUrl,
-    this.defaultHeaders,
-    this.connectTimeout = const Duration(seconds: 10),
-    this.requestTimeout = const Duration(seconds: 30),
-    this.redirectPolicy = RedirectPolicy.follow,
-    this.maxRedirects = 5,
-    this.keepAlive = false,
-    this.retryPolicy = const RetryPolicy(),
-    this.httpErrorPolicy = HttpErrorPolicy.throwException,
-    this.middleware = const [],
-    this.userAgent = 'oxy/0.2.2',
-  }) : assert(maxRedirects >= 0, 'maxRedirects must be >= 0');
+final class RequestOptions {
+  const RequestOptions({
+    this.headers,
+    this.query,
+    this.timeoutPolicy,
+    this.retryPolicy,
+    this.redirectPolicy,
+    this.statusPolicy,
+    this.middleware = const <Middleware>[],
+    this.networkMiddleware = const <Middleware>[],
+    this.hooks,
+    this.signal,
+    this.onSendProgress,
+    this.onReceiveProgress,
+    this.attributes = const Attributes(),
+  });
 
-  final Uri? baseUrl;
-  final HeadersInit? defaultHeaders;
-  final Duration connectTimeout;
-  final Duration requestTimeout;
-  final RedirectPolicy redirectPolicy;
-  final int maxRedirects;
-  final bool keepAlive;
-  final RetryPolicy retryPolicy;
-  final HttpErrorPolicy httpErrorPolicy;
-  final List<OxyMiddleware> middleware;
-  final String userAgent;
+  final HeadersInit? headers;
+  final QueryMap? query;
+  final TimeoutPolicy? timeoutPolicy;
+  final RetryPolicy? retryPolicy;
+  final RedirectPolicy? redirectPolicy;
+  final StatusPolicy? statusPolicy;
+  final List<Middleware> middleware;
+  final List<Middleware> networkMiddleware;
+  final Hooks? hooks;
+  final AbortSignal? signal;
+  final ProgressCallback? onSendProgress;
+  final ProgressCallback? onReceiveProgress;
+  final Attributes attributes;
 
-  OxyConfig copyWith({
-    Uri? baseUrl,
-    HeadersInit? defaultHeaders,
-    Duration? connectTimeout,
-    Duration? requestTimeout,
-    RedirectPolicy? redirectPolicy,
-    int? maxRedirects,
-    bool? keepAlive,
+  RequestOptions copyWith({
+    HeadersInit? headers,
+    QueryMap? query,
+    TimeoutPolicy? timeoutPolicy,
     RetryPolicy? retryPolicy,
-    HttpErrorPolicy? httpErrorPolicy,
-    List<OxyMiddleware>? middleware,
-    String? userAgent,
+    RedirectPolicy? redirectPolicy,
+    StatusPolicy? statusPolicy,
+    List<Middleware>? middleware,
+    List<Middleware>? networkMiddleware,
+    Hooks? hooks,
+    AbortSignal? signal,
+    ProgressCallback? onSendProgress,
+    ProgressCallback? onReceiveProgress,
+    Attributes? attributes,
   }) {
-    return OxyConfig(
-      baseUrl: baseUrl ?? this.baseUrl,
-      defaultHeaders: defaultHeaders ?? this.defaultHeaders,
-      connectTimeout: connectTimeout ?? this.connectTimeout,
-      requestTimeout: requestTimeout ?? this.requestTimeout,
-      redirectPolicy: redirectPolicy ?? this.redirectPolicy,
-      maxRedirects: maxRedirects ?? this.maxRedirects,
-      keepAlive: keepAlive ?? this.keepAlive,
+    return RequestOptions(
+      headers: headers ?? this.headers,
+      query: query ?? this.query,
+      timeoutPolicy: timeoutPolicy ?? this.timeoutPolicy,
       retryPolicy: retryPolicy ?? this.retryPolicy,
-      httpErrorPolicy: httpErrorPolicy ?? this.httpErrorPolicy,
+      redirectPolicy: redirectPolicy ?? this.redirectPolicy,
+      statusPolicy: statusPolicy ?? this.statusPolicy,
       middleware: middleware ?? this.middleware,
-      userAgent: userAgent ?? this.userAgent,
+      networkMiddleware: networkMiddleware ?? this.networkMiddleware,
+      hooks: hooks ?? this.hooks,
+      signal: signal ?? this.signal,
+      onSendProgress: onSendProgress ?? this.onSendProgress,
+      onReceiveProgress: onReceiveProgress ?? this.onReceiveProgress,
+      attributes: attributes ?? this.attributes,
     );
   }
 }
