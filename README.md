@@ -1,11 +1,29 @@
 # Oxy
 
-`oxy` is a modern HTTP client for Dart and Flutter. It is built around a small
-core model: `Client`, `Request`, `Response`, `Headers`, `Body`, policies,
-middleware, and typed request errors.
+`oxy` is a policy-first HTTP client for Dart and Flutter applications, SDKs,
+and reusable API clients. It gives network code a small owned model around
+`Client`, `Request`, `Response`, `Headers`, `Body`, explicit policies,
+middleware, typed errors, and deterministic tests.
 
 [![CI](https://github.com/medz/oxy/actions/workflows/ci.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/ci.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
+
+## Why Oxy
+
+Use Oxy when your Dart or Flutter network layer needs more than one-off HTTP
+calls:
+
+- Build reusable API clients around `Client` with shared defaults and explicit
+  lifecycle management.
+- Keep native connections alive by default while using the same public API on
+  Flutter Web.
+- Express retry, timeout, redirect, status validation, and no-throw flows as
+  policies instead of scattering ad hoc control flow across call sites.
+- Run application middleware once per logical request and network middleware
+  once per network attempt.
+- Avoid unsafe retries: non-replayable request bodies are never retried
+  implicitly.
+- Test request behavior with `MockTransport` without running a server.
 
 ## Design Goals
 
@@ -43,6 +61,33 @@ Future<void> main() async {
     await client.close();
   }
 }
+```
+
+## API Client Pattern
+
+Oxy is designed to sit behind a small package or app-specific API client:
+
+```dart
+class UsersApi {
+  UsersApi(this._client);
+
+  final Client _client;
+
+  Future<Map<String, Object?>> getUser(String id) async {
+    final response = await _client.get('/users/$id');
+    return response.json<Map<String, Object?>>();
+  }
+}
+
+final client = Client(
+  ClientOptions(
+    baseUrl: Uri.parse('https://api.example.com'),
+    timeoutPolicy: const TimeoutPolicy(total: Duration(seconds: 10)),
+    retryPolicy: const RetryPolicy(maxRetries: 2),
+  ),
+);
+
+final users = UsersApi(client);
 ```
 
 ## Result API
