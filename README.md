@@ -45,6 +45,27 @@ Another package may fit better when:
 - Request bodies carry replayability metadata, so one-shot streams are not retried accidentally.
 - Middleware runs through a clear pipeline: application middleware once per logical request, network middleware once per attempt.
 
+## Stability and Roadmap
+
+Oxy is still pre-1.0, so minor releases may include breaking changes while the
+package hardens. The current direction is the intended stable model: `Client`,
+`Request`, `Response`, `Headers`, `Body`, policy types, middleware, typed
+request errors, `Result`, and the single-package native/Web transport layer.
+
+Breaking changes before 1.0 should be deliberate, documented in the changelog,
+and focused on making that model simpler or safer. Oxy does not plan to rename
+the core public types to branded alternatives or split native/Web support into
+adapter packages.
+
+Before 1.0, the main confidence-building work is:
+
+- complete API docs and cookbook examples for common client patterns;
+- keep CI and release checks strict, including analyzer and publish dry-run
+  gates;
+- refactor `Client` internals without changing the public API shape;
+- continue tightening native/Web behavior parity around policies, redirects,
+  streaming, and body replayability.
+
 ## Installation
 
 ```yaml
