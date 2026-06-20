@@ -1,5 +1,5 @@
 name: oxy
-description: A modern cross-platform HTTP client for Dart and Flutter with policies, middleware, retries, timeout, and typed errors.
+description: Policy-first HTTP client for Dart and Flutter apps, SDKs, and reusable API clients.
 version: 0.3.0
 repository: https://github.com/medz/oxy
 
