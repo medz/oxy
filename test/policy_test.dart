@@ -47,6 +47,32 @@ void main() {
     }
   });
 
+  test('status policy restores over-limit preview bodies', () async {
+    final payload = Uint8List.fromList('0123456789'.codeUnits);
+    final client = Client(
+      ClientOptions(
+        errorBodyPreviewLimit: 4,
+        transport: MockTransport((request, context) async {
+          return Response.stream(
+            Stream<List<int>>.fromIterable([
+              payload.sublist(0, 3),
+              payload.sublist(3),
+            ]),
+            status: 400,
+          );
+        }),
+      ),
+    );
+
+    try {
+      await client.get('https://example.com/large-error');
+      fail('Expected StatusError.');
+    } on StatusError catch (error) {
+      expect(error.bodyPreview, isNull);
+      expect(await error.statusResponse.bytes(), orderedEquals(payload));
+    }
+  });
+
   test('status policy can return non-2xx responses', () async {
     final client = Client(
       ClientOptions(
