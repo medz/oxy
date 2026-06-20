@@ -1,5 +1,10 @@
+/// Inputs accepted by [Headers].
 typedef HeadersInit = Object?;
 
+/// Case-insensitive HTTP headers with multi-value support.
+///
+/// Header names are normalized to lowercase. `set-cookie` is kept as separate
+/// values through [getAll] and [getSetCookie].
 final class Headers with Iterable<MapEntry<String, String>> {
   Headers([HeadersInit init]) {
     _fill(init);
@@ -23,24 +28,32 @@ final class Headers with Iterable<MapEntry<String, String>> {
   @override
   bool get isNotEmpty => _values.isNotEmpty;
 
+  /// Appends [value] to [name].
   void append(String name, Object value) {
     final key = _normalizeName(name);
     final text = value.toString();
     _values.putIfAbsent(key, () => <String>[]).add(text);
   }
 
+  /// Replaces all values for [name] with [value].
   void set(String name, Object value) {
     _values[_normalizeName(name)] = <String>[value.toString()];
   }
 
+  /// Removes all values for [name].
   void delete(String name) {
     _values.remove(_normalizeName(name));
   }
 
+  /// Whether [name] is present.
   bool has(String name) {
     return _values.containsKey(_normalizeName(name));
   }
 
+  /// The comma-joined value for [name], or `null`.
+  ///
+  /// For `set-cookie`, values are joined with newlines to avoid comma parsing
+  /// ambiguity. Prefer [getSetCookie] for cookie handling.
   String? get(String name) {
     final values = _values[_normalizeName(name)];
     if (values == null || values.isEmpty) {
@@ -50,16 +63,21 @@ final class Headers with Iterable<MapEntry<String, String>> {
     return values.join(_normalizeName(name) == 'set-cookie' ? '\n' : ',');
   }
 
+  /// All values for [name].
   List<String> getAll(String name) {
     return List<String>.unmodifiable(_values[_normalizeName(name)] ?? const []);
   }
 
+  /// All `set-cookie` header values.
   List<String> getSetCookie() => getAll('set-cookie');
 
+  /// The normalized header names.
   Iterable<String> keys() => _values.keys;
 
+  /// A mutable copy of these headers.
   Headers copy() => Headers(this);
 
+  /// An unmodifiable multi-value map.
   Map<String, List<String>> toMultiValueMap() {
     return Map<String, List<String>>.unmodifiable(
       _values.map((key, value) {

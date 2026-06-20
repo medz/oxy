@@ -4,8 +4,12 @@ import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 
+/// Receives formatted log messages.
 typedef LogPrinter = void Function(String message);
 
+/// Logs request start, response completion, and failures.
+///
+/// User info, query strings, and fragments are redacted before logging.
 final class LoggingMiddleware implements Middleware {
   LoggingMiddleware({LogPrinter? printer}) : _printer = printer ?? print;
 

@@ -5,6 +5,12 @@
 - Removed middleware presets; compose middleware explicitly from the built-in
   middleware types instead.
 
+### Added
+
+- Added public API Dartdoc, a cookbook, and checked examples for reusable API
+  clients, policies, no-throw flows, middleware, testing, and body
+  replayability.
+
 ## 0.3.0
 
 ### Breaking Changes

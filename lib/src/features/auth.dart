@@ -5,9 +5,11 @@ import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 
+/// Resolves an authentication token for a request.
 typedef AuthTokenProvider =
     FutureOr<String?> Function(Request request, Context context);
 
+/// Adds an authorization header when a token is available.
 final class AuthMiddleware implements Middleware {
   AuthMiddleware({
     required this.tokenProvider,
@@ -16,6 +18,7 @@ final class AuthMiddleware implements Middleware {
     this.overrideExisting = false,
   });
 
+  /// Creates middleware that always uses [token].
   AuthMiddleware.staticToken(
     String token, {
     String? scheme = 'Bearer',
@@ -28,9 +31,16 @@ final class AuthMiddleware implements Middleware {
          overrideExisting: overrideExisting,
        );
 
+  /// Provider used to resolve the token.
   final AuthTokenProvider tokenProvider;
+
+  /// Authentication scheme prepended to the token, or `null` for raw tokens.
   final String? scheme;
+
+  /// Header name to write.
   final String headerName;
+
+  /// Whether an existing header should be replaced.
   final bool overrideExisting;
 
   @override

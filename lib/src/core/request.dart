@@ -3,6 +3,19 @@ import 'body.dart';
 import 'headers.dart';
 import '../options.dart';
 
+/// An immutable HTTP request prepared for Oxy's pipeline.
+///
+/// A request stores the method, URI, headers, optional [Body], and
+/// per-request [RequestOptions]. Use [copyWith] or [withHeader] to derive a
+/// modified request in middleware.
+///
+/// ```dart
+/// final request = Request(
+///   '/users',
+///   method: 'POST',
+///   body: Body.fromJson({'name': 'oxy'}),
+/// );
+/// ```
 final class Request {
   Request(
     Object url, {
@@ -29,15 +42,28 @@ final class Request {
     required this.attributes,
   });
 
+  /// The HTTP method.
   final String method;
+
+  /// The request URI before client base URL resolution.
   final Uri uri;
+
+  /// The request headers.
   final Headers headers;
+
+  /// The optional request body.
   final Body? body;
+
+  /// Per-request options.
   final RequestOptions options;
+
+  /// Request attributes used by middleware and transports.
   final Attributes attributes;
 
+  /// The string form of [uri].
   String get url => uri.toString();
 
+  /// Creates a copy with selected values replaced.
   Request copyWith({
     String? method,
     Uri? uri,
@@ -57,6 +83,7 @@ final class Request {
     );
   }
 
+  /// Creates a copy with one header set to [value].
   Request withHeader(String name, Object value) {
     final nextHeaders = headers.copy()..set(name, value);
     return copyWith(headers: nextHeaders);

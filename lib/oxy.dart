@@ -1,3 +1,26 @@
+/// A policy-first HTTP client for Dart and Flutter applications.
+///
+/// Import this library when you want to send one-off requests with [fetch],
+/// build a long-lived [Client] for a reusable API client, configure retry and
+/// timeout policies, compose middleware, or test network code with
+/// `package:oxy/testing.dart`.
+///
+/// ```dart
+/// import 'package:oxy/oxy.dart';
+///
+/// Future<void> main() async {
+///   final client = Client(
+///     ClientOptions(baseUrl: Uri.parse('https://api.example.com')),
+///   );
+///
+///   try {
+///     final response = await client.get('/health');
+///     print(response.status);
+///   } finally {
+///     await client.close();
+///   }
+/// }
+/// ```
 library;
 
 export 'package:ht/ht.dart' show Blob, FormData, Multipart, URLSearchParams;

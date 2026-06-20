@@ -6,9 +6,11 @@ import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 
+/// Produces a request ID for a request.
 typedef RequestIdProvider =
     FutureOr<String?> Function(Request request, Context context);
 
+/// Adds a request ID header when one is available.
 final class RequestIdMiddleware implements Middleware {
   RequestIdMiddleware({
     RequestIdProvider? requestIdProvider,
@@ -17,7 +19,11 @@ final class RequestIdMiddleware implements Middleware {
   }) : _requestIdProvider = requestIdProvider ?? _defaultRequestId;
 
   final RequestIdProvider _requestIdProvider;
+
+  /// Header name to write.
   final String headerName;
+
+  /// Whether an existing request ID header should be replaced.
   final bool overrideExisting;
 
   static final Random _random = Random();
