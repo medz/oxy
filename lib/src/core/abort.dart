@@ -1,12 +1,23 @@
 /// Cooperative cancellation signal used by requests, retry delays, and bodies.
 abstract interface class AbortSignal {
+  /// Creates a new, initially active cancellation signal.
   factory AbortSignal() = _AbortSignalImpl;
 
+  /// Whether [abort] has been called.
   bool get aborted;
+
+  /// The reason supplied to [abort], or `null`.
   Object? get reason;
 
+  /// Registers [callback] to run when the signal aborts.
+  ///
+  /// If the signal is already aborted, [callback] runs immediately.
   void onAbort(void Function() callback);
+
+  /// Throws [reason] if the signal is already aborted.
   void throwIfAborted();
+
+  /// Aborts the signal and notifies registered callbacks.
   void abort([Object? reason]);
 }
 

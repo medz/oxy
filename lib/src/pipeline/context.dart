@@ -6,6 +6,10 @@ import '../policies.dart';
 import '../transport/capability.dart';
 import 'events.dart';
 
+/// Per-request execution context passed through middleware and transports.
+///
+/// The context contains the resolved policies, platform capability, current
+/// retry attempt, attributes, cancellation signal, and event sink.
 final class Context {
   const Context({
     required this.clientOptions,
@@ -22,24 +26,52 @@ final class Context {
     this.onEvent,
   });
 
+  /// Client-level defaults.
   final ClientOptions clientOptions;
+
+  /// Request-level overrides.
   final RequestOptions requestOptions;
+
+  /// Resolved timeout policy.
   final TimeoutPolicy timeoutPolicy;
+
+  /// Resolved retry policy.
   final RetryPolicy retryPolicy;
+
+  /// Resolved redirect policy.
   final RedirectPolicy redirectPolicy;
+
+  /// Resolved status policy.
   final StatusPolicy statusPolicy;
+
+  /// Capabilities of the active transport.
   final PlatformCapability capability;
+
+  /// Merged client, request, and send attributes.
   final Attributes attributes;
+
+  /// When the logical request started.
   final DateTime createdAt;
+
+  /// Zero-based network attempt.
   final int attempt;
+
+  /// Cancellation signal for this attempt.
   final AbortSignal? signal;
+
+  /// Event sink for request lifecycle events.
   final EventSink? onEvent;
 
+  /// Upload progress callback for this request.
   ProgressCallback? get onSendProgress => requestOptions.onSendProgress;
+
+  /// Download progress callback for this request.
   ProgressCallback? get onReceiveProgress => requestOptions.onReceiveProgress;
 
+  /// The attribute value for [key].
   T? attribute<T extends Object>(AttributeKey<T> key) => attributes.get(key);
 
+  /// Creates a copy with selected execution values replaced.
   Context copyWith({
     RequestOptions? requestOptions,
     TimeoutPolicy? timeoutPolicy,
@@ -70,6 +102,7 @@ final class Context {
     );
   }
 
+  /// Emits a request lifecycle event through [onEvent].
   void emit(
     RequestEventType type,
     Request request, {

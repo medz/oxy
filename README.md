@@ -115,6 +115,13 @@ Future<void> main() async {
 }
 ```
 
+## Cookbook
+
+For copyable examples that cover reusable API clients, policies, no-throw
+`Result` flows, middleware composition, testing, and body replayability, see the
+[Oxy Cookbook](https://github.com/medz/oxy/blob/main/doc/cookbook.md). The
+linked examples under `example/` are checked by `dart analyze`.
+
 ## API Client Pattern
 
 Oxy is designed to sit behind a small package or app-specific API client:

@@ -6,9 +6,14 @@ import '../pipeline/internal_attributes.dart';
 import '../pipeline/middleware.dart';
 import 'cookie.dart';
 
+/// Adds cookie jar support for native and test transports.
+///
+/// Browser requests already use the browser's cookie handling, so this
+/// middleware is a no-op on Web transports.
 final class CookieMiddleware implements Middleware {
   const CookieMiddleware(this.jar);
 
+  /// Cookie storage used by the middleware.
   final CookieJar jar;
 
   @override

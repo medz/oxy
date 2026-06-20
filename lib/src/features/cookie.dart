@@ -10,6 +10,9 @@ export 'package:ocookie/ocookie.dart'
         CookiePriority,
         CookieSameSite;
 
+/// Parses a `Set-Cookie` header for [requestUri].
+///
+/// The returned cookie is normalized for host-only/domain/path matching.
 ocookie.Cookie parseSetCookie(String setCookie, Uri requestUri) {
   return _normalizeCookie(
     ocookie.Cookie.fromString(setCookie),
@@ -17,7 +20,9 @@ ocookie.Cookie parseSetCookie(String setCookie, Uri requestUri) {
   ).cookie;
 }
 
+/// Request matching helpers for [ocookie.Cookie].
 extension CookieRequestExtension on ocookie.Cookie {
+  /// Whether this cookie is expired at [nowUtc].
   bool isExpired(DateTime nowUtc) {
     final now = nowUtc.toUtc();
     if (maxAge != null && maxAge == Duration.zero) {
@@ -29,6 +34,7 @@ extension CookieRequestExtension on ocookie.Cookie {
     return false;
   }
 
+  /// Whether this cookie should be sent to [uri].
   bool matchesUri(Uri uri) {
     final host = uri.host.toLowerCase();
     final domain = _cookieDomain(this);
@@ -54,15 +60,23 @@ extension CookieRequestExtension on ocookie.Cookie {
     return true;
   }
 
+  /// Serializes this cookie for a `Cookie` request header.
   String toRequestCookie() => ocookie.Cookie(name, value).serialize();
 }
 
+/// Cookie storage used by `CookieMiddleware`.
 abstract interface class CookieJar {
+  /// Loads cookies that may be sent to [uri].
   Future<List<ocookie.Cookie>> load(Uri uri);
+
+  /// Saves cookies received from [uri].
   Future<void> save(Uri uri, List<ocookie.Cookie> cookies);
+
+  /// Removes all cookies.
   Future<void> clear();
 }
 
+/// In-memory [CookieJar] implementation.
 final class MemoryCookieJar implements CookieJar {
   final List<_StoredCookie> _cookies = <_StoredCookie>[];
 

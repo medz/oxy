@@ -29,6 +29,27 @@ final class _StatusBodyPreview {
   final String? bodyPreview;
 }
 
+/// A reusable HTTP client with shared options, middleware, and transport state.
+///
+/// Create a [Client] when requests should share a base URL, default headers,
+/// retry and timeout policies, middleware, or native keep-alive connections.
+/// For one-off requests, use [fetch].
+///
+/// ```dart
+/// final client = Client(
+///   ClientOptions(baseUrl: Uri.parse('https://api.example.com')),
+/// );
+///
+/// try {
+///   final response = await client.get('/users/1');
+///   print(await response.json<Map<String, Object?>>());
+/// } finally {
+///   await client.close();
+/// }
+/// ```
+///
+/// A client owns its default transport unless [ClientOptions.transport] is set.
+/// Call [close] when a long-lived client is no longer needed.
 final class Client {
   Client([ClientOptions options = const ClientOptions()])
     : options = options,
@@ -37,16 +58,23 @@ final class Client {
           options.transport ??
           createDefaultTransport(keepAlive: options.keepAlive);
 
+  /// The defaults applied to requests sent by this client.
   final ClientOptions options;
   final Transport _transport;
   final bool _ownsTransport;
   final Random _random = Random();
   bool _closed = false;
 
+  /// The transport used after request resolution, policies, and middleware.
   Transport get transport => _transport;
 
+  /// Creates a new client with [next] as its options.
   Client withOptions(ClientOptions next) => Client(next);
 
+  /// Creates a new client with additional application [middleware].
+  ///
+  /// When [replace] is `true`, [middleware] replaces the existing application
+  /// middleware list instead of being appended to it.
   Client withMiddleware(List<Middleware> middleware, {bool replace = false}) {
     return Client(
       options.copyWith(
@@ -57,6 +85,11 @@ final class Client {
     );
   }
 
+  /// Closes the client-owned transport.
+  ///
+  /// This method is idempotent. It only closes the transport that Oxy created
+  /// for this client; a custom [ClientOptions.transport] remains owned by the
+  /// caller.
   Future<void> close() async {
     if (_closed) {
       return;
@@ -67,6 +100,14 @@ final class Client {
     }
   }
 
+  /// Sends a prepared [request].
+  ///
+  /// The request is resolved against [ClientOptions.baseUrl], merged with
+  /// default headers and [options], then passed through middleware, retry,
+  /// redirect, timeout, and status policies.
+  ///
+  /// Throws a [RequestError] subtype for network, timeout, status, retry,
+  /// decode, body, and middleware failures.
   Future<Response> send(Request request, {RequestOptions? options}) async {
     if (_closed) {
       throw NetworkError('Client is closed.', request: request);
@@ -222,6 +263,9 @@ final class Client {
         policy.read != null;
   }
 
+  /// Sends [request] and captures success or failure in a [Result].
+  ///
+  /// This is the no-throw form of [send].
   Future<Result<Response>> sendResult(
     Request request, {
     RequestOptions? options,
@@ -229,6 +273,12 @@ final class Client {
     return Result.capture(() => send(request, options: options));
   }
 
+  /// Sends a request built from a method and URL.
+  ///
+  /// [url] can be a [String] or [Uri]. Relative URLs are resolved against
+  /// [ClientOptions.baseUrl]. Pass [json] to encode a JSON request body and set
+  /// the content type automatically, or pass [body] for raw body inputs accepted
+  /// by [Body.from].
   Future<Response> request(
     String method,
     Object url, {
@@ -264,6 +314,9 @@ final class Client {
     );
   }
 
+  /// Sends a request and captures success or failure in a [Result].
+  ///
+  /// This is the no-throw form of [request].
   Future<Result<Response>> requestResult(
     String method,
     Object url, {
@@ -290,6 +343,7 @@ final class Client {
     );
   }
 
+  /// Sends a `GET` request.
   Future<Response> get(
     Object url, {
     QueryMap? query,
@@ -307,6 +361,7 @@ final class Client {
     );
   }
 
+  /// Sends a `POST` request.
   Future<Response> post(
     Object url, {
     QueryMap? query,
@@ -330,6 +385,7 @@ final class Client {
     );
   }
 
+  /// Sends a `PUT` request.
   Future<Response> put(
     Object url, {
     QueryMap? query,
@@ -353,6 +409,7 @@ final class Client {
     );
   }
 
+  /// Sends a `PATCH` request.
   Future<Response> patch(
     Object url, {
     QueryMap? query,
@@ -376,6 +433,7 @@ final class Client {
     );
   }
 
+  /// Sends a `DELETE` request.
   Future<Response> delete(
     Object url, {
     QueryMap? query,
@@ -399,6 +457,7 @@ final class Client {
     );
   }
 
+  /// Sends a `HEAD` request.
   Future<Response> head(
     Object url, {
     QueryMap? query,
@@ -414,6 +473,10 @@ final class Client {
     );
   }
 
+  /// Sends an `OPTIONS` request.
+  ///
+  /// The method name avoids colliding with the [options] parameter used by the
+  /// other request helpers.
   Future<Response> optionsRequest(
     Object url, {
     QueryMap? query,
@@ -433,6 +496,11 @@ final class Client {
     );
   }
 
+  /// Sends a request and decodes the JSON response body.
+  ///
+  /// If [decoder] is provided, it maps the decoded JSON payload to [T].
+  /// Otherwise the decoded payload is cast to [T]. Decode and mapping failures
+  /// are reported as [DecodeError].
   Future<T> decode<T>(
     String method,
     Object url, {
@@ -1451,8 +1519,16 @@ final class _DownstreamError {
   final StackTrace trace;
 }
 
+/// The shared client used by [fetch] and [fetchResult].
+///
+/// This is useful for scripts and small programs. Call `client.close()` before
+/// a short-lived process exits if it used the shared client.
 final Client client = Client();
 
+/// Sends a one-off request with the shared [client].
+///
+/// For reusable API clients, prefer creating a [Client] with explicit
+/// [ClientOptions] and closing it when it is no longer needed.
 Future<Response> fetch(
   Object url, {
   String method = 'GET',
@@ -1477,6 +1553,9 @@ Future<Response> fetch(
   );
 }
 
+/// Sends a one-off request and captures success or failure in a [Result].
+///
+/// This is the no-throw form of [fetch].
 Future<Result<Response>> fetchResult(
   Object url, {
   String method = 'GET',

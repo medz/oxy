@@ -10,8 +10,10 @@ import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 import '../policies.dart';
 
+/// Builds a cache key for a request.
 typedef CacheKeyBuilder = String Function(Request request, Context context);
 
+/// A response stored by [CacheStore].
 final class CachedResponse {
   const CachedResponse({
     required this.response,
@@ -20,11 +22,19 @@ final class CachedResponse {
     required this.etag,
   });
 
+  /// The buffered response.
   final Response response;
+
+  /// When the response was stored.
   final DateTime storedAt;
+
+  /// When the response expires, or `null` if it requires validation.
   final DateTime? expiresAt;
+
+  /// The response ETag used for revalidation.
   final String? etag;
 
+  /// Whether this response is still fresh at [nowUtc].
   bool isFresh(DateTime nowUtc) {
     return expiresAt != null && nowUtc.isBefore(expiresAt!);
   }
@@ -41,19 +51,30 @@ final class CachedResponse {
   }
 }
 
+/// Storage used by [CacheMiddleware].
 abstract interface class CacheStore {
+  /// Reads the cached response for [key].
   Future<CachedResponse?> read(String key);
+
+  /// Stores [value] for [key].
   Future<void> write(String key, CachedResponse value);
+
+  /// Removes [key].
   Future<void> delete(String key);
+
+  /// Removes all cached entries.
   Future<void> clear();
 }
 
+/// In-memory least-recently-used cache store.
 final class MemoryCacheStore implements CacheStore {
   MemoryCacheStore({this.maxEntries = defaultMaxEntries})
     : assert(maxEntries == null || maxEntries > 0, 'maxEntries must be > 0');
 
+  /// Default maximum number of entries.
   static const int defaultMaxEntries = 128;
 
+  /// Maximum number of entries, or `null` for no entry limit.
   final int? maxEntries;
   final Map<String, CachedResponse> _entries = <String, CachedResponse>{};
 
@@ -95,6 +116,10 @@ final class MemoryCacheStore implements CacheStore {
   }
 }
 
+/// HTTP cache middleware for cacheable `GET` and `HEAD` responses.
+///
+/// The middleware stores bounded, replayable responses and revalidates cached
+/// entries with ETag or Last-Modified validators when needed.
 final class CacheMiddleware implements Middleware {
   CacheMiddleware({
     CacheStore? store,
@@ -105,7 +130,11 @@ final class CacheMiddleware implements Middleware {
        _methods = methods.map((method) => method.toUpperCase()).toSet();
 
   final CacheStore _store;
+
+  /// Cache key builder.
   final CacheKeyBuilder keyBuilder;
+
+  /// Maximum response body size stored in memory.
   final int maxEntryBytes;
   final Set<String> _methods;
 
