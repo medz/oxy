@@ -98,16 +98,18 @@ final client = Client(
     middleware: [
       RequestIdMiddleware(),
       AuthMiddleware.staticToken('secret'),
-      CookieMiddleware(MemoryCookieJar()),
       CacheMiddleware(),
       LoggingMiddleware(),
     ],
+    networkMiddleware: [CookieMiddleware(MemoryCookieJar())],
   ),
 );
 ```
 
-`CookieMiddleware` is for native and test transports. Browser requests already
-use browser cookie handling, so the middleware is a no-op on Web.
+`CookieMiddleware` belongs in network middleware so redirects and retries can
+store cookies between attempts. It is for native and test transports. Browser
+requests already use browser cookie handling, so the middleware is a no-op on
+Web.
 
 ## Test with MockTransport
 
