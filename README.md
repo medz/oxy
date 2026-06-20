@@ -8,10 +8,10 @@ middleware, typed errors, and deterministic tests.
 [![CI](https://github.com/medz/oxy/actions/workflows/ci.yml/badge.svg)](https://github.com/medz/oxy/actions/workflows/ci.yml)
 [![Oxy Version](https://img.shields.io/pub/v/oxy)](https://pub.dev/packages/oxy)
 
-## Why Oxy
+## When to Choose Oxy
 
-Use Oxy when your Dart or Flutter network layer needs more than one-off HTTP
-calls:
+Choose Oxy when you are building a reusable Dart or Flutter API client and want
+HTTP behavior to be explicit, testable, and consistent across native and Web:
 
 - Build reusable API clients around `Client` with shared defaults and explicit
   lifecycle management.
@@ -24,6 +24,15 @@ calls:
 - Avoid unsafe retries: non-replayable request bodies are never retried
   implicitly.
 - Test request behavior with `MockTransport` without running a server.
+
+Another package may fit better when:
+
+- `package:http` is enough and you want the smallest official HTTP surface with
+  your own local wrapper.
+- `dio` already matches your Flutter app conventions or you need its broader
+  interceptor and plugin ecosystem.
+- `chopper` or `retrofit` is a better fit because you want generated,
+  annotation-driven API interfaces.
 
 ## Design Goals
 
