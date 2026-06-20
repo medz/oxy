@@ -184,22 +184,23 @@ final class CacheMiddleware implements Middleware {
       return response;
     }
 
-    final buffered = await _tryBuffer(request, response);
-    if (buffered == null) {
+    final bufferResult = await _tryBuffer(request, response);
+    final cacheResponse = bufferResult.cacheResponse;
+    if (cacheResponse == null) {
       await _store.delete(key);
-      return response;
+      return bufferResult.response;
     }
 
     await _store.write(
       key,
       CachedResponse(
-        response: buffered,
+        response: cacheResponse,
         storedAt: receivedAt,
         expiresAt: expiresAt,
         etag: etag,
       ),
     );
-    return buffered.copyWith(fromCache: false);
+    return cacheResponse.copyWith(fromCache: false);
   }
 
   static String _defaultCacheKeyBuilder(Request request, Context _) {
@@ -430,15 +431,18 @@ final class CacheMiddleware implements Middleware {
         .any((value) => value.trim() == '*');
   }
 
-  Future<Response?> _tryBuffer(Request request, Response response) async {
+  Future<_CacheBufferResult> _tryBuffer(
+    Request request,
+    Response response,
+  ) async {
     final body = response.body;
     if (body == null) {
-      return response;
+      return _CacheBufferResult(response: response, cacheResponse: response);
     }
 
     final contentLength = body.contentLength;
     if (contentLength != null && contentLength > maxEntryBytes) {
-      return null;
+      return _CacheBufferResult(response: response);
     }
 
     final iterator = StreamIterator<Uint8List>(body.open());
@@ -450,16 +454,24 @@ final class CacheMiddleware implements Middleware {
         chunks.add(chunk);
         builder.add(chunk);
         if (builder.length > maxEntryBytes) {
-          response.body = ResponseBody.stream(
-            _restoreBody(chunks, iterator),
-            contentLength: body.contentLength,
+          if (body.replayable) {
+            await iterator.cancel();
+            return _CacheBufferResult(response: response);
+          }
+          return _CacheBufferResult(
+            response: response.copyWith(
+              body: ResponseBody.stream(
+                _restoreBody(chunks, iterator),
+                contentLength: body.contentLength,
+              ),
+            ),
           );
-          return null;
         }
       }
-      return response.copyWith(
+      final buffered = response.copyWith(
         body: ResponseBody.fromBytes(builder.takeBytes()),
       );
+      return _CacheBufferResult(response: buffered, cacheResponse: buffered);
     } catch (error, trace) {
       if (error is RequestError) {
         rethrow;
@@ -489,6 +501,13 @@ final class CacheMiddleware implements Middleware {
       await iterator.cancel();
     }
   }
+}
+
+final class _CacheBufferResult {
+  const _CacheBufferResult({required this.response, this.cacheResponse});
+
+  final Response response;
+  final Response? cacheResponse;
 }
 
 const Set<String> _cacheKeyIgnoredHeaders = <String>{

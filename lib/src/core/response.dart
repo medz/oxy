@@ -81,7 +81,7 @@ final class Response {
   final Uri url;
   final bool redirected;
   final bool fromCache;
-  ResponseBody? body;
+  final ResponseBody? body;
 
   bool get ok => status >= 200 && status <= 299;
 

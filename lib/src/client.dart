@@ -22,6 +22,13 @@ import 'transport/transport.dart';
 
 const Object _jsonOmitted = Object();
 
+final class _StatusBodyPreview {
+  const _StatusBodyPreview({required this.response, this.bodyPreview});
+
+  final Response response;
+  final String? bodyPreview;
+}
+
 final class Client {
   Client([ClientOptions options = const ClientOptions()])
     : options = options,
@@ -586,9 +593,13 @@ final class Client {
         RequestEventType.statusFailed,
         request: request,
         attempt: context.attempt,
-        response: response,
+        response: preview.response,
       );
-      throw StatusError(response, request: request, bodyPreview: preview);
+      throw StatusError(
+        preview.response,
+        request: request,
+        bodyPreview: preview.bodyPreview,
+      );
     }
 
     return response;
@@ -823,12 +834,12 @@ final class Client {
             RequestEventType.statusFailed,
             request: attemptRequest,
             attempt: attempt,
-            response: response,
+            response: preview.response,
           );
           throw StatusError(
-            response,
+            preview.response,
             request: attemptRequest,
-            bodyPreview: preview,
+            bodyPreview: preview.bodyPreview,
           );
         }
 
@@ -1240,11 +1251,14 @@ final class Client {
     );
   }
 
-  Future<String?> _previewStatusBody(Response response, Context context) async {
+  Future<_StatusBodyPreview> _previewStatusBody(
+    Response response,
+    Context context,
+  ) async {
     final limit = context.clientOptions.errorBodyPreviewLimit;
     final body = response.body;
     if (limit <= 0 || body == null) {
-      return null;
+      return _StatusBodyPreview(response: response);
     }
 
     try {
@@ -1257,19 +1271,33 @@ final class Client {
         chunks.add(chunk);
         builder.add(chunk);
         if (builder.length > limit) {
-          response.body = ResponseBody.stream(
-            _restorePreviewStream(chunks, iterator),
-            contentLength: body.contentLength,
+          if (body.replayable) {
+            await iterator.cancel();
+            return _StatusBodyPreview(response: response);
+          }
+          return _StatusBodyPreview(
+            response: response.copyWith(
+              body: ResponseBody.stream(
+                _restorePreviewStream(chunks, iterator),
+                contentLength: body.contentLength,
+              ),
+            ),
           );
-          return null;
         }
       }
 
       final data = builder.takeBytes();
-      response.body = ResponseBody.fromBytes(data);
-      return utf8.decode(data);
+      final next = response.copyWith(body: ResponseBody.fromBytes(data));
+      try {
+        return _StatusBodyPreview(
+          response: next,
+          bodyPreview: utf8.decode(data),
+        );
+      } catch (_) {
+        return _StatusBodyPreview(response: next);
+      }
     } catch (_) {
-      return null;
+      return _StatusBodyPreview(response: response);
     }
   }
 
