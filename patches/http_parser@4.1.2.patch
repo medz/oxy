@@ -1,33 +1,51 @@
 diff --git a/lib/src/http_date.dart b/lib/src/http_date.dart
-index 0cedd9a6d88b8ac5b3f9289acf406af640679b99..f67b269449303d5cf0786cfe5f696f7a349af1eb 100644
+index 0cedd9a6d88b8ac5b3f9289acf406af640679b99..0af2f27924616e96273d725cee71369745653730 100644
 --- a/lib/src/http_date.dart
 +++ b/lib/src/http_date.dart
-@@ -68,7 +68,7 @@ DateTime parseHttpDate(String date) =>
+@@ -68,13 +68,13 @@ DateTime parseHttpDate(String date) =>
          scanner.expect('-');
          final month = _parseMonth(scanner);
          scanner.expect('-');
 -        final year = 1900 + _parseInt(scanner, 2);
-+        final year = _parseRfc850Year(scanner);
++        final twoDigitYear = _parseInt(scanner, 2);
          scanner.expect(' ');
          final time = _parseTime(scanner);
          scanner.expect(' GMT');
-@@ -126,6 +126,21 @@ int _parseInt(StringScanner scanner, int digits) {
+         scanner.expectDone();
+ 
+-        return _makeDateTime(year, month, day, time);
++        return _makeRfc850DateTime(twoDigitYear, month, day, time);
+       }
+ 
+       // RFC 1123 and asctime both start with a short weekday.
+@@ -126,6 +126,32 @@ int _parseInt(StringScanner scanner, int digits) {
    return int.parse(scanner.lastMatch![0]!);
  }
  
-+/// Parses an obsolete RFC 850 two-digit year.
++/// Returns a UTC [DateTime] from an obsolete RFC 850 two-digit year.
 +///
 +/// Per RFC 9110, timestamps that appear more than 50 years in the future are
 +/// interpreted as the most recent past year with the same last two digits.
-+int _parseRfc850Year(StringScanner scanner) {
-+  final twoDigitYear = _parseInt(scanner, 2);
++DateTime _makeRfc850DateTime(
++    int twoDigitYear, int month, int day, DateTime time) {
 +  final now = DateTime.now().toUtc();
 +  final currentCentury = now.year - (now.year % 100);
-+  var year = currentCentury + twoDigitYear;
-+  if (year - now.year > 50) {
-+    year -= 100;
++  final year = currentCentury + twoDigitYear;
++  var dateTime = _makeDateTime(year, month, day, time);
++  final futureLimit = DateTime.utc(
++      now.year + 50,
++      now.month,
++      now.day,
++      now.hour,
++      now.minute,
++      now.second,
++      now.millisecond,
++      now.microsecond);
++
++  if (dateTime.isAfter(futureLimit)) {
++    dateTime = _makeDateTime(year - 100, month, day, time);
 +  }
-+  return year;
++  return dateTime;
 +}
 +
  /// Parses an timestamp of the form "HH:MM:SS" on a 24-hour clock.

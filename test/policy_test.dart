@@ -430,6 +430,27 @@ void main() {
     expect(delay, lessThanOrEqualTo(const Duration(minutes: 5)));
   });
 
+  test('retry policy rolls over RFC850 dates more than 50 years ahead', () {
+    final now = DateTime.now().toUtc();
+    final retryAt = DateTime.utc(
+      now.year + 50,
+      now.month,
+      now.day,
+      now.hour,
+      now.minute,
+      now.second,
+    ).add(const Duration(days: 1));
+    final response = Response.text(
+      'busy',
+      status: 503,
+      headers: {'retry-after': _formatRfc850Date(retryAt)},
+    );
+
+    final delay = const RetryPolicy().delayFor(0, response: response);
+
+    expect(delay, Duration.zero);
+  });
+
   test('retry policy ignores invalid Retry-After dates', () {
     final response = Response.text(
       'busy',
