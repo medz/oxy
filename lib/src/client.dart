@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'core/abort.dart';
 import 'core/body.dart';
@@ -11,6 +9,7 @@ import 'core/request.dart';
 import 'core/response.dart';
 import 'core/result.dart';
 import 'client/request_resolution.dart';
+import 'client/response_policies.dart';
 import 'options.dart';
 import 'pipeline/context.dart';
 import 'pipeline/events.dart';
@@ -22,13 +21,6 @@ import 'transport/default_transport.dart';
 import 'transport/transport.dart';
 
 const Object _jsonOmitted = Object();
-
-final class _StatusBodyPreview {
-  const _StatusBodyPreview({required this.response, this.bodyPreview});
-
-  final Response response;
-  final String? bodyPreview;
-}
 
 /// A reusable HTTP client with shared options, middleware, and transport state.
 ///
@@ -200,7 +192,7 @@ final class Client {
           );
         }
         throwIfLifecycleClosed();
-        final policyResponse = await _applyResponsePolicies(
+        final policyResponse = await applyResponsePolicies(
           prepared,
           response,
           context,
@@ -571,7 +563,7 @@ final class Client {
     Context context,
   ) {
     if (context.redirectPolicy.mode == RedirectMode.follow &&
-        _isRedirectStatus(response.status)) {
+        isRedirectStatus(response.status)) {
       return _runRedirects(request, context, (
         redirectRequest,
         redirectContext,
@@ -580,38 +572,6 @@ final class Client {
       }, firstResponse: response);
     }
     return Future.value(_withResponseTimeouts(response, request, context));
-  }
-
-  Future<Response> _applyResponsePolicies(
-    Request request,
-    Response response,
-    Context context,
-  ) async {
-    if (_isRedirectBlocked(response, context)) {
-      throw StatusError(
-        response,
-        request: request,
-        message: 'Redirect blocked by RedirectPolicy.error.',
-      );
-    }
-
-    if (!context.statusPolicy.accepts(response)) {
-      final preview = await _previewStatusBody(response, context);
-      emitEvent(
-        context.onEvent,
-        RequestEventType.statusFailed,
-        request: request,
-        attempt: context.attempt,
-        response: preview.response,
-      );
-      throw StatusError(
-        preview.response,
-        request: request,
-        bodyPreview: preview.bodyPreview,
-      );
-    }
-
-    return response;
   }
 
   bool _usesClientRedirects(Context context) {
@@ -630,7 +590,7 @@ final class Client {
     var response = firstResponse;
     for (var redirects = 0; ; redirects++) {
       response ??= await next(current, _allowRedirectStatus(context));
-      if (!_isRedirectStatus(response.status)) {
+      if (!isRedirectStatus(response.status)) {
         return redirected ? response.copyWith(redirected: true) : response;
       }
 
@@ -679,7 +639,7 @@ final class Client {
     return context.copyWith(
       statusPolicy: StatusPolicy(
         accept: (response) {
-          return _isRedirectStatus(response.status) ||
+          return isRedirectStatus(response.status) ||
               context.statusPolicy.accepts(response);
         },
       ),
@@ -797,7 +757,7 @@ final class Client {
           response: response,
         );
 
-        if (_isRedirectBlocked(response, attemptContext)) {
+        if (isRedirectBlocked(response, attemptContext)) {
           throw StatusError(
             response,
             request: attemptRequest,
@@ -836,23 +796,11 @@ final class Client {
           continue;
         }
 
-        if (!attemptContext.statusPolicy.accepts(response)) {
-          final preview = await _previewStatusBody(response, attemptContext);
-          emitEvent(
-            attemptContext.onEvent,
-            RequestEventType.statusFailed,
-            request: attemptRequest,
-            attempt: attempt,
-            response: preview.response,
-          );
-          throw StatusError(
-            preview.response,
-            request: attemptRequest,
-            bodyPreview: preview.bodyPreview,
-          );
-        }
-
-        return response;
+        return await applyResponsePolicies(
+          attemptRequest,
+          response,
+          attemptContext,
+        );
       } catch (error, trace) {
         final normalized = _normalizeError(
           error,
@@ -1098,18 +1046,6 @@ final class Client {
     return false;
   }
 
-  bool _isRedirectBlocked(Response response, Context context) {
-    return context.redirectPolicy.mode == RedirectMode.error &&
-        _isRedirectStatus(response.status);
-  }
-
-  bool _isRedirectStatus(int status) {
-    return switch (status) {
-      301 || 302 || 303 || 307 || 308 => true,
-      _ => false,
-    };
-  }
-
   Future<void> _beforeRetry(
     Request request,
     Context context,
@@ -1193,72 +1129,6 @@ final class Client {
       cause: error,
       trace: trace,
     );
-  }
-
-  Future<_StatusBodyPreview> _previewStatusBody(
-    Response response,
-    Context context,
-  ) async {
-    final limit = context.clientOptions.errorBodyPreviewLimit;
-    final body = response.body;
-    if (limit <= 0 || body == null) {
-      return _StatusBodyPreview(response: response);
-    }
-
-    try {
-      final iterator = StreamIterator<Uint8List>(body.open());
-      final chunks = <Uint8List>[];
-      final builder = BytesBuilder(copy: false);
-
-      while (await iterator.moveNext()) {
-        final chunk = iterator.current;
-        chunks.add(chunk);
-        builder.add(chunk);
-        if (builder.length > limit) {
-          if (body.replayable) {
-            await iterator.cancel();
-            return _StatusBodyPreview(response: response);
-          }
-          return _StatusBodyPreview(
-            response: response.copyWith(
-              body: ResponseBody.stream(
-                _restorePreviewStream(chunks, iterator),
-                contentLength: body.contentLength,
-              ),
-            ),
-          );
-        }
-      }
-
-      final data = builder.takeBytes();
-      final next = response.copyWith(body: ResponseBody.fromBytes(data));
-      try {
-        return _StatusBodyPreview(
-          response: next,
-          bodyPreview: utf8.decode(data),
-        );
-      } catch (_) {
-        return _StatusBodyPreview(response: next);
-      }
-    } catch (_) {
-      return _StatusBodyPreview(response: response);
-    }
-  }
-
-  Stream<List<int>> _restorePreviewStream(
-    List<Uint8List> chunks,
-    StreamIterator<Uint8List> iterator,
-  ) async* {
-    try {
-      for (final chunk in chunks) {
-        yield chunk;
-      }
-      while (await iterator.moveNext()) {
-        yield iterator.current;
-      }
-    } finally {
-      await iterator.cancel();
-    }
   }
 }
 
