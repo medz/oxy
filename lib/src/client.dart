@@ -4,13 +4,13 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'core/abort.dart';
-import 'core/attributes.dart';
 import 'core/body.dart';
 import 'core/errors.dart';
 import 'core/headers.dart';
 import 'core/request.dart';
 import 'core/response.dart';
 import 'core/result.dart';
+import 'client/request_resolution.dart';
 import 'options.dart';
 import 'pipeline/context.dart';
 import 'pipeline/events.dart';
@@ -113,7 +113,12 @@ final class Client {
       throw NetworkError('Client is closed.', request: request);
     }
 
-    final resolved = _resolve(request, options);
+    final resolved = resolveClientRequest(
+      request,
+      options,
+      clientOptions: this.options,
+      capability: _transport.capability,
+    );
     final prepared = resolved.request;
     var context = resolved.context;
     final totalTimeout = context.timeoutPolicy.total;
@@ -291,7 +296,11 @@ final class Client {
     ProgressCallback? onReceiveProgress,
   }) {
     final requestHeaders = Headers(headers);
-    final requestBody = _resolveBody(body: body, json: json);
+    final requestBody = resolveRequestBody(
+      body: body,
+      json: json,
+      jsonOmitted: _jsonOmitted,
+    );
     if (requestBody?.contentType != null &&
         !requestHeaders.has('content-type')) {
       requestHeaders.set('content-type', requestBody!.contentType!);
@@ -521,78 +530,6 @@ final class Client {
       options: options,
     );
     return response.decode<T>(decoder: decoder);
-  }
-
-  _ResolvedRequest _resolve(Request request, RequestOptions? sendOptions) {
-    final incoming = _mergeRequestOptions(request.options, sendOptions);
-    final timeoutPolicy = incoming.timeoutPolicy ?? options.timeoutPolicy;
-    final retryPolicy = incoming.retryPolicy ?? options.retryPolicy;
-    final redirectPolicy = incoming.redirectPolicy ?? options.redirectPolicy;
-    final statusPolicy = incoming.statusPolicy ?? options.statusPolicy;
-
-    final attributes = _mergeAttributes(
-      options.attributes,
-      request.attributes,
-      incoming.attributes,
-    );
-
-    final context = Context(
-      clientOptions: options,
-      requestOptions: incoming,
-      timeoutPolicy: timeoutPolicy,
-      retryPolicy: retryPolicy,
-      redirectPolicy: redirectPolicy,
-      statusPolicy: statusPolicy,
-      capability: _transport.capability,
-      attributes: attributes,
-      createdAt: DateTime.now().toUtc(),
-      attempt: 0,
-      signal: incoming.signal,
-      onEvent: options.onEvent,
-    );
-
-    final resolvedUrl = _resolveUrl(_mergeQuery(request.uri, incoming.query));
-    final headers = Headers(options.defaultHeaders);
-    for (final name in request.headers.keys()) {
-      headers.delete(name);
-      for (final value in request.headers.getAll(name)) {
-        headers.append(name, value);
-      }
-    }
-    if (incoming.headers != null) {
-      final override = Headers(incoming.headers);
-      for (final name in override.keys()) {
-        headers.delete(name);
-        for (final value in override.getAll(name)) {
-          headers.append(name, value);
-        }
-      }
-    }
-    if (context.capability.name != 'web' &&
-        options.userAgent.isNotEmpty &&
-        !headers.has('user-agent')) {
-      headers.set('user-agent', options.userAgent);
-    }
-
-    final body = request.body;
-    if (body?.contentType != null && !headers.has('content-type')) {
-      headers.set('content-type', body!.contentType!);
-    }
-    if (context.capability.name != 'web' &&
-        body?.contentLength != null &&
-        !headers.has('content-length')) {
-      headers.set('content-length', body!.contentLength!);
-    }
-
-    final prepared = request.copyWith(
-      method: request.method.toUpperCase(),
-      uri: resolvedUrl,
-      headers: headers,
-      options: incoming,
-      attributes: attributes,
-    );
-
-    return _ResolvedRequest(prepared, context);
   }
 
   Future<_ApplicationPipelineResult> _runApplicationPipeline(
@@ -1384,122 +1321,6 @@ final class Client {
       await iterator.cancel();
     }
   }
-
-  RequestOptions _mergeRequestOptions(
-    RequestOptions requestOptions,
-    RequestOptions? sendOptions,
-  ) {
-    if (sendOptions == null) {
-      return requestOptions;
-    }
-
-    return requestOptions.copyWith(
-      headers: sendOptions.headers,
-      query: sendOptions.query,
-      timeoutPolicy: sendOptions.timeoutPolicy,
-      retryPolicy: sendOptions.retryPolicy,
-      redirectPolicy: sendOptions.redirectPolicy,
-      statusPolicy: sendOptions.statusPolicy,
-      middleware: <Middleware>[
-        ...requestOptions.middleware,
-        ...sendOptions.middleware,
-      ],
-      networkMiddleware: <Middleware>[
-        ...requestOptions.networkMiddleware,
-        ...sendOptions.networkMiddleware,
-      ],
-      hooks:
-          requestOptions.hooks?.merge(sendOptions.hooks) ?? sendOptions.hooks,
-      signal: sendOptions.signal,
-      onSendProgress: sendOptions.onSendProgress,
-      onReceiveProgress: sendOptions.onReceiveProgress,
-      attributes: _mergeAttributes(
-        requestOptions.attributes,
-        sendOptions.attributes,
-      ),
-    );
-  }
-
-  Attributes _mergeAttributes(
-    Attributes first,
-    Attributes second, [
-    Attributes third = const Attributes(),
-  ]) {
-    var merged = Attributes(first.toMap());
-    for (final entry in second.toMap().entries) {
-      merged = merged.set(entry.key, entry.value);
-    }
-    for (final entry in third.toMap().entries) {
-      merged = merged.set(entry.key, entry.value);
-    }
-    return merged;
-  }
-
-  Uri _resolveUrl(Uri url) {
-    if (url.hasScheme) {
-      return url;
-    }
-    final baseUrl = options.baseUrl;
-    if (baseUrl == null) {
-      throw ArgumentError.value(
-        url.toString(),
-        'url',
-        'Relative URLs require ClientOptions(baseUrl: ...).',
-      );
-    }
-    return baseUrl.resolveUri(url);
-  }
-
-  Uri _mergeQuery(Uri uri, QueryMap? query) {
-    if (query == null || query.isEmpty) {
-      return uri;
-    }
-
-    final merged = <String, List<String>>{
-      for (final entry in uri.queryParametersAll.entries)
-        entry.key: List<String>.from(entry.value),
-    };
-
-    for (final entry in query.entries) {
-      final value = entry.value;
-      if (value == null) {
-        continue;
-      }
-      if (value is Iterable && value is! String) {
-        merged[entry.key] = value.map((item) => item.toString()).toList();
-      } else {
-        merged[entry.key] = <String>[value.toString()];
-      }
-    }
-
-    final parts = <String>[];
-    for (final entry in merged.entries) {
-      for (final value in entry.value) {
-        parts.add(
-          '${Uri.encodeQueryComponent(entry.key)}='
-          '${Uri.encodeQueryComponent(value)}',
-        );
-      }
-    }
-    return uri.replace(query: parts.join('&'));
-  }
-
-  Body? _resolveBody({required Object? body, required Object? json}) {
-    if (body != null && !identical(json, _jsonOmitted)) {
-      throw ArgumentError('Use either body or json, not both.');
-    }
-    if (!identical(json, _jsonOmitted)) {
-      return Body.fromJson(json);
-    }
-    return Body.from(body);
-  }
-}
-
-final class _ResolvedRequest {
-  const _ResolvedRequest(this.request, this.context);
-
-  final Request request;
-  final Context context;
 }
 
 final class _ApplicationPipelineResult {
