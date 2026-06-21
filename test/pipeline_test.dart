@@ -196,8 +196,8 @@ void main() {
     final client = Client(
       ClientOptions(
         onEvent: events.add,
-        middleware: const [PassThroughMiddleware()],
-        networkMiddleware: [
+        middleware: [
+          const PassThroughMiddleware(),
           AttemptHeaderMiddleware('x-net', '1', headerEvents),
         ],
         transport: MockTransport((request, context) async {

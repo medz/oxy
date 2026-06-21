@@ -128,10 +128,6 @@ RequestOptions _mergeRequestOptions(
       ...requestOptions.middleware,
       ...sendOptions.middleware,
     ],
-    networkMiddleware: <Middleware>[
-      ...requestOptions.networkMiddleware,
-      ...sendOptions.networkMiddleware,
-    ],
     hooks: requestOptions.hooks?.merge(sendOptions.hooks) ?? sendOptions.hooks,
     signal: sendOptions.signal,
     onSendProgress: sendOptions.onSendProgress,

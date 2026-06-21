@@ -8,6 +8,9 @@
   parameters.
 - Removed Oxy's `MemoryCookieJar`, `parseSetCookie`, and cookie request-matching
   extension APIs in favor of upstream `ocookie` primitives.
+- Removed deprecated `ClientOptions.networkMiddleware` and
+  `RequestOptions.networkMiddleware`; pass attempt middleware through
+  `middleware` instead.
 
 ### Changed
 
