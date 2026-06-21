@@ -9,7 +9,7 @@ Future<void> main() async {
       middleware: [
         RequestIdMiddleware(requestIdProvider: (_, _) => 'request-1'),
         AuthMiddleware.staticToken('secret'),
-        CookieMiddleware(MemoryCookieJar()),
+        CookieMiddleware(),
         CacheMiddleware(
           keyBuilder: (request, context) {
             return '${request.method} ${request.uri}';

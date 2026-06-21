@@ -1,8 +1,19 @@
 ## Unreleased
 
+### Breaking Changes
+
+- Replaced Oxy's local cookie jar API with `ocookie 0.3.0` primitives.
+  `CookieMiddleware` now creates an in-memory jar by default and accepts
+  upstream `CookieJar`, `CookieStore`, and `CookiePolicy` inputs through named
+  parameters.
+- Removed Oxy's `MemoryCookieJar`, `parseSetCookie`, and cookie request-matching
+  extension APIs in favor of upstream `ocookie` primitives.
+
 ### Changed
 
 - Upgraded to `ht ^0.4.0`.
+- Upgraded to `ocookie ^0.3.0` and delegated cookie normalization, matching,
+  sorting, and storage to upstream `ocookie`.
 - Removed `ht.Body` as an accepted Oxy body source; use stable data
   containers such as `Blob` instead.
 

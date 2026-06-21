@@ -44,12 +44,12 @@ void main() {
   });
 
   test('cookie middleware isolates cookie state in client-owned jar', () async {
-    final jar = MemoryCookieJar();
+    final jar = CookieJar();
     var calls = 0;
     late Request secondRequest;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 2) {
@@ -76,18 +76,18 @@ void main() {
   });
 
   test('cookie middleware preserves duplicate path-scoped cookies', () async {
-    final jar = MemoryCookieJar();
-    await jar.save(Uri.parse('https://example.com/login'), [
+    final jar = CookieJar();
+    await jar.saveCookies(Uri.parse('https://example.com/login'), [
       const Cookie('sid', 'root', path: '/'),
     ]);
-    await jar.save(Uri.parse('https://example.com/app/login'), [
+    await jar.saveCookies(Uri.parse('https://example.com/app/login'), [
       const Cookie('sid', 'app', path: '/app'),
     ]);
 
     late Request captured;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: MockTransport((request, context) async {
           captured = request;
           return Response.text('ok');
@@ -101,11 +101,11 @@ void main() {
   });
 
   test('cookie jar enforces domain and host-only scoping', () async {
-    final jar = MemoryCookieJar();
-    await jar.save(Uri.parse('https://example.com/login'), [
+    final jar = CookieJar();
+    await jar.saveCookies(Uri.parse('https://example.com/login'), [
       const Cookie('sid', 'host', path: '/'),
     ]);
-    await jar.save(Uri.parse('https://api.example.com/login'), [
+    await jar.saveCookies(Uri.parse('https://api.example.com/login'), [
       const Cookie('wide', 'domain', domain: 'example.com', path: '/'),
     ]);
 
@@ -117,50 +117,43 @@ void main() {
     expect(rootCookies.map((cookie) => cookie.name), contains('sid'));
     final rootSid = rootCookies.singleWhere((cookie) => cookie.name == 'sid');
     expect(rootSid.domain, isNull);
-    expect(rootSid.matchesUri(Uri.parse('https://example.com/home')), isFalse);
     expect(
       subdomainCookies.map((cookie) => cookie.name),
       isNot(contains('sid')),
     );
     expect(subdomainCookies.map((cookie) => cookie.name), contains('wide'));
     await expectLater(
-      jar.save(Uri.parse('https://evil.example/login'), [
+      jar.saveCookies(Uri.parse('https://evil.example/login'), [
         const Cookie('attack', '1', domain: 'victim.example', path: '/'),
       ]),
       throwsArgumentError,
     );
     await expectLater(
-      jar.save(Uri.parse('https://api.example.com/login'), [
+      jar.saveCookies(Uri.parse('https://api.example.com/login'), [
         const Cookie('attack', '1', domain: 'com', path: '/'),
       ]),
       throwsArgumentError,
     );
   });
 
-  test('standalone host-only parsed cookies fail closed for URI matching', () {
-    final cookie = parseSetCookie(
+  test('stored host-only cookies retain origin-host matching state', () {
+    final cookie = StoredCookie.fromSetCookie(
       'sid=abc; Path=/; HttpOnly',
-      Uri.parse('https://example.com/login'),
+      requestUri: Uri.parse('https://example.com/login'),
     );
 
-    expect(cookie.domain, isNull);
-    expect(
-      cookie.matchesUri(Uri.parse('https://example.com/profile')),
-      isFalse,
-    );
-    expect(
-      cookie.matchesUri(Uri.parse('https://other.example/profile')),
-      isFalse,
-    );
+    expect(cookie.cookie.domain, isNull);
+    expect(cookie.matches(Uri.parse('https://example.com/profile')), isTrue);
+    expect(cookie.matches(Uri.parse('https://other.example/profile')), isFalse);
   });
 
   test('cookie middleware stores response cookies against final URL', () async {
-    final jar = MemoryCookieJar();
+    final jar = CookieJar();
     var calls = 0;
     late Request finalHostRequest;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
@@ -184,12 +177,12 @@ void main() {
   });
 
   test('cookie middleware stores cookies from followed redirects', () async {
-    final jar = MemoryCookieJar();
+    final jar = CookieJar();
     var calls = 0;
     late Request finalRequest;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
@@ -219,11 +212,11 @@ void main() {
   test(
     'cookie middleware rehydrates cookies for cross-origin redirects',
     () async {
-      final jar = MemoryCookieJar();
-      await jar.save(Uri.parse('https://example.com'), [
+      final jar = CookieJar();
+      await jar.saveCookies(Uri.parse('https://example.com'), [
         const Cookie('sid', 'source', path: '/'),
       ]);
-      await jar.save(Uri.parse('https://other.example'), [
+      await jar.saveCookies(Uri.parse('https://other.example'), [
         const Cookie('sid', 'target', path: '/'),
       ]);
 
@@ -231,7 +224,7 @@ void main() {
       late Request redirected;
       final client = Client(
         ClientOptions(
-          middleware: [CookieMiddleware(jar)],
+          middleware: [CookieMiddleware(jar: jar)],
           transport: MockTransport((request, context) async {
             calls += 1;
             if (calls == 1) {
@@ -256,10 +249,10 @@ void main() {
   );
 
   test('cookie middleware stores cookies from status errors', () async {
-    final jar = MemoryCookieJar();
+    final jar = CookieJar();
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: MockTransport((request, context) async {
           return Response.text(
             'unauthorized',
@@ -280,15 +273,39 @@ void main() {
     expect(cookies.map((cookie) => cookie.name), contains('sid'));
   });
 
+  test('cookie middleware accepts store injection', () async {
+    final store = MemoryCookieStore();
+    final client = Client(
+      ClientOptions(
+        middleware: [CookieMiddleware(store: store)],
+        transport: MockTransport((request, context) async {
+          return Response.text(
+            'ok',
+            headers: {'set-cookie': 'sid=store; Path=/'},
+            url: request.uri,
+          );
+        }),
+      ),
+    );
+
+    await client.get('https://example.com/login');
+
+    final jar = CookieJar(store: store);
+    expect(
+      await jar.header(Uri.parse('https://example.com/account')),
+      'sid=store',
+    );
+  });
+
   test('cookie middleware is a no-op for browser transports', () async {
-    final jar = MemoryCookieJar();
-    await jar.save(Uri.parse('https://example.com'), [
+    final jar = CookieJar();
+    await jar.saveCookies(Uri.parse('https://example.com'), [
       const Cookie('sid', 'abc', path: '/'),
     ]);
     late Request captured;
     final client = Client(
       ClientOptions(
-        middleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar: jar)],
         transport: CapabilityTransport(PlatformCapability.web, (
           request,
           context,

@@ -11,7 +11,20 @@ import 'cookie.dart';
 /// middleware is a no-op on Web transports.
 final class CookieMiddleware
     implements AttemptTransformer, AttemptResponseHandler {
-  const CookieMiddleware(this.jar);
+  /// Creates cookie middleware backed by an `ocookie` jar.
+  ///
+  /// When [jar] is omitted, Oxy creates a [CookieJar] with an in-memory store.
+  /// Pass [store] to plug in persistence while letting Oxy assemble the jar.
+  /// If [jar] is supplied together with [store] or [policy], [jar] wins; debug
+  /// assertions report the redundant configuration during development.
+  CookieMiddleware({CookieJar? jar, CookieStore? store, CookiePolicy? policy})
+    : assert(
+        jar == null || (store == null && policy == null),
+        'When jar is provided, store and policy are ignored.',
+      ),
+      jar =
+          jar ??
+          CookieJar(store: store, policy: policy ?? const CookiePolicy());
 
   /// Cookie storage used by the middleware.
   final CookieJar jar;
@@ -40,8 +53,22 @@ final class CookieMiddleware
   Future<Request> _attachCookies(Request request) async {
     final managed =
         request.attributes.get(cookieHeaderManagedAttribute) == true;
-    final cookies = await jar.load(request.uri);
-    if (cookies.isEmpty) {
+
+    final existing = request.headers.get('cookie');
+    final hasExplicitCookie =
+        !managed && existing != null && existing.isNotEmpty;
+    if (!hasExplicitCookie) {
+      final header = await jar.header(request.uri);
+      if (header != null && header.isNotEmpty) {
+        final hydrated = request.withHeader('cookie', header);
+        return hydrated.copyWith(
+          attributes: hydrated.attributes.set(
+            cookieHeaderManagedAttribute,
+            true,
+          ),
+        );
+      }
+
       if (managed) {
         final headers = request.headers.copy()..delete('cookie');
         return request.copyWith(
@@ -52,27 +79,20 @@ final class CookieMiddleware
       return request;
     }
 
-    final existing = request.headers.get('cookie');
-    final hasExplicitCookie =
-        !managed && existing != null && existing.isNotEmpty;
-    final explicitCookies = hasExplicitCookie
-        ? Cookie.parse(
-            existing,
-          ).entries.map((entry) => Cookie(entry.key, entry.value)).toList()
-        : const <Cookie>[];
+    final explicitCookies = Cookie.parse(
+      existing,
+    ).entries.map((entry) => Cookie(entry.key, entry.value)).toList();
     final explicitNames = {for (final cookie in explicitCookies) cookie.name};
-    final jarCookies =
-        cookies.where((cookie) => !explicitNames.contains(cookie.name)).toList()
-          ..sort(_cookieHeaderOrder);
+    final jarCookies = (await jar.load(
+      request.uri,
+    )).where((cookie) => !explicitNames.contains(cookie.name));
     final headerCookies = <Cookie>[...explicitCookies, ...jarCookies];
 
     if (headerCookies.isEmpty) {
       return request;
     }
 
-    final value = headerCookies
-        .map((cookie) => cookie.toRequestCookie())
-        .join('; ');
+    final value = headerCookies.map(_toRequestCookie).join('; ');
 
     final hydrated = request.withHeader('cookie', value);
     return hydrated.copyWith(
@@ -82,34 +102,25 @@ final class CookieMiddleware
     );
   }
 
-  int _cookieHeaderOrder(Cookie a, Cookie b) {
-    final pathOrder = (b.path?.length ?? 0).compareTo(a.path?.length ?? 0);
-    if (pathOrder != 0) {
-      return pathOrder;
-    }
-    return 0;
-  }
-
   Future<void> _storeResponseCookies(Uri requestUrl, Response response) async {
     final setCookies = response.headers.getSetCookie();
     if (setCookies.isEmpty) {
       return;
     }
 
-    final parsed = <Cookie>[];
     for (final setCookie in setCookies) {
       try {
-        parsed.add(parseSetCookie(setCookie, requestUrl));
+        await jar.save(requestUrl, [setCookie]);
       } on FormatException catch (_) {
       } on ArgumentError catch (_) {}
-    }
-
-    if (parsed.isNotEmpty) {
-      await jar.save(requestUrl, parsed);
     }
   }
 
   Uri _cookieUri(Request request, Response response) {
     return response.url.hasScheme ? response.url : request.uri;
+  }
+
+  String _toRequestCookie(Cookie cookie) {
+    return Cookie(cookie.name, cookie.value).serialize();
   }
 }
