@@ -53,20 +53,9 @@ ResolvedRequest resolveClientRequest(
     clientOptions.baseUrl,
   );
   final headers = Headers(clientOptions.defaultHeaders);
-  for (final name in request.headers.keys()) {
-    headers.delete(name);
-    for (final value in request.headers.getAll(name)) {
-      headers.append(name, value);
-    }
-  }
+  _overrideHeaders(headers, request.headers);
   if (incoming.headers != null) {
-    final override = Headers(incoming.headers);
-    for (final name in override.keys()) {
-      headers.delete(name);
-      for (final value in override.getAll(name)) {
-        headers.append(name, value);
-      }
-    }
+    _overrideHeaders(headers, Headers(incoming.headers));
   }
   if (capability.name != 'web' &&
       clientOptions.userAgent.isNotEmpty &&
@@ -81,7 +70,7 @@ ResolvedRequest resolveClientRequest(
   if (capability.name != 'web' &&
       body?.contentLength != null &&
       !headers.has('content-length')) {
-    headers.set('content-length', body!.contentLength!);
+    headers.set('content-length', body!.contentLength!.toString());
   }
 
   final prepared = request.copyWith(
@@ -107,6 +96,17 @@ Body? resolveRequestBody({
     return Body.fromJson(json);
   }
   return Body.from(body);
+}
+
+void _overrideHeaders(Headers target, Headers source) {
+  final names = <String>{};
+  for (final entry in source.entries()) {
+    final name = entry.key;
+    if (names.add(name)) {
+      target.delete(name);
+    }
+    target.append(name, entry.value);
+  }
 }
 
 RequestOptions _mergeRequestOptions(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math';
 
+import '../core/headers.dart';
 import '../core/request.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
@@ -38,7 +39,9 @@ final class RequestIdMiddleware implements RequestTransformer {
       return request;
     }
 
-    return request.withHeader(headerName, requestId.trim());
+    return request.copyWith(
+      headers: Headers(request.headers)..set(headerName, requestId.trim()),
+    );
   }
 
   static String _defaultRequestId(Request _, Context _) {

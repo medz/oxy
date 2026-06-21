@@ -76,17 +76,11 @@ final class Request {
     return Request._(
       method: method ?? this.method,
       uri: uri ?? this.uri,
-      headers: headers == null ? this.headers.copy() : Headers(headers),
+      headers: Headers(headers ?? this.headers),
       body: clearBody ? null : body ?? this.body,
       options: options ?? this.options,
       attributes: attributes ?? this.attributes,
     );
-  }
-
-  /// Creates a copy with one header set to [value].
-  Request withHeader(String name, Object value) {
-    final nextHeaders = headers.copy()..set(name, value);
-    return copyWith(headers: nextHeaders);
   }
 
   static Uri _parseUri(Object input) {
