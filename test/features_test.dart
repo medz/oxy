@@ -297,6 +297,57 @@ void main() {
     );
   });
 
+  test(
+    'cookie middleware preserves explicit cookies when jar is empty',
+    () async {
+      late Request captured;
+      final client = Client(
+        ClientOptions(
+          middleware: [CookieMiddleware()],
+          transport: MockTransport((request, context) async {
+            captured = request;
+            return Response.text('ok');
+          }),
+        ),
+      );
+
+      await client.get(
+        'https://example.com/account',
+        headers: {'cookie': 'sid=one; sid=two'},
+      );
+
+      expect(captured.headers.get('cookie'), 'sid=one; sid=two');
+    },
+  );
+
+  test(
+    'cookie middleware preserves explicit duplicate cookies when merging',
+    () async {
+      final jar = CookieJar();
+      await jar.saveCookies(Uri.parse('https://example.com'), [
+        const Cookie('sid', 'jar', path: '/'),
+        const Cookie('theme', 'dark', path: '/'),
+      ]);
+      late Request captured;
+      final client = Client(
+        ClientOptions(
+          middleware: [CookieMiddleware(jar: jar)],
+          transport: MockTransport((request, context) async {
+            captured = request;
+            return Response.text('ok');
+          }),
+        ),
+      );
+
+      await client.get(
+        'https://example.com/account',
+        headers: {'cookie': 'sid=one; sid=two'},
+      );
+
+      expect(captured.headers.get('cookie'), 'sid=one; sid=two; theme=dark');
+    },
+  );
+
   test('cookie middleware is a no-op for browser transports', () async {
     final jar = CookieJar();
     await jar.saveCookies(Uri.parse('https://example.com'), [

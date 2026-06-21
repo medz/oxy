@@ -53,14 +53,18 @@ final class CookieMiddleware
   Future<Request> _attachCookies(Request request) async {
     final managed =
         request.attributes.get(cookieHeaderManagedAttribute) == true;
+    final storedCookies = await jar.loadStored(request.uri);
 
     final existing = request.headers.get('cookie');
     final hasExplicitCookie =
         !managed && existing != null && existing.isNotEmpty;
     if (!hasExplicitCookie) {
-      final header = await jar.header(request.uri);
-      if (header != null && header.isNotEmpty) {
-        final hydrated = request.withHeader('cookie', header);
+      if (storedCookies.isNotEmpty) {
+        final value = jar.policy.toRequestHeaderValue(
+          storedCookies,
+          sort: false,
+        );
+        final hydrated = request.withHeader('cookie', value);
         return hydrated.copyWith(
           attributes: hydrated.attributes.set(
             cookieHeaderManagedAttribute,
@@ -83,16 +87,16 @@ final class CookieMiddleware
       existing,
     ).entries.map((entry) => Cookie(entry.key, entry.value)).toList();
     final explicitNames = {for (final cookie in explicitCookies) cookie.name};
-    final jarCookies = (await jar.load(
-      request.uri,
-    )).where((cookie) => !explicitNames.contains(cookie.name));
-    final headerCookies = <Cookie>[...explicitCookies, ...jarCookies];
+    final jarCookies = storedCookies.where((cookie) {
+      return !explicitNames.contains(cookie.cookie.name);
+    });
 
-    if (headerCookies.isEmpty) {
+    if (jarCookies.isEmpty) {
       return request;
     }
 
-    final value = headerCookies.map(_toRequestCookie).join('; ');
+    final jarHeader = jar.policy.toRequestHeaderValue(jarCookies, sort: false);
+    final value = '$existing; $jarHeader';
 
     final hydrated = request.withHeader('cookie', value);
     return hydrated.copyWith(
@@ -118,9 +122,5 @@ final class CookieMiddleware
 
   Uri _cookieUri(Request request, Response response) {
     return response.url.hasScheme ? response.url : request.uri;
-  }
-
-  String _toRequestCookie(Cookie cookie) {
-    return Cookie(cookie.name, cookie.value).serialize();
   }
 }
