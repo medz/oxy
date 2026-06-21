@@ -11,6 +11,7 @@ import 'core/result.dart';
 import 'client/redirects.dart';
 import 'client/request_resolution.dart';
 import 'client/response_policies.dart';
+import 'client/retry.dart';
 import 'options.dart';
 import 'pipeline/context.dart';
 import 'pipeline/events.dart';
@@ -630,7 +631,7 @@ final class Client {
           );
         }
 
-        if (_shouldRetryResponse(attemptRequest, response, attemptContext)) {
+        if (shouldRetryResponse(attemptRequest, response, attemptContext)) {
           lastResponse = response;
           if (attempt >= retryPolicy.maxRetries) {
             throw RetryError(
@@ -650,14 +651,14 @@ final class Client {
             signal: context.signal,
             clearSignal: context.signal == null,
           );
-          await _beforeRetry(
+          await beforeRetry(
             attemptRequest,
             retryContext,
             null,
             response,
             delay,
           );
-          await _waitRetryDelay(delay, retryContext);
+          await waitRetryDelay(delay, retryContext);
           continue;
         }
 
@@ -675,7 +676,7 @@ final class Client {
         );
         lastError = normalized;
 
-        if (_shouldRetryError(attemptRequest, normalized, attemptContext)) {
+        if (shouldRetryError(attemptRequest, normalized, attemptContext)) {
           if (attempt >= retryPolicy.maxRetries) {
             throw RetryError(
               attempts: attempt + 1,
@@ -691,14 +692,14 @@ final class Client {
             signal: context.signal,
             clearSignal: context.signal == null,
           );
-          await _beforeRetry(
+          await beforeRetry(
             attemptRequest,
             retryContext,
             normalized,
             null,
             delay,
           );
-          await _waitRetryDelay(delay, retryContext);
+          await waitRetryDelay(delay, retryContext);
           continue;
         }
 
@@ -859,85 +860,6 @@ final class Client {
     );
     signal?.abort(timeoutError);
     return timeoutError;
-  }
-
-  bool _shouldRetryResponse(
-    Request request,
-    Response response,
-    Context context,
-  ) {
-    final policy = context.retryPolicy;
-    if (policy.maxRetries <= 0 ||
-        !policy.allowsMethod(request) ||
-        request.body?.replayable == false) {
-      return false;
-    }
-    return policy.shouldRetryResponse(response);
-  }
-
-  bool _shouldRetryError(Request request, Object error, Context context) {
-    final policy = context.retryPolicy;
-    if (policy.maxRetries <= 0 ||
-        !policy.allowsMethod(request) ||
-        request.body?.replayable == false) {
-      return false;
-    }
-    if (error is CancelError || error is DecodeError) {
-      return false;
-    }
-    if (error is TimeoutError) {
-      return error.retryable;
-    }
-    if (error is NetworkError) {
-      return error.retryable;
-    }
-    return false;
-  }
-
-  Future<void> _beforeRetry(
-    Request request,
-    Context context,
-    Object? error,
-    Response? response,
-    Duration delay,
-  ) async {
-    emitEvent(
-      context.onEvent,
-      RequestEventType.retryScheduled,
-      request: request,
-      attempt: context.attempt,
-      response: response,
-      error: error,
-      detail: delay.toString(),
-    );
-    await context.clientOptions.hooks
-        .merge(context.requestOptions.hooks)
-        .onRetry
-        ?.call(request, error, response, delay, context);
-  }
-
-  Future<void> _waitRetryDelay(Duration delay, Context context) {
-    final signal = context.signal;
-    if (signal == null) {
-      return Future<void>.delayed(delay);
-    }
-    if (signal.aborted) {
-      throw CancelError(reason: signal.reason);
-    }
-
-    final completer = Completer<void>();
-    final timer = Timer(delay, () {
-      if (!completer.isCompleted) {
-        completer.complete();
-      }
-    });
-    signal.onAbort(() {
-      timer.cancel();
-      if (!completer.isCompleted) {
-        completer.completeError(CancelError(reason: signal.reason));
-      }
-    });
-    return completer.future;
   }
 
   Object _normalizeError(
