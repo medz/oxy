@@ -97,7 +97,7 @@ final client = Client(
     middleware: [
       RequestIdMiddleware(),
       AuthMiddleware.staticToken('secret'),
-      CookieMiddleware(MemoryCookieJar()),
+      CookieMiddleware(),
       CacheMiddleware(),
       LoggingMiddleware(),
     ],
