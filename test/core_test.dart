@@ -66,7 +66,10 @@ void main() {
       expect(body.contentType, startsWith('multipart/form-data; boundary='));
       expect(body.contentLength, greaterThan(0));
 
+      final boundary = body.contentType!.split('boundary=').last;
       final text = utf8.decode(await body.bytes());
+      expect(text, startsWith('--$boundary\r\n'));
+      expect(text, endsWith('--$boundary--\r\n'));
       expect(text, contains('name="name"'));
       expect(text, contains('oxy'));
       expect(text, contains('filename="a.txt"'));

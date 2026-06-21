@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:http_parser/http_parser.dart' show parseHttpDate;
+
 import 'core/request.dart';
 import 'core/response.dart';
 
@@ -156,7 +158,7 @@ final class RetryPolicy {
       return Duration(seconds: max(0, seconds));
     }
 
-    final date = _parseHttpDate(value.trim()) ?? DateTime.tryParse(value);
+    final date = _parseRetryAfterDate(value.trim());
     if (date == null) {
       return null;
     }
@@ -165,45 +167,14 @@ final class RetryPolicy {
     return delta.isNegative ? Duration.zero : delta;
   }
 
-  DateTime? _parseHttpDate(String value) {
-    final match = RegExp(
-      r'^[A-Za-z]{3}, (\d{2}) ([A-Za-z]{3}) (\d{4}) '
-      r'(\d{2}):(\d{2}):(\d{2}) GMT$',
-    ).firstMatch(value);
-    if (match == null) {
-      return null;
+  DateTime? _parseRetryAfterDate(String value) {
+    try {
+      return parseHttpDate(value);
+    } on FormatException {
+      return DateTime.tryParse(value);
     }
-
-    final month = _httpMonths[match.group(2)!.toLowerCase()];
-    if (month == null) {
-      return null;
-    }
-
-    return DateTime.utc(
-      int.parse(match.group(3)!),
-      month,
-      int.parse(match.group(1)!),
-      int.parse(match.group(4)!),
-      int.parse(match.group(5)!),
-      int.parse(match.group(6)!),
-    );
   }
 }
-
-const Map<String, int> _httpMonths = <String, int>{
-  'jan': 1,
-  'feb': 2,
-  'mar': 3,
-  'apr': 4,
-  'may': 5,
-  'jun': 6,
-  'jul': 7,
-  'aug': 8,
-  'sep': 9,
-  'oct': 10,
-  'nov': 11,
-  'dec': 12,
-};
 
 /// Redirect handling behavior.
 enum RedirectMode {
