@@ -144,15 +144,7 @@ final class Client {
       context.requestOptions.middleware,
     );
     final middleware = MiddlewareLifecycle(requestMiddleware);
-    final attemptMiddleware = MiddlewareLifecycle(
-      combineMiddleware(
-        requestMiddleware,
-        combineMiddleware(
-          this.options.networkMiddleware,
-          context.requestOptions.networkMiddleware,
-        ),
-      ),
-    );
+    final attemptMiddleware = middleware;
     var lifecycleRequest = prepared;
 
     Future<void> closeLifecycle({Object? error}) async {

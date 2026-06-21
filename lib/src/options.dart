@@ -53,11 +53,6 @@ final class ClientOptions {
     this.redirectPolicy = RedirectPolicy.follow,
     this.statusPolicy = StatusPolicy.throwOnError,
     this.middleware = const <Middleware>[],
-    @Deprecated(
-      'Use middleware with lifecycle-capable middleware instead. '
-      'networkMiddleware will be removed before 1.0.',
-    )
-    this.networkMiddleware = const <Middleware>[],
     this.hooks = const Hooks(),
     this.transport,
     this.keepAlive = true,
@@ -87,13 +82,6 @@ final class ClientOptions {
 
   /// Middleware scheduled by lifecycle capabilities.
   final List<Middleware> middleware;
-
-  /// Deprecated attempt-only middleware.
-  @Deprecated(
-    'Use middleware with lifecycle-capable middleware instead. '
-    'networkMiddleware will be removed before 1.0.',
-  )
-  final List<Middleware> networkMiddleware;
 
   /// Lifecycle hooks applied to every request.
   final Hooks hooks;
@@ -125,11 +113,6 @@ final class ClientOptions {
     RedirectPolicy? redirectPolicy,
     StatusPolicy? statusPolicy,
     List<Middleware>? middleware,
-    @Deprecated(
-      'Use middleware with lifecycle-capable middleware instead. '
-      'networkMiddleware will be removed before 1.0.',
-    )
-    List<Middleware>? networkMiddleware,
     Hooks? hooks,
     Transport? transport,
     bool? keepAlive,
@@ -146,7 +129,6 @@ final class ClientOptions {
       redirectPolicy: redirectPolicy ?? this.redirectPolicy,
       statusPolicy: statusPolicy ?? this.statusPolicy,
       middleware: middleware ?? this.middleware,
-      networkMiddleware: networkMiddleware ?? this.networkMiddleware,
       hooks: hooks ?? this.hooks,
       transport: transport ?? this.transport,
       keepAlive: keepAlive ?? this.keepAlive,
@@ -171,11 +153,6 @@ final class RequestOptions {
     this.redirectPolicy,
     this.statusPolicy,
     this.middleware = const <Middleware>[],
-    @Deprecated(
-      'Use middleware with lifecycle-capable middleware instead. '
-      'networkMiddleware will be removed before 1.0.',
-    )
-    this.networkMiddleware = const <Middleware>[],
     this.hooks,
     this.signal,
     this.onSendProgress,
@@ -204,13 +181,6 @@ final class RequestOptions {
   /// Lifecycle middleware added to this request.
   final List<Middleware> middleware;
 
-  /// Deprecated attempt-only middleware added to this request.
-  @Deprecated(
-    'Use middleware with lifecycle-capable middleware instead. '
-    'networkMiddleware will be removed before 1.0.',
-  )
-  final List<Middleware> networkMiddleware;
-
   /// Lifecycle hook overrides.
   final Hooks? hooks;
 
@@ -235,11 +205,6 @@ final class RequestOptions {
     RedirectPolicy? redirectPolicy,
     StatusPolicy? statusPolicy,
     List<Middleware>? middleware,
-    @Deprecated(
-      'Use middleware with lifecycle-capable middleware instead. '
-      'networkMiddleware will be removed before 1.0.',
-    )
-    List<Middleware>? networkMiddleware,
     Hooks? hooks,
     AbortSignal? signal,
     ProgressCallback? onSendProgress,
@@ -254,7 +219,6 @@ final class RequestOptions {
       redirectPolicy: redirectPolicy ?? this.redirectPolicy,
       statusPolicy: statusPolicy ?? this.statusPolicy,
       middleware: middleware ?? this.middleware,
-      networkMiddleware: networkMiddleware ?? this.networkMiddleware,
       hooks: hooks ?? this.hooks,
       signal: signal ?? this.signal,
       onSendProgress: onSendProgress ?? this.onSendProgress,
