@@ -16,6 +16,7 @@ import 'pipeline/context.dart';
 import 'pipeline/events.dart';
 import 'pipeline/internal_attributes.dart';
 import 'pipeline/middleware.dart';
+import 'pipeline/runner.dart';
 import 'policies.dart';
 import 'transport/default_transport.dart';
 import 'transport/transport.dart';
@@ -536,13 +537,16 @@ final class Client {
     Request request,
     Context context,
   ) async {
-    final middleware = <Middleware>[
-      ...options.middleware,
-      ...context.requestOptions.middleware,
-    ];
+    final middleware = combineMiddleware(
+      options.middleware,
+      context.requestOptions.middleware,
+    );
 
     var reachedTerminal = false;
-    final next = _buildPipeline(middleware, (nextRequest, nextContext) {
+    final next = buildMiddlewarePipeline(middleware, (
+      nextRequest,
+      nextContext,
+    ) {
       reachedTerminal = true;
       if (_usesClientRedirects(nextContext)) {
         return _runRedirects(nextRequest, nextContext, (
@@ -905,12 +909,15 @@ final class Client {
   }
 
   Future<Response> _runNetworkPipeline(Request request, Context context) {
-    final middleware = <Middleware>[
-      ...options.networkMiddleware,
-      ...context.requestOptions.networkMiddleware,
-    ];
+    final middleware = combineMiddleware(
+      options.networkMiddleware,
+      context.requestOptions.networkMiddleware,
+    );
 
-    final operation = _buildPipeline(middleware, (nextRequest, nextContext) {
+    final operation = buildMiddlewarePipeline(middleware, (
+      nextRequest,
+      nextContext,
+    ) {
       return _transport.send(
         _sanitizeRedirectHeaders(nextRequest),
         nextContext,
@@ -1056,74 +1063,6 @@ final class Client {
     );
     signal?.abort(timeoutError);
     return timeoutError;
-  }
-
-  Next _buildPipeline(List<Middleware> middleware, Next terminal) {
-    Next runner = terminal;
-
-    for (var i = middleware.length - 1; i >= 0; i--) {
-      final current = middleware[i];
-      final next = runner;
-      runner = (request, context) async {
-        final middlewareName = current.runtimeType.toString();
-        Future<Response> guardedNext(Request request, Context context) async {
-          try {
-            return await next(request, context);
-          } catch (error, trace) {
-            if (error is RequestError) {
-              Error.throwWithStackTrace(error, trace);
-            }
-            throw _DownstreamError(error, trace);
-          }
-        }
-
-        void emitMiddlewareEnd({Response? response, Object? error}) {
-          emitEvent(
-            context.onEvent,
-            RequestEventType.middlewareEnd,
-            request: request,
-            attempt: context.attempt,
-            response: response,
-            error: error,
-            detail: middlewareName,
-          );
-        }
-
-        emitEvent(
-          context.onEvent,
-          RequestEventType.middlewareStart,
-          request: request,
-          attempt: context.attempt,
-          detail: middlewareName,
-        );
-        late Response response;
-        try {
-          response = await current.intercept(request, context, guardedNext);
-        } catch (error, trace) {
-          if (error is _DownstreamError) {
-            emitMiddlewareEnd(error: error.error);
-            Error.throwWithStackTrace(error.error, error.trace);
-          }
-          if (error is RequestError) {
-            emitMiddlewareEnd(error: error);
-            rethrow;
-          }
-          final middlewareError = MiddlewareError(
-            middleware: middlewareName,
-            message: 'Middleware execution failed.',
-            request: request,
-            cause: error,
-            trace: trace,
-          );
-          emitMiddlewareEnd(error: middlewareError);
-          throw middlewareError;
-        }
-        emitMiddlewareEnd(response: response);
-        return response;
-      };
-    }
-
-    return runner;
   }
 
   bool _shouldRetryResponse(
@@ -1331,13 +1270,6 @@ final class _ApplicationPipelineResult {
 
   final Response response;
   final bool reachedTerminal;
-}
-
-final class _DownstreamError {
-  const _DownstreamError(this.error, this.trace);
-
-  final Object error;
-  final StackTrace trace;
 }
 
 /// The shared client used by [fetch] and [fetchResult].
