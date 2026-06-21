@@ -6,8 +6,9 @@ import '../options.dart';
 /// An immutable HTTP request prepared for Oxy's pipeline.
 ///
 /// A request stores the method, URI, headers, optional [Body], and
-/// per-request [RequestOptions]. Use [copyWith] or [withHeader] to derive a
-/// modified request in middleware.
+/// per-request [RequestOptions]. Use [copyWith] to derive a modified request in
+/// middleware; copy existing headers with `Headers(request.headers)` before
+/// changing them.
 ///
 /// ```dart
 /// final request = Request(
