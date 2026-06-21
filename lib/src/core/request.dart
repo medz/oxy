@@ -6,8 +6,9 @@ import '../options.dart';
 /// An immutable HTTP request prepared for Oxy's pipeline.
 ///
 /// A request stores the method, URI, headers, optional [Body], and
-/// per-request [RequestOptions]. Use [copyWith] or [withHeader] to derive a
-/// modified request in middleware.
+/// per-request [RequestOptions]. Use [copyWith] to derive a modified request in
+/// middleware; copy existing headers with `Headers(request.headers)` before
+/// changing them.
 ///
 /// ```dart
 /// final request = Request(
@@ -76,17 +77,11 @@ final class Request {
     return Request._(
       method: method ?? this.method,
       uri: uri ?? this.uri,
-      headers: headers == null ? this.headers.copy() : Headers(headers),
+      headers: Headers(headers ?? this.headers),
       body: clearBody ? null : body ?? this.body,
       options: options ?? this.options,
       attributes: attributes ?? this.attributes,
     );
-  }
-
-  /// Creates a copy with one header set to [value].
-  Request withHeader(String name, Object value) {
-    final nextHeaders = headers.copy()..set(name, value);
-    return copyWith(headers: nextHeaders);
   }
 
   static Uri _parseUri(Object input) {

@@ -9,14 +9,31 @@ import 'package:test/test.dart';
 
 void main() {
   group('Headers', () {
-    test('stores names case-insensitively and preserves multi-values', () {
+    test('stores names case-insensitively through ht', () {
       final headers = Headers({'X-Test': 'one'})
         ..append('x-test', 'two')
         ..set('Content-Type', 'text/plain');
 
-      expect(headers.get('X-TEST'), 'one,two');
-      expect(headers.getAll('x-test'), ['one', 'two']);
+      expect(headers.get('X-TEST'), 'one, two');
+      expect(headers.entries().map((entry) => entry.key), contains('x-test'));
       expect(headers.get('content-type'), 'text/plain');
+    });
+
+    test('preserves set-cookie as independent values', () {
+      final headers = Headers()
+        ..append('set-cookie', 'a=1')
+        ..append('set-cookie', 'b=2');
+
+      expect(headers.get('set-cookie'), isNull);
+      expect(headers.getSetCookie(), ['a=1', 'b=2']);
+    });
+
+    test('copies independently from headers', () {
+      final headers = Headers({'x-id': '1'});
+      final copy = Headers(headers)..set('x-id', '2');
+
+      expect(headers.get('x-id'), '1');
+      expect(copy.get('x-id'), '2');
     });
   });
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../core/headers.dart';
 import '../core/request.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
@@ -57,6 +58,8 @@ final class AuthMiddleware implements RequestTransformer {
         ? token.trim()
         : '${scheme!} ${token.trim()}';
 
-    return request.withHeader(headerName, value);
+    return request.copyWith(
+      headers: Headers(request.headers)..set(headerName, value),
+    );
   }
 }

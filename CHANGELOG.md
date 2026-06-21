@@ -2,6 +2,11 @@
 
 ### Breaking Changes
 
+- Reworked `Headers` as a direct `ht.Headers` re-export. Oxy-specific helpers
+  such as `getAll`, `copy`, and `toMultiValueMap` are no longer available; use
+  `entries()`, `Headers(headers)`, and `getSetCookie()` instead.
+- Removed `Request.withHeader`; use `Request.copyWith(headers: ...)` with
+  `Headers(request.headers)` when deriving requests with changed headers.
 - Replaced Oxy's local cookie jar API with `ocookie 0.3.0` primitives.
   `CookieMiddleware` now creates an in-memory jar by default and accepts
   upstream `CookieJar`, `CookieStore`, and `CookiePolicy` inputs through named
@@ -11,7 +16,8 @@
 
 ### Changed
 
-- Upgraded to `ht ^0.4.0`.
+- Upgraded to `ht ^0.4.2` and aligned header normalization and iteration with
+  Fetch semantics.
 - Upgraded to `ocookie ^0.3.0` and delegated cookie normalization, matching,
   sorting, and storage to upstream `ocookie`.
 - Removed `ht.Body` as an accepted Oxy body source; use stable data

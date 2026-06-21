@@ -31,7 +31,9 @@ final class RequestHeaderMiddleware implements RequestTransformer {
   @override
   Request onRequest(Request request, Context context) {
     events.add('$name:${context.attempt}');
-    return request.withHeader(name, value);
+    return request.copyWith(
+      headers: Headers(request.headers)..set(name, value),
+    );
   }
 }
 
@@ -45,7 +47,9 @@ final class AttemptHeaderMiddleware implements AttemptTransformer {
   @override
   Request onAttempt(Request request, Context context) {
     events.add('$name:${context.attempt}');
-    return request.withHeader(name, value);
+    return request.copyWith(
+      headers: Headers(request.headers)..set(name, value),
+    );
   }
 }
 
@@ -157,7 +161,7 @@ void main() {
       headers: {'authorization': 'Bearer request'},
     );
 
-    expect(captured.headers.getAll('authorization'), ['Bearer request']);
+    expect(captured.headers.get('authorization'), 'Bearer request');
   });
 
   test('emits start before prepared lifecycle events', () async {

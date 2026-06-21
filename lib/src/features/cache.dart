@@ -281,7 +281,9 @@ final class CacheMiddleware
       if (_cacheKeyIgnoredHeaders.contains(name)) {
         continue;
       }
-      headerParts.add('$name=${request.headers.getAll(name).join('\u0000')}');
+      headerParts.add(
+        '$name=${_headerValues(request.headers, name).join('\u0000')}',
+      );
     }
     return '${request.method.toUpperCase()} ${request.url}\n'
         '${headerParts.join('\n')}';
@@ -294,12 +296,17 @@ final class CacheMiddleware
 
     final etag = cached.etag;
     if (etag != null) {
-      return request.withHeader('if-none-match', etag);
+      return request.copyWith(
+        headers: Headers(request.headers)..set('if-none-match', etag),
+      );
     }
 
     final lastModified = cached.response.headers.get('last-modified');
     if (lastModified != null && lastModified.trim().isNotEmpty) {
-      return request.withHeader('if-modified-since', lastModified);
+      return request.copyWith(
+        headers: Headers(request.headers)
+          ..set('if-modified-since', lastModified),
+      );
     }
 
     return request;
@@ -392,7 +399,7 @@ final class CacheMiddleware
         continue;
       }
       headers.delete(name);
-      for (final value in notModified.headers.getAll(name)) {
+      for (final value in _headerValues(notModified.headers, name)) {
         headers.append(name, value);
       }
     }
@@ -447,7 +454,7 @@ final class CacheMiddleware
       }
     }
 
-    for (final value in headers.getAll('pragma')) {
+    for (final value in _headerValues(headers, 'pragma')) {
       for (final part in value.split(',')) {
         if (part.trim().toLowerCase() == 'no-cache') {
           noCache = true;
@@ -460,7 +467,9 @@ final class CacheMiddleware
 
   bool _hasVaryStar(Headers headers) {
     return headers
-        .getAll('vary')
+        .entries()
+        .where((entry) => entry.key == 'vary')
+        .map((entry) => entry.value)
         .expand((value) => value.split(','))
         .any((value) => value.trim() == '*');
   }
@@ -571,6 +580,12 @@ bool _hasConditionalHeader(Headers headers) {
       headers.has('if-modified-since') ||
       headers.has('if-none-match') ||
       headers.has('if-unmodified-since');
+}
+
+Iterable<String> _headerValues(Headers headers, String name) {
+  return headers.entries().where((entry) => entry.key == name).map((entry) {
+    return entry.value;
+  });
 }
 
 int _ageSeconds(Headers headers) {

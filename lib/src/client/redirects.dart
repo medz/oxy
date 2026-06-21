@@ -1,4 +1,5 @@
 import '../core/errors.dart';
+import '../core/headers.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
@@ -75,7 +76,7 @@ Request sanitizeRedirectHeaders(Request request) {
     return request;
   }
 
-  final headers = request.headers.copy()
+  final headers = Headers(request.headers)
     ..delete('authorization')
     ..delete('proxy-authorization');
   if (request.attributes.get(cookieHeaderManagedAttribute) != true) {
@@ -99,7 +100,7 @@ Request _redirectRequest(Request request, Response response, String location) {
   final base = response.url.hasScheme ? response.url : request.uri;
   final nextUri = base.resolve(location);
   final sameOrigin = _sameOrigin(request.uri, nextUri);
-  final nextHeaders = request.headers.copy();
+  final nextHeaders = Headers(request.headers);
   var nextAttributes = request.attributes;
   if (!sameOrigin) {
     nextHeaders.delete('authorization');

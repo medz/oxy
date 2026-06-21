@@ -116,7 +116,9 @@ final class TraceMiddleware
     implements RequestTransformer, FinalResponseHandler {
   @override
   Request onRequest(Request request, Context context) {
-    return request.withHeader('x-trace-id', 'trace-1');
+    return request.copyWith(
+      headers: Headers(request.headers)..set('x-trace-id', 'trace-1'),
+    );
   }
 
   @override

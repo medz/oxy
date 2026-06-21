@@ -1,3 +1,4 @@
+import '../core/headers.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
@@ -64,9 +65,9 @@ final class CookieMiddleware
           storedCookies,
           sort: false,
         );
-        final hydrated = request.withHeader('cookie', value);
-        return hydrated.copyWith(
-          attributes: hydrated.attributes.set(
+        return request.copyWith(
+          headers: Headers(request.headers)..set('cookie', value),
+          attributes: request.attributes.set(
             cookieHeaderManagedAttribute,
             true,
           ),
@@ -74,7 +75,7 @@ final class CookieMiddleware
       }
 
       if (managed) {
-        final headers = request.headers.copy()..delete('cookie');
+        final headers = Headers(request.headers)..delete('cookie');
         return request.copyWith(
           headers: headers,
           attributes: request.attributes.remove(cookieHeaderManagedAttribute),
@@ -98,11 +99,11 @@ final class CookieMiddleware
     final jarHeader = jar.policy.toRequestHeaderValue(jarCookies, sort: false);
     final value = '$existing; $jarHeader';
 
-    final hydrated = request.withHeader('cookie', value);
-    return hydrated.copyWith(
+    return request.copyWith(
+      headers: Headers(request.headers)..set('cookie', value),
       attributes: hasExplicitCookie
-          ? hydrated.attributes.remove(cookieHeaderManagedAttribute)
-          : hydrated.attributes.set(cookieHeaderManagedAttribute, true),
+          ? request.attributes.remove(cookieHeaderManagedAttribute)
+          : request.attributes.set(cookieHeaderManagedAttribute, true),
     );
   }
 
