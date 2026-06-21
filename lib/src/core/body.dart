@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:ht/ht.dart' as ht;
@@ -20,9 +19,6 @@ typedef BodyStreamFactory = Stream<List<int>> Function();
 /// replayable stream factories are replayable. Bodies created from a raw
 /// `Stream<List<int>>` are one-shot.
 final class Body {
-  static final Random _boundaryRandom = Random();
-  static int _boundaryCounter = 0;
-
   Body._({
     required this.kind,
     required this.replayable,
@@ -146,7 +142,7 @@ final class Body {
 
   /// Creates a replayable multipart form body.
   static Body fromFormData(ht.FormData formData) {
-    final encoded = formData.encodeMultipart(boundary: _multipartBoundary());
+    final encoded = formData.encodeMultipart();
     return Body._(
       kind: BodyKind.multipart,
       replayable: true,
@@ -186,13 +182,6 @@ final class Body {
       replayable: true,
       open: () => body.clone(),
     );
-  }
-
-  static String _multipartBoundary() {
-    final timestamp = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
-    final counter = (_boundaryCounter++).toRadixString(16);
-    final random = _boundaryRandom.nextInt(0x3fffffff).toRadixString(16);
-    return '----oxy-$timestamp-$counter-$random';
   }
 
   /// Opens the body stream.
