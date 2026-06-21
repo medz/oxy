@@ -413,6 +413,33 @@ void main() {
     expect(delay, greaterThan(const Duration(days: 1)));
   });
 
+  test('retry policy ignores invalid Retry-After dates', () {
+    final response = Response.text(
+      'busy',
+      status: 503,
+      headers: {'retry-after': 'Wed, 99 Nope 2099 07:28:00 GMT'},
+    );
+
+    final delay = const RetryPolicy(
+      baseDelay: Duration(milliseconds: 100),
+      jitterRatio: 0,
+    ).delayFor(0, response: response);
+
+    expect(delay, const Duration(milliseconds: 100));
+  });
+
+  test('retry policy accepts obsolete HTTP-date Retry-After values', () {
+    final response = Response.text(
+      'busy',
+      status: 503,
+      headers: {'retry-after': 'Wednesday, 21-Oct-99 07:28:00 GMT'},
+    );
+
+    final delay = const RetryPolicy().delayFor(0, response: response);
+
+    expect(delay, Duration.zero);
+  });
+
   test('retry policy rejects negative delay configuration', () {
     expect(
       () =>
