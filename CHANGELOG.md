@@ -1,3 +1,11 @@
+## Unreleased
+
+### Changed
+
+- Upgraded to `ht ^0.4.0`.
+- Removed `ht.Body` as an accepted Oxy body source; use stable data
+  containers such as `Blob` instead.
+
 ## 0.4.0
 
 ### Breaking Changes

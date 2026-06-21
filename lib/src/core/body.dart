@@ -134,7 +134,6 @@ final class Body {
       ht.FormData() => Body.fromFormData(value),
       ht.URLSearchParams() => Body.fromUrlSearchParams(value),
       ht.Blob() => Body.fromBlob(value),
-      ht.Body() => Body.fromHtBody(value),
       Stream<List<int>>() => Body.stream(value),
       _ => throw ArgumentError.value(value, 'value', 'Unsupported body input.'),
     };
@@ -172,15 +171,6 @@ final class Body {
       contentLength: blob.size,
       contentType: blob.type.isEmpty ? null : blob.type,
       open: () => blob.stream(),
-    );
-  }
-
-  /// Creates a replayable body from an `ht` body clone factory.
-  static Body fromHtBody(ht.Body body) {
-    return Body._(
-      kind: BodyKind.stream,
-      replayable: true,
-      open: () => body.clone(),
     );
   }
 
