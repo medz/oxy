@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
 import 'package:oxy/src/transport/transport.stub.dart' as stub;
 import 'package:test/test.dart';
@@ -95,6 +96,10 @@ void main() {
       expect(body.contentType, contains('application/x-www-form-urlencoded'));
       expect(await body.text(), 'q=oxy&page=1');
       expect(await body.text(), 'q=oxy&page=1');
+    });
+
+    test('rejects ht Body before generic stream coercion', () {
+      expect(() => Body.from(ht.Body('hello')), throwsArgumentError);
     });
   });
 

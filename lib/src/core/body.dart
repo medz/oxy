@@ -134,6 +134,11 @@ final class Body {
       ht.FormData() => Body.fromFormData(value),
       ht.URLSearchParams() => Body.fromUrlSearchParams(value),
       ht.Blob() => Body.fromBlob(value),
+      ht.Body() => throw ArgumentError.value(
+        value,
+        'value',
+        'Unsupported body input.',
+      ),
       Stream<List<int>>() => Body.stream(value),
       _ => throw ArgumentError.value(value, 'value', 'Unsupported body input.'),
     };
