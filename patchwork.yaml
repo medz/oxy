@@ -1,0 +1,8 @@
+overlays:
+  -
+    package: "http_parser"
+    version: "4.1.2"
+    sha256: "e2ca3a27e7bfb319db162622ce3df7b1df565014b701c8e651ec3c89b02dc180"
+    patch: "patches/http_parser@4.1.2.patch"
+    reason: "Fix RFC850 two-digit HTTP-date years used by Retry-After."
+

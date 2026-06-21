@@ -413,6 +413,23 @@ void main() {
     expect(delay, greaterThan(const Duration(days: 1)));
   });
 
+  test('retry policy honors RFC850 Retry-After dates in this century', () {
+    final retryAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
+    final response = Response.text(
+      'busy',
+      status: 503,
+      headers: {'retry-after': _formatRfc850Date(retryAt)},
+    );
+
+    final delay = const RetryPolicy(
+      baseDelay: Duration(milliseconds: 100),
+      jitterRatio: 0,
+    ).delayFor(0, response: response);
+
+    expect(delay, greaterThan(Duration.zero));
+    expect(delay, lessThanOrEqualTo(const Duration(minutes: 5)));
+  });
+
   test('retry policy ignores invalid Retry-After dates', () {
     final response = Response.text(
       'busy',
@@ -451,4 +468,41 @@ void main() {
       throwsA(isA<AssertionError>()),
     );
   });
+}
+
+const _longWeekdays = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+const _shortMonths = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+String _formatRfc850Date(DateTime date) {
+  date = date.toUtc();
+  final day = date.day.toString().padLeft(2, '0');
+  final year = (date.year % 100).toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  final second = date.second.toString().padLeft(2, '0');
+  return '${_longWeekdays[date.weekday - 1]}, '
+      '$day-${_shortMonths[date.month - 1]}-$year '
+      '$hour:$minute:$second GMT';
 }

@@ -1,0 +1,35 @@
+diff --git a/lib/src/http_date.dart b/lib/src/http_date.dart
+index 0cedd9a6d88b8ac5b3f9289acf406af640679b99..f67b269449303d5cf0786cfe5f696f7a349af1eb 100644
+--- a/lib/src/http_date.dart
++++ b/lib/src/http_date.dart
+@@ -68,7 +68,7 @@ DateTime parseHttpDate(String date) =>
+         scanner.expect('-');
+         final month = _parseMonth(scanner);
+         scanner.expect('-');
+-        final year = 1900 + _parseInt(scanner, 2);
++        final year = _parseRfc850Year(scanner);
+         scanner.expect(' ');
+         final time = _parseTime(scanner);
+         scanner.expect(' GMT');
+@@ -126,6 +126,21 @@ int _parseInt(StringScanner scanner, int digits) {
+   return int.parse(scanner.lastMatch![0]!);
+ }
+ 
++/// Parses an obsolete RFC 850 two-digit year.
++///
++/// Per RFC 9110, timestamps that appear more than 50 years in the future are
++/// interpreted as the most recent past year with the same last two digits.
++int _parseRfc850Year(StringScanner scanner) {
++  final twoDigitYear = _parseInt(scanner, 2);
++  final now = DateTime.now().toUtc();
++  final currentCentury = now.year - (now.year % 100);
++  var year = currentCentury + twoDigitYear;
++  if (year - now.year > 50) {
++    year -= 100;
++  }
++  return year;
++}
++
+ /// Parses an timestamp of the form "HH:MM:SS" on a 24-hour clock.
+ DateTime _parseTime(StringScanner scanner) {
+   final hours = _parseInt(scanner, 2);
