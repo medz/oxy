@@ -1,4 +1,5 @@
 import '../core/errors.dart';
+import '../core/attributes.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
@@ -10,37 +11,47 @@ typedef LogPrinter = void Function(String message);
 /// Logs request start, response completion, and failures.
 ///
 /// User info, query strings, and fragments are redacted before logging.
-final class LoggingMiddleware implements Middleware {
+final class LoggingMiddleware
+    implements RequestTransformer, FinalResponseHandler, FinalErrorHandler {
   LoggingMiddleware({LogPrinter? printer}) : _printer = printer ?? print;
 
   final LogPrinter _printer;
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
+  Request onRequest(Request request, Context context) {
     final stopwatch = Stopwatch()..start();
     _printer('[oxy] -> ${request.method} ${_redact(request.uri)}');
+    return request.copyWith(
+      attributes: request.attributes.set(_loggingStateAttribute, stopwatch),
+    );
+  }
 
-    try {
-      final response = await next(request, context);
-      stopwatch.stop();
-      _printer(
-        '[oxy] <- ${response.status} ${request.method} '
-        '${_redact(request.uri)} (${stopwatch.elapsedMilliseconds}ms)',
-      );
+  @override
+  Response onResponse(Request request, Response response, Context context) {
+    final stopwatch = request.attributes.get(_loggingStateAttribute);
+    if (stopwatch == null) {
       return response;
-    } catch (error) {
-      stopwatch.stop();
-      final label = error is RequestError ? error.runtimeType : 'error';
-      _printer(
-        '[oxy] !! ${request.method} ${_redact(request.uri)} '
-        '(${stopwatch.elapsedMilliseconds}ms) $label',
-      );
-      rethrow;
     }
+    stopwatch.stop();
+    _printer(
+      '[oxy] <- ${response.status} ${request.method} '
+      '${_redact(request.uri)} (${stopwatch.elapsedMilliseconds}ms)',
+    );
+    return response;
+  }
+
+  @override
+  void onError(Request request, Object error, Context context) {
+    final stopwatch = request.attributes.get(_loggingStateAttribute);
+    if (stopwatch == null) {
+      return;
+    }
+    stopwatch.stop();
+    final label = error is RequestError ? error.runtimeType : 'error';
+    _printer(
+      '[oxy] !! ${request.method} ${_redact(request.uri)} '
+      '(${stopwatch.elapsedMilliseconds}ms) $label',
+    );
   }
 
   String _redact(Uri uri) {
@@ -57,3 +68,5 @@ final class LoggingMiddleware implements Middleware {
     return sanitized.toString();
   }
 }
+
+const _loggingStateAttribute = AttributeKey<Stopwatch>('oxy.logging.state');

@@ -66,9 +66,9 @@ final class Client {
   /// Creates a new client with [next] as its options.
   Client withOptions(ClientOptions next) => Client(next);
 
-  /// Creates a new client with additional application [middleware].
+  /// Creates a new client with additional lifecycle [middleware].
   ///
-  /// When [replace] is `true`, [middleware] replaces the existing application
+  /// When [replace] is `true`, [middleware] replaces the existing lifecycle
   /// middleware list instead of being appended to it.
   Client withMiddleware(List<Middleware> middleware, {bool replace = false}) {
     return Client(
@@ -139,6 +139,21 @@ final class Client {
     }
     final hooks = this.options.hooks.merge(context.requestOptions.hooks);
     var lifecycleClosed = false;
+    final requestMiddleware = combineMiddleware(
+      this.options.middleware,
+      context.requestOptions.middleware,
+    );
+    final middleware = MiddlewareLifecycle(requestMiddleware);
+    final attemptMiddleware = MiddlewareLifecycle(
+      combineMiddleware(
+        requestMiddleware,
+        combineMiddleware(
+          this.options.networkMiddleware,
+          context.requestOptions.networkMiddleware,
+        ),
+      ),
+    );
+    var lifecycleRequest = prepared;
 
     Future<void> closeLifecycle({Object? error}) async {
       if (lifecycleClosed) {
@@ -146,12 +161,15 @@ final class Client {
       }
       lifecycleClosed = true;
       if (error == null) {
+        await middleware.onFinally(lifecycleRequest, context);
         await hooks.onFinally?.call(prepared, context);
         return;
       }
       try {
+        await middleware.onError(lifecycleRequest, error, context);
         await hooks.onError?.call(prepared, error, context);
       } finally {
+        await middleware.onFinally(lifecycleRequest, context);
         await hooks.onFinally?.call(prepared, context);
       }
     }
@@ -183,26 +201,46 @@ final class Client {
       try {
         await hooks.onRequest?.call(prepared, context);
         throwIfLifecycleClosed();
-        final pipelineResult = await _runApplicationPipeline(prepared, context);
-        var response = pipelineResult.response;
+        lifecycleRequest = await middleware.onRequest(
+          lifecycleRequest,
+          context,
+        );
         throwIfLifecycleClosed();
-        if (!pipelineResult.reachedTerminal) {
+        var response = await middleware.resolve(lifecycleRequest, context);
+        if (response == null) {
+          response = await _runApplicationPipeline(
+            lifecycleRequest,
+            context,
+            attemptMiddleware,
+          );
+        } else {
           response = await _completeShortCircuitedResponse(
-            prepared,
+            lifecycleRequest,
             response,
             context,
+            attemptMiddleware,
           );
         }
         throwIfLifecycleClosed();
         final policyResponse = await applyResponsePolicies(
-          prepared,
+          lifecycleRequest,
           response,
           context,
         );
         throwIfLifecycleClosed();
+        final middlewareResponse = await middleware.onResponse(
+          lifecycleRequest,
+          policyResponse,
+          context,
+        );
+        throwIfLifecycleClosed();
         final nextResponse =
-            await hooks.onResponse?.call(prepared, policyResponse, context) ??
-            policyResponse;
+            await hooks.onResponse?.call(
+              prepared,
+              middlewareResponse,
+              context,
+            ) ??
+            middlewareResponse;
         throwIfLifecycleClosed();
         emitEvent(
           context.onEvent,
@@ -504,53 +542,47 @@ final class Client {
     return response.decode<T>(decoder: decoder);
   }
 
-  Future<_ApplicationPipelineResult> _runApplicationPipeline(
+  Future<Response> _runApplicationPipeline(
     Request request,
     Context context,
-  ) async {
-    final middleware = combineMiddleware(
-      options.middleware,
-      context.requestOptions.middleware,
-    );
-
-    var reachedTerminal = false;
-    final next = buildMiddlewarePipeline(middleware, (
-      nextRequest,
-      nextContext,
-    ) {
-      reachedTerminal = true;
-      if (usesClientRedirects(nextContext)) {
-        return runRedirects(nextRequest, nextContext, (
+    MiddlewareLifecycle attemptMiddleware,
+  ) {
+    if (usesClientRedirects(context)) {
+      return runRedirects(request, context, (redirectRequest, redirectContext) {
+        return _runOperation(
           redirectRequest,
           redirectContext,
-        ) {
-          return _runOperation(redirectRequest, redirectContext);
-        });
-      }
-      return _runOperation(nextRequest, nextContext);
-    });
-    final response = await next(request, context);
-    return _ApplicationPipelineResult(
-      response: response,
-      reachedTerminal: reachedTerminal,
-    );
+          attemptMiddleware,
+        );
+      });
+    }
+    return _runOperation(request, context, attemptMiddleware);
   }
 
   Future<Response> _completeShortCircuitedResponse(
     Request request,
     Response response,
     Context context,
+    MiddlewareLifecycle attemptMiddleware,
   ) {
     if (context.redirectPolicy.mode == RedirectMode.follow &&
         isRedirectStatus(response.status)) {
       return runRedirects(request, context, (redirectRequest, redirectContext) {
-        return _runOperation(redirectRequest, redirectContext);
+        return _runOperation(
+          redirectRequest,
+          redirectContext,
+          attemptMiddleware,
+        );
       }, firstResponse: response);
     }
     return Future.value(withResponseTimeouts(response, request, context));
   }
 
-  Future<Response> _runOperation(Request request, Context context) async {
+  Future<Response> _runOperation(
+    Request request,
+    Context context,
+    MiddlewareLifecycle attemptLifecycle,
+  ) async {
     final retryPolicy = context.retryPolicy;
     Object? lastError;
     Response? lastResponse;
@@ -561,7 +593,7 @@ final class Client {
         attempt: attempt,
         signal: attemptSignal,
       );
-      final attemptRequest = sanitizeRedirectHeaders(request);
+      var attemptRequest = sanitizeRedirectHeaders(request);
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -586,12 +618,21 @@ final class Client {
           attempt: attempt,
         );
 
-        var response = await _runNetworkPipeline(
+        attemptRequest = await attemptLifecycle.onAttempt(
           attemptRequest,
+          attemptContext,
+        );
+        var response = await _transport.send(
+          sanitizeRedirectHeaders(attemptRequest),
           attemptContext,
         );
         response = withReadTimeout(response, attemptRequest, attemptContext);
         response = withTotalTimeout(response, attemptRequest, attemptContext);
+        response = await attemptLifecycle.onAttemptResponse(
+          attemptRequest,
+          response,
+          attemptContext,
+        );
 
         emitEvent(
           attemptContext.onEvent,
@@ -686,36 +727,11 @@ final class Client {
     }
   }
 
-  Future<Response> _runNetworkPipeline(Request request, Context context) {
-    final middleware = combineMiddleware(
-      options.networkMiddleware,
-      context.requestOptions.networkMiddleware,
-    );
-
-    final operation = buildMiddlewarePipeline(middleware, (
-      nextRequest,
-      nextContext,
-    ) {
-      return _transport.send(sanitizeRedirectHeaders(nextRequest), nextContext);
-    })(request, context);
-    return operation;
-  }
-
   void _throwIfAborted(AbortSignal? signal, Request request) {
     if (signal?.aborted == true) {
       throw CancelError(reason: signal?.reason, request: request);
     }
   }
-}
-
-final class _ApplicationPipelineResult {
-  const _ApplicationPipelineResult({
-    required this.response,
-    required this.reachedTerminal,
-  });
-
-  final Response response;
-  final bool reachedTerminal;
 }
 
 /// The shared client used by [fetch] and [fetchResult].

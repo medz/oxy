@@ -61,8 +61,8 @@ Choose Oxy when you want:
   timeout, network, decode, body, retry, cancel, and middleware failures.
 - Safe retry behavior: replayable request bodies can be retried, one-shot
   streams are never retried implicitly.
-- Middleware with clear scope: application middleware runs once per logical
-  request; network middleware runs for every transport attempt.
+- Middleware with lifecycle capabilities for request transforms, cache
+  resolution, per-attempt handling, and final response processing.
 - `MockTransport` tests that exercise the real Oxy pipeline without opening a
   socket or running a server.
 
@@ -183,8 +183,8 @@ final response = await client.get(
 );
 ```
 
-Application middleware runs once for the logical request. Network middleware
-runs once for every network attempt, including retries and redirects:
+Middleware is configured as one list. Each middleware declares the lifecycle
+capabilities it needs, and Oxy schedules those capabilities at the right phase:
 
 ```dart
 final client = Client(
@@ -192,10 +192,10 @@ final client = Client(
     middleware: [
       RequestIdMiddleware(),
       AuthMiddleware.staticToken('secret'),
+      CookieMiddleware(MemoryCookieJar()),
       CacheMiddleware(),
       LoggingMiddleware(),
     ],
-    networkMiddleware: [CookieMiddleware(MemoryCookieJar())],
   ),
 );
 ```

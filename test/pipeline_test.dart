@@ -21,47 +21,53 @@ final class CapabilityTransport implements Transport {
   }
 }
 
-final class HeaderMiddleware implements Middleware {
-  HeaderMiddleware(this.name, this.value, this.events);
+final class RequestHeaderMiddleware implements RequestTransformer {
+  RequestHeaderMiddleware(this.name, this.value, this.events);
 
   final String name;
   final String value;
   final List<String> events;
 
   @override
-  Future<Response> intercept(Request request, Context context, Next next) {
+  Request onRequest(Request request, Context context) {
     events.add('$name:${context.attempt}');
-    return next(request.withHeader(name, value), context);
+    return request.withHeader(name, value);
   }
 }
 
-final class PassThroughMiddleware implements Middleware {
+final class AttemptHeaderMiddleware implements AttemptTransformer {
+  AttemptHeaderMiddleware(this.name, this.value, this.events);
+
+  final String name;
+  final String value;
+  final List<String> events;
+
+  @override
+  Request onAttempt(Request request, Context context) {
+    events.add('$name:${context.attempt}');
+    return request.withHeader(name, value);
+  }
+}
+
+final class PassThroughMiddleware implements RequestTransformer {
   const PassThroughMiddleware();
 
   @override
-  Future<Response> intercept(Request request, Context context, Next next) {
-    return next(request, context);
-  }
+  Request onRequest(Request request, Context context) => request;
 }
 
-final class ShortCircuitMiddleware implements Middleware {
+final class ShortCircuitMiddleware implements RequestResolver {
   const ShortCircuitMiddleware(this.response);
 
   final Response response;
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
-    return response;
-  }
+  Response resolve(Request request, Context context) => response;
 }
 
 void main() {
   test(
-    'runs application middleware once and network middleware per attempt',
+    'schedules request middleware once and attempt middleware per attempt',
     () async {
       var calls = 0;
       final events = <String>[];
@@ -81,8 +87,10 @@ void main() {
         ClientOptions(
           baseUrl: Uri.parse('https://example.com'),
           transport: transport,
-          middleware: [HeaderMiddleware('x-app', '1', events)],
-          networkMiddleware: [HeaderMiddleware('x-net', '1', events)],
+          middleware: [
+            RequestHeaderMiddleware('x-app', '1', events),
+            AttemptHeaderMiddleware('x-net', '1', events),
+          ],
         ),
       );
 
@@ -189,7 +197,9 @@ void main() {
       ClientOptions(
         onEvent: events.add,
         middleware: const [PassThroughMiddleware()],
-        networkMiddleware: [HeaderMiddleware('x-net', '1', headerEvents)],
+        networkMiddleware: [
+          AttemptHeaderMiddleware('x-net', '1', headerEvents),
+        ],
         transport: MockTransport((request, context) async {
           return Response.text('ok');
         }),
@@ -207,10 +217,10 @@ void main() {
         .map((event) => '${event.type.name}:${event.detail}:${event.attempt}')
         .toList();
     expect(middlewareEvents, [
-      'middlewareStart:PassThroughMiddleware:0',
-      'middlewareStart:HeaderMiddleware:0',
-      'middlewareEnd:HeaderMiddleware:0',
-      'middlewareEnd:PassThroughMiddleware:0',
+      'middlewareStart:PassThroughMiddleware.onRequest:0',
+      'middlewareEnd:PassThroughMiddleware.onRequest:0',
+      'middlewareStart:AttemptHeaderMiddleware.onAttempt:0',
+      'middlewareEnd:AttemptHeaderMiddleware.onAttempt:0',
     ]);
   });
 
@@ -402,13 +412,13 @@ void main() {
     expect(calls, 2);
   });
 
-  test('client redirect loop does not rerun application middleware', () async {
+  test('client redirect loop does not rerun request middleware', () async {
     var calls = 0;
     final events = <String>[];
     final client = Client(
       ClientOptions(
         baseUrl: Uri.parse('https://example.com'),
-        middleware: [HeaderMiddleware('x-app', '1', events)],
+        middleware: [RequestHeaderMiddleware('x-app', '1', events)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
@@ -587,16 +597,16 @@ void main() {
   );
 
   test(
-    'cross-origin redirects strip auth without rerunning app middleware',
+    'cross-origin redirects strip auth without rerunning request middleware',
     () async {
       var calls = 0;
       late Request redirected;
       final events = <String>[];
       final client = Client(
         ClientOptions(
-          middleware: [AuthMiddleware.staticToken('secret')],
-          networkMiddleware: [
-            HeaderMiddleware('authorization', 'Bearer network', events),
+          middleware: [
+            AuthMiddleware.staticToken('secret'),
+            AttemptHeaderMiddleware('authorization', 'Bearer network', events),
           ],
           transport: MockTransport((request, context) async {
             calls += 1;

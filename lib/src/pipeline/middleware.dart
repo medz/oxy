@@ -4,16 +4,62 @@ import '../core/request.dart';
 import '../core/response.dart';
 import 'context.dart';
 
-/// Continues request processing from middleware.
-typedef Next = Future<Response> Function(Request request, Context context);
-
-/// Intercepts a request before or around the next pipeline step.
+/// Marker interface for middleware lifecycle capabilities.
 ///
-/// Application middleware runs once per logical request. Network middleware
-/// runs once per network attempt, including retries and redirects.
-abstract interface class Middleware {
-  /// Handles [request] and either returns a [Response] or calls [next].
-  Future<Response> intercept(Request request, Context context, Next next);
+/// Implement one or more capability interfaces to participate in the request
+/// lifecycle. Oxy schedules each capability at the phase where it belongs.
+abstract interface class Middleware {}
+
+/// Mutates or observes the logical request before cache resolution or network
+/// attempts begin.
+abstract interface class RequestTransformer implements Middleware {
+  /// Returns the request that should continue through the pipeline.
+  FutureOr<Request> onRequest(Request request, Context context);
+}
+
+/// Resolves a logical request without reaching the transport.
+abstract interface class RequestResolver implements Middleware {
+  /// Returns a response to short-circuit the request, or `null` to continue.
+  FutureOr<Response?> resolve(Request request, Context context);
+}
+
+/// Mutates or observes a single transport attempt.
+abstract interface class AttemptTransformer implements Middleware {
+  /// Returns the request that should be sent for this attempt.
+  FutureOr<Request> onAttempt(Request request, Context context);
+}
+
+/// Handles the raw response from a single transport attempt before retry,
+/// redirect, and final status policies run.
+abstract interface class AttemptResponseHandler implements Middleware {
+  /// Returns the response that should continue attempt processing.
+  FutureOr<Response> onAttemptResponse(
+    Request request,
+    Response response,
+    Context context,
+  );
+}
+
+/// Handles the final successful response for a logical request.
+abstract interface class FinalResponseHandler implements Middleware {
+  /// Returns the response that should be delivered to hooks and callers.
+  FutureOr<Response> onResponse(
+    Request request,
+    Response response,
+    Context context,
+  );
+}
+
+/// Observes a final failure for a logical request.
+abstract interface class FinalErrorHandler implements Middleware {
+  /// Called before client error hooks when request processing fails.
+  FutureOr<void> onError(Request request, Object error, Context context);
+}
+
+/// Observes the end of a logical request.
+abstract interface class FinalFinallyHandler implements Middleware {
+  /// Called once request processing has finished.
+  FutureOr<void> onFinally(Request request, Context context);
 }
 
 /// Hook called with a request and context.
@@ -52,7 +98,7 @@ final class Hooks {
     this.onFinally,
   });
 
-  /// Called before application middleware.
+  /// Called before lifecycle middleware.
   final HookCallback? onRequest;
 
   /// Called after response policies and before the final response is returned.

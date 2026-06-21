@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math';
 
 import '../core/request.dart';
-import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 
@@ -11,7 +10,7 @@ typedef RequestIdProvider =
     FutureOr<String?> Function(Request request, Context context);
 
 /// Adds a request ID header when one is available.
-final class RequestIdMiddleware implements Middleware {
+final class RequestIdMiddleware implements RequestTransformer {
   RequestIdMiddleware({
     RequestIdProvider? requestIdProvider,
     this.headerName = 'x-request-id',
@@ -29,21 +28,17 @@ final class RequestIdMiddleware implements Middleware {
   static final Random _random = Random();
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
+  Future<Request> onRequest(Request request, Context context) async {
     if (!overrideExisting && request.headers.has(headerName)) {
-      return next(request, context);
+      return request;
     }
 
     final requestId = await _requestIdProvider(request, context);
     if (requestId == null || requestId.trim().isEmpty) {
-      return next(request, context);
+      return request;
     }
 
-    return next(request.withHeader(headerName, requestId.trim()), context);
+    return request.withHeader(headerName, requestId.trim());
   }
 
   static String _defaultRequestId(Request _, Context _) {
