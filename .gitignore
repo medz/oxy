@@ -1,4 +1,6 @@
 .DS_Store
+.patchwork/
 .dart_tool/
+pubspec_overrides.yaml
 
 pubspec.lock
