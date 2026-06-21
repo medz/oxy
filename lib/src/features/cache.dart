@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import '../core/attributes.dart';
 import '../core/body.dart';
 import '../core/errors.dart';
 import '../core/headers.dart';
@@ -8,10 +9,13 @@ import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
-import '../policies.dart';
 
 /// Builds a cache key for a request.
 typedef CacheKeyBuilder = String Function(Request request, Context context);
+
+const AttributeKey<_CacheState> _cacheStateAttribute = AttributeKey(
+  'oxy.cache.state',
+);
 
 /// A response stored by [CacheStore].
 final class CachedResponse {
@@ -120,7 +124,12 @@ final class MemoryCacheStore implements CacheStore {
 ///
 /// The middleware stores bounded, replayable responses and revalidates cached
 /// entries with ETag or Last-Modified validators when needed.
-final class CacheMiddleware implements Middleware {
+final class CacheMiddleware
+    implements
+        RequestTransformer,
+        RequestResolver,
+        AttemptResponseHandler,
+        FinalResponseHandler {
   CacheMiddleware({
     CacheStore? store,
     this.keyBuilder = _defaultCacheKeyBuilder,
@@ -139,89 +148,122 @@ final class CacheMiddleware implements Middleware {
   final Set<String> _methods;
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
+  Future<Request> onRequest(Request request, Context context) async {
     if (!_methods.contains(request.method.toUpperCase())) {
-      return next(request, context);
+      return request;
     }
 
     final requestControl = _parseCacheControl(request.headers);
     if (requestControl.noStore) {
-      return next(request, context);
+      return request;
     }
 
     final key = keyBuilder(request, context);
     final cached = await _store.read(key);
     final now = DateTime.now().toUtc();
-    if (cached != null &&
-        cached.isFresh(now) &&
-        cached._satisfiesRequest(requestControl, now) &&
-        !requestControl.requiresRevalidation &&
-        !_hasConditionalHeader(request.headers)) {
-      return _validateCachedResponse(
-        request,
-        context,
-        _cloneCached(cached.response),
-      );
+    final revalidationRequest = _revalidationRequest(request, cached);
+    return revalidationRequest.copyWith(
+      attributes: revalidationRequest.attributes.set(
+        _cacheStateAttribute,
+        _CacheState(
+          key: key,
+          cached: cached,
+          canUseFresh:
+              cached != null &&
+              cached.isFresh(now) &&
+              cached._satisfiesRequest(requestControl, now) &&
+              !requestControl.requiresRevalidation &&
+              !_hasConditionalHeader(request.headers),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Response? resolve(Request request, Context context) {
+    final state = request.attributes.get(_cacheStateAttribute);
+    final cached = state?.cached;
+    if (state == null || cached == null || !state.canUseFresh) {
+      return null;
+    }
+    return _cloneCached(cached.response);
+  }
+
+  @override
+  Future<Response> onAttemptResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    final state = request.attributes.get(_cacheStateAttribute);
+    final cached = state?.cached;
+    if (state == null || cached == null || response.status != 304) {
+      return response;
     }
 
-    final revalidationRequest = _revalidationRequest(request, cached);
-    final response = await next(
-      revalidationRequest,
-      cached == null ? context : _allowNotModified(context),
-    );
-    final receivedAt = DateTime.now().toUtc();
-    if (response.status == 304 && cached != null) {
-      if (!_notModifiedMatchesCached(request, cached, response)) {
-        return response;
-      }
-      final merged = _mergeNotModified(cached.response, response);
-      final mergedControl = _parseCacheControl(merged.headers);
-      if (mergedControl.noStore ||
-          _hasVaryStar(merged.headers) ||
-          !_cacheableStatus(merged.status)) {
-        await _store.delete(key);
-        return _validateCachedResponse(request, context, _cloneCached(merged));
-      }
-      await _store.write(
-        key,
-        CachedResponse(
-          response: merged,
-          storedAt: receivedAt,
-          expiresAt: _expiresAt(merged, receivedAt),
-          etag: merged.headers.get('etag') ?? cached.etag,
-        ),
-      );
-      return _validateCachedResponse(request, context, _cloneCached(merged));
+    if (!_notModifiedMatchesCached(request, cached, response)) {
+      return response;
     }
+
+    final receivedAt = DateTime.now().toUtc();
+    final merged = _mergeNotModified(cached.response, response);
+    final mergedControl = _parseCacheControl(merged.headers);
+    if (mergedControl.noStore ||
+        _hasVaryStar(merged.headers) ||
+        !_cacheableStatus(merged.status)) {
+      await _store.delete(state.key);
+      return _cloneCached(merged);
+    }
+
+    await _store.write(
+      state.key,
+      CachedResponse(
+        response: merged,
+        storedAt: receivedAt,
+        expiresAt: _expiresAt(merged, receivedAt),
+        etag: merged.headers.get('etag') ?? cached.etag,
+      ),
+    );
+    return _cloneCached(merged);
+  }
+
+  @override
+  Future<Response> onResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    final state = request.attributes.get(_cacheStateAttribute);
+    if (state == null || response.fromCache || response.status == 304) {
+      return response;
+    }
+
+    final receivedAt = DateTime.now().toUtc();
 
     final cacheControl = _parseCacheControl(response.headers);
     if (cacheControl.noStore ||
         _hasVaryStar(response.headers) ||
         !_cacheableStatus(response.status)) {
-      await _store.delete(key);
+      await _store.delete(state.key);
       return response;
     }
 
     final expiresAt = _expiresAt(response, receivedAt);
     final etag = response.headers.get('etag');
     if (expiresAt == null && etag == null) {
-      await _store.delete(key);
+      await _store.delete(state.key);
       return response;
     }
 
     final bufferResult = await _tryBuffer(request, response);
     final cacheResponse = bufferResult.cacheResponse;
     if (cacheResponse == null) {
-      await _store.delete(key);
+      await _store.delete(state.key);
       return bufferResult.response;
     }
 
     await _store.write(
-      key,
+      state.key,
       CachedResponse(
         response: cacheResponse,
         storedAt: receivedAt,
@@ -243,17 +285,6 @@ final class CacheMiddleware implements Middleware {
     }
     return '${request.method.toUpperCase()} ${request.url}\n'
         '${headerParts.join('\n')}';
-  }
-
-  Context _allowNotModified(Context context) {
-    return context.copyWith(
-      statusPolicy: StatusPolicy(
-        accept: (response) {
-          return response.status == 304 ||
-              context.statusPolicy.accepts(response);
-        },
-      ),
-    );
   }
 
   Request _revalidationRequest(Request request, CachedResponse? cached) {
@@ -354,25 +385,6 @@ final class CacheMiddleware implements Middleware {
     );
   }
 
-  Response _validateCachedResponse(
-    Request request,
-    Context context,
-    Response response,
-  ) {
-    if (context.redirectPolicy.mode == RedirectMode.error &&
-        _isRedirectStatus(response.status)) {
-      throw StatusError(
-        response,
-        request: request,
-        message: 'Redirect blocked by RedirectPolicy.error.',
-      );
-    }
-    if (!context.statusPolicy.accepts(response)) {
-      throw StatusError(response, request: request);
-    }
-    return response;
-  }
-
   Response _mergeNotModified(Response cached, Response notModified) {
     final headers = Headers(cached.headers);
     for (final name in notModified.headers.keys()) {
@@ -412,13 +424,6 @@ final class CacheMiddleware implements Middleware {
 
   bool _cacheableStatus(int status) {
     return const <int>{200, 203, 204, 206, 300, 301, 308}.contains(status);
-  }
-
-  bool _isRedirectStatus(int status) {
-    return switch (status) {
-      301 || 302 || 303 || 307 || 308 => true,
-      _ => false,
-    };
   }
 
   _CacheControl _parseCacheControl(Headers headers) {
@@ -537,6 +542,18 @@ final class _CacheBufferResult {
 
   final Response response;
   final Response? cacheResponse;
+}
+
+final class _CacheState {
+  const _CacheState({
+    required this.key,
+    required this.cached,
+    required this.canUseFresh,
+  });
+
+  final String key;
+  final CachedResponse? cached;
+  final bool canUseFresh;
 }
 
 const Set<String> _cacheKeyIgnoredHeaders = <String>{

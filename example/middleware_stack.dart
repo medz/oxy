@@ -9,6 +9,7 @@ Future<void> main() async {
       middleware: [
         RequestIdMiddleware(requestIdProvider: (_, _) => 'request-1'),
         AuthMiddleware.staticToken('secret'),
+        CookieMiddleware(MemoryCookieJar()),
         CacheMiddleware(
           keyBuilder: (request, context) {
             return '${request.method} ${request.uri}';
@@ -16,7 +17,6 @@ Future<void> main() async {
         ),
         LoggingMiddleware(printer: logs.add),
       ],
-      networkMiddleware: [CookieMiddleware(MemoryCookieJar())],
       transport: MockTransport((request, context) async {
         return Response.json(
           {'ok': true},

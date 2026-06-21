@@ -53,6 +53,10 @@ final class ClientOptions {
     this.redirectPolicy = RedirectPolicy.follow,
     this.statusPolicy = StatusPolicy.throwOnError,
     this.middleware = const <Middleware>[],
+    @Deprecated(
+      'Use middleware with lifecycle-capable middleware instead. '
+      'networkMiddleware will be removed before 1.0.',
+    )
     this.networkMiddleware = const <Middleware>[],
     this.hooks = const Hooks(),
     this.transport,
@@ -81,10 +85,14 @@ final class ClientOptions {
   /// Status validation policy applied to every response by default.
   final StatusPolicy statusPolicy;
 
-  /// Middleware that runs once for each logical request.
+  /// Middleware scheduled by lifecycle capabilities.
   final List<Middleware> middleware;
 
-  /// Middleware that runs for each network attempt.
+  /// Deprecated attempt-only middleware.
+  @Deprecated(
+    'Use middleware with lifecycle-capable middleware instead. '
+    'networkMiddleware will be removed before 1.0.',
+  )
   final List<Middleware> networkMiddleware;
 
   /// Lifecycle hooks applied to every request.
@@ -117,6 +125,10 @@ final class ClientOptions {
     RedirectPolicy? redirectPolicy,
     StatusPolicy? statusPolicy,
     List<Middleware>? middleware,
+    @Deprecated(
+      'Use middleware with lifecycle-capable middleware instead. '
+      'networkMiddleware will be removed before 1.0.',
+    )
     List<Middleware>? networkMiddleware,
     Hooks? hooks,
     Transport? transport,
@@ -159,6 +171,10 @@ final class RequestOptions {
     this.redirectPolicy,
     this.statusPolicy,
     this.middleware = const <Middleware>[],
+    @Deprecated(
+      'Use middleware with lifecycle-capable middleware instead. '
+      'networkMiddleware will be removed before 1.0.',
+    )
     this.networkMiddleware = const <Middleware>[],
     this.hooks,
     this.signal,
@@ -185,10 +201,14 @@ final class RequestOptions {
   /// Status validation policy override.
   final StatusPolicy? statusPolicy;
 
-  /// Application middleware added to this request.
+  /// Lifecycle middleware added to this request.
   final List<Middleware> middleware;
 
-  /// Network middleware added to this request.
+  /// Deprecated attempt-only middleware added to this request.
+  @Deprecated(
+    'Use middleware with lifecycle-capable middleware instead. '
+    'networkMiddleware will be removed before 1.0.',
+  )
   final List<Middleware> networkMiddleware;
 
   /// Lifecycle hook overrides.
@@ -215,6 +235,10 @@ final class RequestOptions {
     RedirectPolicy? redirectPolicy,
     StatusPolicy? statusPolicy,
     List<Middleware>? middleware,
+    @Deprecated(
+      'Use middleware with lifecycle-capable middleware instead. '
+      'networkMiddleware will be removed before 1.0.',
+    )
     List<Middleware>? networkMiddleware,
     Hooks? hooks,
     AbortSignal? signal,

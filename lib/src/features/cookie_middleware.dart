@@ -1,4 +1,3 @@
-import '../core/errors.dart';
 import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
@@ -10,34 +9,32 @@ import 'cookie.dart';
 ///
 /// Browser requests already use the browser's cookie handling, so this
 /// middleware is a no-op on Web transports.
-final class CookieMiddleware implements Middleware {
+final class CookieMiddleware
+    implements AttemptTransformer, AttemptResponseHandler {
   const CookieMiddleware(this.jar);
 
   /// Cookie storage used by the middleware.
   final CookieJar jar;
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
+  Future<Request> onAttempt(Request request, Context context) {
     if (context.capability.name == 'web') {
-      return next(request, context);
+      return Future.value(request);
     }
 
-    final hydrated = await _attachCookies(request);
-    try {
-      final response = await next(hydrated, context);
-      await _storeResponseCookies(_cookieUri(hydrated, response), response);
-      return response;
-    } on StatusError catch (error) {
-      await _storeResponseCookies(
-        _cookieUri(hydrated, error.statusResponse),
-        error.statusResponse,
-      );
-      rethrow;
+    return _attachCookies(request);
+  }
+
+  @override
+  Future<Response> onAttemptResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    if (context.capability.name != 'web') {
+      await _storeResponseCookies(_cookieUri(request, response), response);
     }
+    return response;
   }
 
   Future<Request> _attachCookies(Request request) async {

@@ -85,10 +85,9 @@ rethrow the captured failure with its original stack trace.
 
 ## Compose Middleware
 
-Application middleware runs once for the logical request. Network middleware
-runs for every network attempt. Most application clients should start with
-application middleware and only use network middleware when they need
-attempt-level behavior.
+Configure middleware as one list. Each middleware declares the lifecycle
+capabilities it needs, and Oxy schedules those capabilities at the request,
+attempt, or final response phase.
 
 See [`example/middleware_stack.dart`](../example/middleware_stack.dart).
 
@@ -98,18 +97,34 @@ final client = Client(
     middleware: [
       RequestIdMiddleware(),
       AuthMiddleware.staticToken('secret'),
+      CookieMiddleware(MemoryCookieJar()),
       CacheMiddleware(),
       LoggingMiddleware(),
     ],
-    networkMiddleware: [CookieMiddleware(MemoryCookieJar())],
   ),
 );
 ```
 
-`CookieMiddleware` belongs in network middleware so redirects and retries can
-store cookies between attempts. It is for native and test transports. Browser
-requests already use browser cookie handling, so the middleware is a no-op on
-Web.
+`CookieMiddleware` works from the main middleware list and stores cookies across
+redirects and retries. It is for native and test transports. Browser requests
+already use browser cookie handling, so the middleware is a no-op on Web.
+
+Custom middleware implements the capabilities it needs:
+
+```dart
+final class TraceMiddleware
+    implements RequestTransformer, FinalResponseHandler {
+  @override
+  Request onRequest(Request request, Context context) {
+    return request.withHeader('x-trace-id', 'trace-1');
+  }
+
+  @override
+  Response onResponse(Request request, Response response, Context context) {
+    return response;
+  }
+}
+```
 
 ## Test with MockTransport
 

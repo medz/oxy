@@ -4,12 +4,20 @@
 
 - Removed middleware presets; compose middleware explicitly from the built-in
   middleware types instead.
+- Redesigned middleware around lifecycle capabilities. `Middleware.intercept`
+  and `Next` were replaced by request, attempt, final response, error, and
+  finally capability interfaces.
+- Deprecated `ClientOptions.networkMiddleware` and
+  `RequestOptions.networkMiddleware`; configure common middleware through the
+  primary `middleware` list instead.
 
 ### Added
 
 - Added public API Dartdoc, a cookbook, and checked examples for reusable API
   clients, policies, no-throw flows, middleware, testing, and body
   replayability.
+- `CookieMiddleware` now works across redirects and retries from the primary
+  `middleware` list.
 
 ## 0.3.0
 

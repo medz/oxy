@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../core/errors.dart';
 import '../core/request.dart';
 import '../core/response.dart';
@@ -15,77 +17,195 @@ List<Middleware> combineMiddleware(
   return <Middleware>[...first, ...second];
 }
 
-Next buildMiddlewarePipeline(List<Middleware> middleware, Next terminal) {
-  Next runner = terminal;
+final class MiddlewareLifecycle {
+  MiddlewareLifecycle(List<Middleware> middleware)
+    : _middleware = List<Middleware>.unmodifiable(middleware);
 
-  for (var i = middleware.length - 1; i >= 0; i--) {
-    final current = middleware[i];
-    final next = runner;
-    runner = (request, context) async {
-      final middlewareName = current.runtimeType.toString();
-      Future<Response> guardedNext(Request request, Context context) async {
-        try {
-          return await next(request, context);
-        } catch (error, trace) {
-          if (error is RequestError) {
-            Error.throwWithStackTrace(error, trace);
-          }
-          throw _DownstreamError(error, trace);
+  final List<Middleware> _middleware;
+
+  bool get isEmpty => _middleware.isEmpty;
+
+  Future<Request> onRequest(Request request, Context context) async {
+    var current = request;
+    for (final middleware in _middleware) {
+      if (middleware is RequestTransformer) {
+        current = await _runCapability<Request>(
+          middleware,
+          'onRequest',
+          current,
+          context,
+          () => middleware.onRequest(current, context),
+        );
+      }
+    }
+    return current;
+  }
+
+  Future<Response?> resolve(Request request, Context context) async {
+    for (final middleware in _middleware) {
+      if (middleware is RequestResolver) {
+        final response = await _runCapability<Response?>(
+          middleware,
+          'resolve',
+          request,
+          context,
+          () => middleware.resolve(request, context),
+        );
+        if (response != null) {
+          return response;
         }
       }
+    }
+    return null;
+  }
 
-      void emitMiddlewareEnd({Response? response, Object? error}) {
+  Future<Request> onAttempt(Request request, Context context) async {
+    var current = request;
+    for (final middleware in _middleware) {
+      if (middleware is AttemptTransformer) {
+        current = await _runCapability<Request>(
+          middleware,
+          'onAttempt',
+          current,
+          context,
+          () => middleware.onAttempt(current, context),
+        );
+      }
+    }
+    return current;
+  }
+
+  Future<Response> onAttemptResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    var current = response;
+    for (var i = _middleware.length - 1; i >= 0; i--) {
+      final middleware = _middleware[i];
+      if (middleware is AttemptResponseHandler) {
+        current = await _runCapability<Response>(
+          middleware,
+          'onAttemptResponse',
+          request,
+          context,
+          () => middleware.onAttemptResponse(request, current, context),
+          response: current,
+        );
+      }
+    }
+    return current;
+  }
+
+  Future<Response> onResponse(
+    Request request,
+    Response response,
+    Context context,
+  ) async {
+    var current = response;
+    for (var i = _middleware.length - 1; i >= 0; i--) {
+      final middleware = _middleware[i];
+      if (middleware is FinalResponseHandler) {
+        current = await _runCapability<Response>(
+          middleware,
+          'onResponse',
+          request,
+          context,
+          () => middleware.onResponse(request, current, context),
+          response: current,
+        );
+      }
+    }
+    return current;
+  }
+
+  Future<void> onError(Request request, Object error, Context context) async {
+    for (var i = _middleware.length - 1; i >= 0; i--) {
+      final middleware = _middleware[i];
+      if (middleware is FinalErrorHandler) {
+        await _runCapability<void>(
+          middleware,
+          'onError',
+          request,
+          context,
+          () => middleware.onError(request, error, context),
+        );
+      }
+    }
+  }
+
+  Future<void> onFinally(Request request, Context context) async {
+    for (var i = _middleware.length - 1; i >= 0; i--) {
+      final middleware = _middleware[i];
+      if (middleware is FinalFinallyHandler) {
+        await _runCapability<void>(
+          middleware,
+          'onFinally',
+          request,
+          context,
+          () => middleware.onFinally(request, context),
+        );
+      }
+    }
+  }
+
+  Future<T> _runCapability<T>(
+    Middleware middleware,
+    String capability,
+    Request request,
+    Context context,
+    FutureOr<T> Function() run, {
+    Response? response,
+  }) async {
+    final detail = '${middleware.runtimeType}.$capability';
+    emitEvent(
+      context.onEvent,
+      RequestEventType.middlewareStart,
+      request: request,
+      attempt: context.attempt,
+      detail: detail,
+    );
+
+    try {
+      final result = await run();
+      emitEvent(
+        context.onEvent,
+        RequestEventType.middlewareEnd,
+        request: request,
+        attempt: context.attempt,
+        response: result is Response ? result : response,
+        detail: detail,
+      );
+      return result;
+    } catch (error, trace) {
+      if (error is RequestError) {
         emitEvent(
           context.onEvent,
           RequestEventType.middlewareEnd,
           request: request,
           attempt: context.attempt,
-          response: response,
           error: error,
-          detail: middlewareName,
+          detail: detail,
         );
+        rethrow;
       }
 
+      final middlewareError = MiddlewareError(
+        middleware: detail,
+        message: 'Middleware execution failed.',
+        request: request,
+        cause: error,
+        trace: trace,
+      );
       emitEvent(
         context.onEvent,
-        RequestEventType.middlewareStart,
+        RequestEventType.middlewareEnd,
         request: request,
         attempt: context.attempt,
-        detail: middlewareName,
+        error: middlewareError,
+        detail: detail,
       );
-      late Response response;
-      try {
-        response = await current.intercept(request, context, guardedNext);
-      } catch (error, trace) {
-        if (error is _DownstreamError) {
-          emitMiddlewareEnd(error: error.error);
-          Error.throwWithStackTrace(error.error, error.trace);
-        }
-        if (error is RequestError) {
-          emitMiddlewareEnd(error: error);
-          rethrow;
-        }
-        final middlewareError = MiddlewareError(
-          middleware: middlewareName,
-          message: 'Middleware execution failed.',
-          request: request,
-          cause: error,
-          trace: trace,
-        );
-        emitMiddlewareEnd(error: middlewareError);
-        throw middlewareError;
-      }
-      emitMiddlewareEnd(response: response);
-      return response;
-    };
+      throw middlewareError;
+    }
   }
-
-  return runner;
-}
-
-final class _DownstreamError {
-  const _DownstreamError(this.error, this.trace);
-
-  final Object error;
-  final StackTrace trace;
 }

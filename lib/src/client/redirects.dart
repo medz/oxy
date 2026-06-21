@@ -3,9 +3,11 @@ import '../core/request.dart';
 import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/internal_attributes.dart';
-import '../pipeline/middleware.dart';
 import '../policies.dart';
 import 'response_policies.dart';
+
+typedef RedirectHandler =
+    Future<Response> Function(Request request, Context context);
 
 bool usesClientRedirects(Context context) {
   return context.redirectPolicy.mode == RedirectMode.follow &&
@@ -15,7 +17,7 @@ bool usesClientRedirects(Context context) {
 Future<Response> runRedirects(
   Request request,
   Context context,
-  Next next, {
+  RedirectHandler next, {
   Response? firstResponse,
 }) async {
   var current = request;

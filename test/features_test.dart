@@ -189,7 +189,7 @@ void main() {
     late Request finalRequest;
     final client = Client(
       ClientOptions(
-        networkMiddleware: [CookieMiddleware(jar)],
+        middleware: [CookieMiddleware(jar)],
         transport: MockTransport((request, context) async {
           calls += 1;
           if (calls == 1) {
@@ -231,7 +231,7 @@ void main() {
       late Request redirected;
       final client = Client(
         ClientOptions(
-          networkMiddleware: [CookieMiddleware(jar)],
+          middleware: [CookieMiddleware(jar)],
           transport: MockTransport((request, context) async {
             calls += 1;
             if (calls == 1) {

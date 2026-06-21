@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import '../core/request.dart';
-import '../core/response.dart';
 import '../pipeline/context.dart';
 import '../pipeline/middleware.dart';
 
@@ -10,7 +9,7 @@ typedef AuthTokenProvider =
     FutureOr<String?> Function(Request request, Context context);
 
 /// Adds an authorization header when a token is available.
-final class AuthMiddleware implements Middleware {
+final class AuthMiddleware implements RequestTransformer {
   AuthMiddleware({
     required this.tokenProvider,
     this.scheme = 'Bearer',
@@ -44,24 +43,20 @@ final class AuthMiddleware implements Middleware {
   final bool overrideExisting;
 
   @override
-  Future<Response> intercept(
-    Request request,
-    Context context,
-    Next next,
-  ) async {
+  Future<Request> onRequest(Request request, Context context) async {
     if (!overrideExisting && request.headers.has(headerName)) {
-      return next(request, context);
+      return request;
     }
 
     final token = await tokenProvider(request, context);
     if (token == null || token.trim().isEmpty) {
-      return next(request, context);
+      return request;
     }
 
     final value = scheme == null || scheme!.isEmpty
         ? token.trim()
         : '${scheme!} ${token.trim()}';
 
-    return next(request.withHeader(headerName, value), context);
+    return request.withHeader(headerName, value);
   }
 }
