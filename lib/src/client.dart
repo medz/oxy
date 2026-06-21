@@ -8,12 +8,12 @@ import 'core/headers.dart';
 import 'core/request.dart';
 import 'core/response.dart';
 import 'core/result.dart';
+import 'client/redirects.dart';
 import 'client/request_resolution.dart';
 import 'client/response_policies.dart';
 import 'options.dart';
 import 'pipeline/context.dart';
 import 'pipeline/events.dart';
-import 'pipeline/internal_attributes.dart';
 import 'pipeline/middleware.dart';
 import 'pipeline/runner.dart';
 import 'policies.dart';
@@ -540,8 +540,8 @@ final class Client {
       nextContext,
     ) {
       reachedTerminal = true;
-      if (_usesClientRedirects(nextContext)) {
-        return _runRedirects(nextRequest, nextContext, (
+      if (usesClientRedirects(nextContext)) {
+        return runRedirects(nextRequest, nextContext, (
           redirectRequest,
           redirectContext,
         ) {
@@ -564,146 +564,11 @@ final class Client {
   ) {
     if (context.redirectPolicy.mode == RedirectMode.follow &&
         isRedirectStatus(response.status)) {
-      return _runRedirects(request, context, (
-        redirectRequest,
-        redirectContext,
-      ) {
+      return runRedirects(request, context, (redirectRequest, redirectContext) {
         return _runOperation(redirectRequest, redirectContext);
       }, firstResponse: response);
     }
     return Future.value(_withResponseTimeouts(response, request, context));
-  }
-
-  bool _usesClientRedirects(Context context) {
-    return context.redirectPolicy.mode == RedirectMode.follow &&
-        context.capability.name != 'web';
-  }
-
-  Future<Response> _runRedirects(
-    Request request,
-    Context context,
-    Next next, {
-    Response? firstResponse,
-  }) async {
-    var current = request;
-    var redirected = false;
-    var response = firstResponse;
-    for (var redirects = 0; ; redirects++) {
-      response ??= await next(current, _allowRedirectStatus(context));
-      if (!isRedirectStatus(response.status)) {
-        return redirected ? response.copyWith(redirected: true) : response;
-      }
-
-      final location = response.headers.get('location');
-      if (location == null || location.trim().isEmpty) {
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Redirect response is missing a Location header.',
-        );
-      }
-      if (redirects >= context.redirectPolicy.maxRedirects) {
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Too many redirects.',
-        );
-      }
-      if (!_redirectChangesToGet(response.status, current.method) &&
-          current.body?.replayable == false) {
-        await response.drain(maxBytes: null);
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Redirect requires a replayable request body.',
-        );
-      }
-
-      await response.drain(maxBytes: null);
-      try {
-        current = _redirectRequest(current, response, location);
-      } on FormatException catch (_, trace) {
-        throw StatusError(
-          response,
-          request: current,
-          message: 'Redirect response has an invalid Location header.',
-          trace: trace,
-        );
-      }
-      redirected = true;
-      response = null;
-    }
-  }
-
-  Context _allowRedirectStatus(Context context) {
-    return context.copyWith(
-      statusPolicy: StatusPolicy(
-        accept: (response) {
-          return isRedirectStatus(response.status) ||
-              context.statusPolicy.accepts(response);
-        },
-      ),
-    );
-  }
-
-  Request _redirectRequest(
-    Request request,
-    Response response,
-    String location,
-  ) {
-    final base = response.url.hasScheme ? response.url : request.uri;
-    final nextUri = base.resolve(location);
-    final sameOrigin = _sameOrigin(request.uri, nextUri);
-    final nextHeaders = request.headers.copy();
-    var nextAttributes = request.attributes;
-    if (!sameOrigin) {
-      nextHeaders.delete('authorization');
-      nextHeaders.delete('cookie');
-      nextHeaders.delete('proxy-authorization');
-      nextAttributes = nextAttributes
-          .remove(cookieHeaderManagedAttribute)
-          .set(redirectCrossOriginAttribute, true);
-    }
-
-    var method = request.method;
-    var clearBody = false;
-    if (_redirectChangesToGet(response.status, method)) {
-      method = 'GET';
-      clearBody = true;
-      nextHeaders.delete('content-length');
-      nextHeaders.delete('content-type');
-    }
-
-    return request.copyWith(
-      method: method,
-      uri: nextUri,
-      headers: nextHeaders,
-      clearBody: clearBody,
-      attributes: nextAttributes,
-    );
-  }
-
-  bool _redirectChangesToGet(int status, String method) {
-    final upper = method.toUpperCase();
-    if (status == 303 && upper != 'GET' && upper != 'HEAD') {
-      return true;
-    }
-    return (status == 301 || status == 302) && upper == 'POST';
-  }
-
-  bool _sameOrigin(Uri a, Uri b) {
-    return a.scheme == b.scheme && a.host == b.host && _portOf(a) == _portOf(b);
-  }
-
-  int _portOf(Uri uri) {
-    if (uri.hasPort) {
-      return uri.port;
-    }
-    return switch (uri.scheme) {
-      'http' => 80,
-      'https' => 443,
-      _ => 0,
-    };
   }
 
   Future<Response> _runOperation(Request request, Context context) async {
@@ -717,7 +582,7 @@ final class Client {
         attempt: attempt,
         signal: attemptSignal,
       );
-      final attemptRequest = _sanitizeRedirectHeaders(request);
+      final attemptRequest = sanitizeRedirectHeaders(request);
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -842,20 +707,6 @@ final class Client {
     }
   }
 
-  Request _sanitizeRedirectHeaders(Request request) {
-    if (request.attributes.get(redirectCrossOriginAttribute) != true) {
-      return request;
-    }
-
-    final headers = request.headers.copy()
-      ..delete('authorization')
-      ..delete('proxy-authorization');
-    if (request.attributes.get(cookieHeaderManagedAttribute) != true) {
-      headers.delete('cookie');
-    }
-    return request.copyWith(headers: headers);
-  }
-
   Future<Response> _runNetworkPipeline(Request request, Context context) {
     final middleware = combineMiddleware(
       options.networkMiddleware,
@@ -866,10 +717,7 @@ final class Client {
       nextRequest,
       nextContext,
     ) {
-      return _transport.send(
-        _sanitizeRedirectHeaders(nextRequest),
-        nextContext,
-      );
+      return _transport.send(sanitizeRedirectHeaders(nextRequest), nextContext);
     })(request, context);
     return operation;
   }
