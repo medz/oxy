@@ -1,6 +1,6 @@
 name: oxy
 description: Policy-first HTTP client for Dart and Flutter apps, SDKs, and reusable API clients.
-version: 0.4.0
+version: 0.5.0
 repository: https://github.com/medz/oxy
 
 topics:
