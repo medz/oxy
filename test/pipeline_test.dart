@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
 import 'package:oxy/testing.dart';
 import 'package:test/test.dart';
@@ -143,6 +144,32 @@ void main() {
     expect(result.isFailure, isTrue);
     expect(result.error, isA<NetworkError>());
   });
+
+  test(
+    'uses original replayable stream body when replay is disabled',
+    () async {
+      final body = Body(ht.Body(Stream<List<int>>.value([1, 2, 3])));
+      final client = Client(
+        ClientOptions(
+          retryPolicy: const RetryPolicy(maxRetries: 0),
+          redirectPolicy: RedirectPolicy.manual,
+          transport: MockTransport((request, context) async {
+            expect(identical(request.body, body), isTrue);
+            expect(await request.body!.bytes(), [1, 2, 3]);
+            return Response.text('ok');
+          }),
+        ),
+      );
+
+      final response = await client.post(
+        'https://example.com/upload',
+        body: body,
+      );
+
+      expect(await response.text(), 'ok');
+      expect(body.bodyUsed, isTrue);
+    },
+  );
 
   test('per-request headers override client defaults', () async {
     late Request captured;
