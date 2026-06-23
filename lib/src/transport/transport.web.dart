@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import '../core/body.dart';
@@ -30,10 +32,24 @@ extension type JSArrayStatic._(JSObject _) {
   external static bool isArray(JSAny? value);
 }
 
+@JS('Object')
+extension type JSObjectStatic._(JSObject _) {
+  external static JSObject defineProperty(
+    JSObject object,
+    String property,
+    JSObject descriptor,
+  );
+}
+
+extension type PropertyDescriptor._(JSObject _) implements JSObject {
+  external factory PropertyDescriptor({JSFunction get});
+}
+
 @JS('Headers')
 extension type WebHeaders._(JSObject _) implements JSObject {
   external factory WebHeaders();
   external void append(String name, String value);
+  external bool has(String name);
   external ArrayIterator entries();
 }
 
@@ -65,6 +81,8 @@ extension type RequestInit._(JSObject _) implements JSObject {
 @JS('Request')
 extension type WebRequest._(JSObject _) implements JSObject {
   external factory WebRequest(String input, RequestInit init);
+  external ReadableStream? get body;
+  external WebHeaders get headers;
 }
 
 @JS('Response')
@@ -81,7 +99,15 @@ extension type WebResponse._(JSObject _) implements JSObject {
 @JS('fetch')
 external JSPromise<WebResponse> webFetch(WebRequest request);
 
+bool? _requestStreamsSupported;
+bool _didWarnRequestStreamFallback = false;
+
 final class WebTransport implements Transport {
+  WebTransport({bool? requestStreamsSupported})
+    : _requestStreamsSupportedOverride = requestStreamsSupported;
+
+  final bool? _requestStreamsSupportedOverride;
+
   @override
   PlatformCapability get capability => PlatformCapability.web;
 
@@ -111,7 +137,10 @@ final class WebTransport implements Transport {
     _bindAbort(controller, context);
 
     final requestBody = request.body;
-    final streamBody = streamsRequestBody(requestBody);
+    final streamBody = shouldStreamRequestBody(
+      requestBody,
+      requestStreamsSupported: _supportsRequestStreams,
+    );
     final contentLength = knownBodyLength(requestBody);
     final requestBodySent =
         streamBody && context.timeoutPolicy.firstByte != null
@@ -408,6 +437,64 @@ final class WebTransport implements Transport {
       301 || 302 || 303 || 307 || 308 => true,
       _ => false,
     };
+  }
+
+  bool shouldStreamRequestBody(
+    Body? body, {
+    required bool requestStreamsSupported,
+  }) {
+    if (!streamsRequestBody(body)) {
+      return false;
+    }
+    if (requestStreamsSupported) {
+      return true;
+    }
+    _warnRequestStreamFallback();
+    return false;
+  }
+
+  bool get _supportsRequestStreams {
+    return _requestStreamsSupportedOverride ??
+        (_requestStreamsSupported ??= _detectRequestStreamsSupported());
+  }
+
+  bool _detectRequestStreamsSupported() {
+    try {
+      var duplexAccessed = false;
+      final init = JSObject()
+        ..['method'] = 'POST'.toJS
+        ..['body'] = ReadableStream(UnderlyingSource());
+      JSObjectStatic.defineProperty(
+        init,
+        'duplex',
+        PropertyDescriptor(
+          get: (() {
+            duplexAccessed = true;
+            return 'half'.toJS;
+          }).toJS,
+        ),
+      );
+      final request = WebRequest('https://example.com/', RequestInit._(init));
+      return duplexAccessed &&
+          request.body != null &&
+          !request.headers.has('content-type');
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _warnRequestStreamFallback() {
+    assert(() {
+      if (!_didWarnRequestStreamFallback) {
+        _didWarnRequestStreamFallback = true;
+        developer.log(
+          'Fetch request streams are not supported in this browser; '
+          'buffering the request body before upload.',
+          name: 'oxy.web',
+        );
+      }
+      return true;
+    }());
   }
 
   bool _isForbiddenRequestHeader(String name) {
