@@ -12,6 +12,8 @@ enum BodyKind { empty, bytes, text, json, form, multipart, file, stream }
 /// Opens a fresh byte stream for a replayable body.
 typedef BodyStreamFactory = Stream<List<int>> Function();
 
+typedef _HtBodyFactory = ht.Body Function();
+
 /// A request body with replayability and metadata.
 ///
 /// Oxy uses [replayable] to decide whether a request can be retried safely.
@@ -22,7 +24,7 @@ final class Body {
   Body._({
     required this.kind,
     required this.replayable,
-    required BodyStreamFactory open,
+    required _HtBodyFactory open,
     this.contentLength,
     this.contentType,
   }) : _open = open;
@@ -38,7 +40,7 @@ final class Body {
 
   /// The content type supplied by the body source, or `null`.
   final String? contentType;
-  final BodyStreamFactory _open;
+  final _HtBodyFactory _open;
   bool _used = false;
 
   /// Creates an empty replayable body.
@@ -53,7 +55,7 @@ final class Body {
       kind: kind,
       replayable: true,
       contentLength: data.length,
-      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
+      open: () => ht.Body(Uint8List.fromList(data)),
     );
   }
 
@@ -61,7 +63,7 @@ final class Body {
   static Body fromText(
     String value, {
     Encoding encoding = utf8,
-    String contentType = 'text/plain; charset=utf-8',
+    String contentType = 'text/plain;charset=UTF-8',
   }) {
     final data = encoding.encode(value);
     return Body._(
@@ -69,7 +71,7 @@ final class Body {
       replayable: true,
       contentLength: data.length,
       contentType: contentType,
-      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
+      open: () => ht.Body(Uint8List.fromList(data)),
     );
   }
 
@@ -84,7 +86,7 @@ final class Body {
       replayable: true,
       contentLength: data.length,
       contentType: contentType,
-      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
+      open: () => ht.Body(Uint8List.fromList(data)),
     );
   }
 
@@ -100,7 +102,7 @@ final class Body {
           throw const BodyStateError('Request body stream was already used.');
         }
         consumed = true;
-        return stream;
+        return ht.Body(stream);
       },
     );
   }
@@ -117,7 +119,7 @@ final class Body {
       replayable: true,
       contentLength: contentLength,
       contentType: contentType,
-      open: open,
+      open: () => ht.Body(open()),
     );
   }
 
@@ -130,18 +132,26 @@ final class Body {
       Body() => value,
       String() => Body.fromText(value),
       Uint8List() => Body.fromBytes(value),
+      ByteBuffer() => Body.fromBytes(value.asUint8List()),
       List<int>() => Body.fromBytes(value),
       ht.FormData() => Body.fromFormData(value),
       ht.URLSearchParams() => Body.fromUrlSearchParams(value),
       ht.Blob() => Body.fromBlob(value),
-      ht.Body() => throw ArgumentError.value(
-        value,
-        'value',
-        'Unsupported body input.',
-      ),
+      ht.Body() => Body._fromHtBody(value),
       Stream<List<int>>() => Body.stream(value),
-      _ => throw ArgumentError.value(value, 'value', 'Unsupported body input.'),
+      _ => Body._fromHtBody(ht.Body(value)),
     };
+  }
+
+  /// Creates a replayable body backed by an upstream [ht.Body].
+  static Body _fromHtBody(ht.Body body) {
+    final source = body.clone();
+    return Body._(
+      kind: BodyKind.stream,
+      replayable: true,
+      contentType: source.contentType,
+      open: () => source.clone(),
+    );
   }
 
   /// Creates a replayable multipart form body.
@@ -152,7 +162,7 @@ final class Body {
       replayable: true,
       contentLength: encoded.contentLength,
       contentType: encoded.contentType,
-      open: () => encoded.stream,
+      open: () => ht.Body(encoded.stream),
     );
   }
 
@@ -163,8 +173,8 @@ final class Body {
       kind: BodyKind.form,
       replayable: true,
       contentLength: data.length,
-      contentType: 'application/x-www-form-urlencoded; charset=utf-8',
-      open: () => Stream<List<int>>.value(Uint8List.fromList(data)),
+      contentType: ht.Body(params).contentType,
+      open: () => ht.Body(Uint8List.fromList(data)),
     );
   }
 
@@ -175,7 +185,7 @@ final class Body {
       replayable: true,
       contentLength: blob.size,
       contentType: blob.type.isEmpty ? null : blob.type,
-      open: () => blob.stream(),
+      open: () => ht.Body(blob),
     );
   }
 
@@ -191,9 +201,7 @@ final class Body {
       _used = true;
     }
 
-    return _open().map((chunk) {
-      return chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-    });
+    return _open().stream;
   }
 
   /// Reads the body as bytes.

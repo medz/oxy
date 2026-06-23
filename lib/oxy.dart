@@ -23,7 +23,8 @@
 /// ```
 library;
 
-export 'package:ht/ht.dart' show Blob, FormData, Multipart, URLSearchParams;
+export 'package:ht/ht.dart'
+    show Blob, BlobPart, File, FormData, Multipart, URLSearchParams;
 
 export 'src/client.dart';
 export 'src/core/abort.dart';

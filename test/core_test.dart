@@ -40,11 +40,15 @@ void main() {
   group('Body', () {
     test('marks bytes and json bodies as replayable', () async {
       final bytes = Body.fromBytes([1, 2, 3]);
+      final text = Body.from('hello')!;
       final json = Body.fromJson({'ok': true});
 
       expect(bytes.replayable, isTrue);
       expect(await bytes.bytes(), [1, 2, 3]);
       expect(await bytes.bytes(), [1, 2, 3]);
+      expect(text.kind, BodyKind.text);
+      expect(text.contentType, 'text/plain;charset=UTF-8');
+      expect(await text.text(), 'hello');
       expect(json.contentType, contains('application/json'));
       expect(utf8.decode(await json.bytes()), '{"ok":true}');
     });
@@ -94,8 +98,9 @@ void main() {
       expect(utf8.decode(await body.bytes()), text);
     });
 
-    test('treats Blob bodies as streaming file-like bodies', () async {
+    test('treats Blob and File bodies as streaming file-like bodies', () async {
       final body = Body.from(Blob(['hello'], 'text/plain'))!;
+      final fileBody = Body.from(File(['file'], 'a.txt', type: 'text/plain'))!;
 
       expect(body.kind, BodyKind.file);
       expect(body.replayable, isTrue);
@@ -103,6 +108,13 @@ void main() {
       expect(body.contentType, 'text/plain');
       expect(await body.text(), 'hello');
       expect(await body.text(), 'hello');
+
+      expect(fileBody.kind, BodyKind.file);
+      expect(fileBody.replayable, isTrue);
+      expect(fileBody.contentLength, 4);
+      expect(fileBody.contentType, 'text/plain');
+      expect(await fileBody.text(), 'file');
+      expect(await fileBody.text(), 'file');
     });
 
     test('accepts URLSearchParams as replayable form body', () async {
@@ -110,13 +122,49 @@ void main() {
       final body = Body.from(params)!;
 
       expect(body.kind, BodyKind.form);
-      expect(body.contentType, contains('application/x-www-form-urlencoded'));
+      expect(
+        body.contentType,
+        'application/x-www-form-urlencoded;charset=UTF-8',
+      );
       expect(await body.text(), 'q=oxy&page=1');
       expect(await body.text(), 'q=oxy&page=1');
     });
 
-    test('rejects ht Body before generic stream coercion', () {
-      expect(() => Body.from(ht.Body('hello')), throwsArgumentError);
+    test('accepts ht Body as replayable upstream body', () async {
+      final upstream = ht.Body('hello');
+      final body = Body.from(upstream)!;
+
+      expect(body.kind, BodyKind.stream);
+      expect(body.replayable, isTrue);
+      expect(body.contentLength, isNull);
+      expect(body.contentType, 'text/plain;charset=UTF-8');
+      expect(await body.text(), 'hello');
+      expect(await body.text(), 'hello');
+      expect(upstream.bodyUsed, isFalse);
+    });
+
+    test('accepts stream-backed ht Body through clone semantics', () async {
+      final upstream = ht.Body(
+        Stream<List<int>>.fromIterable([
+          utf8.encode('hello '),
+          utf8.encode('stream'),
+        ]),
+      );
+      final body = Body.from(upstream)!;
+
+      expect(body.replayable, isTrue);
+      expect(await body.text(), 'hello stream');
+      expect(await body.text(), 'hello stream');
+    });
+
+    test('accepts ByteBuffer through ht-compatible body input', () async {
+      final buffer = Uint8List.fromList([1, 2, 3]).buffer;
+      final body = Body.from(buffer)!;
+
+      expect(body.kind, BodyKind.bytes);
+      expect(body.replayable, isTrue);
+      expect(body.contentLength, 3);
+      expect(await body.bytes(), [1, 2, 3]);
     });
   });
 
