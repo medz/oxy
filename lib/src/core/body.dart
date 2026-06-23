@@ -90,7 +90,11 @@ Body? requestBodyFrom(Object? value) {
 
 /// Creates a JSON request body.
 Body requestJsonBody(Object? value) {
-  return Body(ht.Blob([jsonEncode(value)], 'application/json; charset=utf-8'));
+  return Body._withPolicy(
+    ht.Blob([jsonEncode(value)], 'application/json; charset=utf-8'),
+    replayable: true,
+    streamUpload: false,
+  );
 }
 
 /// Returns a body byte length when it is available without consuming [body].

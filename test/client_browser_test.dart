@@ -6,6 +6,7 @@ import 'dart:js_interop';
 
 import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/core/body.dart' as core;
 import 'package:oxy/src/transport/transport.web.dart' as web;
 import 'package:oxy/src/transport/web_stream_utils.dart';
 import 'package:test/test.dart';
@@ -59,6 +60,17 @@ void main() {
     expect(
       transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
       isTrue,
+    );
+  });
+
+  test('web transport buffers JSON request bodies', () {
+    final body = core.requestJsonBody({'name': 'oxy'});
+    final transport = web.WebTransport();
+
+    expect(body.contentType, 'application/json; charset=utf-8');
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isFalse,
     );
   });
 
