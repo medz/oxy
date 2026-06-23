@@ -62,6 +62,27 @@ void main() {
     );
   });
 
+  test('web transport buffers small upstream ht Body payloads', () {
+    final textBody = Body(ht.Body('hello'));
+    final bytesBody = Body(ht.Body([1, 2, 3]));
+    final transport = web.WebTransport();
+
+    expect(
+      transport.shouldStreamRequestBody(
+        textBody,
+        requestStreamsSupported: true,
+      ),
+      isFalse,
+    );
+    expect(
+      transport.shouldStreamRequestBody(
+        bytesBody,
+        requestStreamsSupported: true,
+      ),
+      isFalse,
+    );
+  });
+
   test('web response stream read failures become NetworkError', () async {
     void start(ReadableByteStreamController controller) {
       controller.error('broken'.toJS);

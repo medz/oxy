@@ -39,7 +39,7 @@ final class Body extends ht.Body {
       throw const BodyStateError('Body is not replayable.');
     }
     return Body._withPolicy(
-      super.clone(),
+      this,
       replayable: true,
       streamUpload: _streamUpload,
     );
@@ -57,10 +57,25 @@ final class Body extends ht.Body {
   static bool _defaultStreamUpload(Object? init) {
     return switch (init) {
       Body() => init._streamUpload,
-      ht.Body() => true,
+      ht.Body() => _streamsUpstreamBody(init),
       Stream<List<int>>() || ht.FormData() || ht.Blob() => true,
       _ => false,
     };
+  }
+
+  static bool _streamsUpstreamBody(ht.Body body) {
+    if (knownBodyLength(body) == null) {
+      return true;
+    }
+
+    final contentType = body.contentType?.toLowerCase();
+    if (contentType == null ||
+        contentType == 'text/plain;charset=utf-8' ||
+        contentType == 'application/x-www-form-urlencoded;charset=utf-8') {
+      return false;
+    }
+
+    return true;
   }
 }
 
