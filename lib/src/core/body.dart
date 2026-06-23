@@ -9,6 +9,8 @@ import 'errors.dart';
 /// Opens a fresh byte stream for a replayable body.
 typedef _BodyStreamFactory = Stream<List<int>> Function();
 
+const _bufferedUpstreamBodyLimit = 64 * 1024;
+
 /// A request body backed by `ht.Body`.
 ///
 /// Oxy uses [replayable] to decide whether a request can be retried safely.
@@ -64,13 +66,16 @@ final class Body extends ht.Body {
   }
 
   static bool _streamsUpstreamBody(ht.Body body) {
-    if (knownBodyLength(body) == null) {
+    final length = knownBodyLength(body);
+    if (length == null) {
       return true;
     }
 
     final contentType = body.contentType?.toLowerCase();
-    if (contentType == null ||
-        contentType == 'text/plain;charset=utf-8' ||
+    if (contentType == null) {
+      return length > _bufferedUpstreamBodyLimit;
+    }
+    if (contentType == 'text/plain;charset=utf-8' ||
         contentType == 'application/x-www-form-urlencoded;charset=utf-8') {
       return false;
     }

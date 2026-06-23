@@ -3,6 +3,7 @@ library;
 
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
 import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
@@ -92,6 +93,17 @@ void main() {
         requestStreamsSupported: true,
       ),
       isFalse,
+    );
+  });
+
+  test('web transport streams large untyped upstream ht Body payloads', () {
+    final body = Body(ht.Body(Blob([Uint8List(128 * 1024)])));
+    final transport = web.WebTransport();
+
+    expect(body.contentType, isNull);
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isTrue,
     );
   });
 
