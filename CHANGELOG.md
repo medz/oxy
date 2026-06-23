@@ -1,4 +1,4 @@
-## Unreleased
+## 0.6.0
 
 ### Breaking Changes
 
@@ -8,12 +8,22 @@
   such as `stream()`, `bytes()`, `text()`, `json()`, `clone()`, `size`, and
   `contentType`.
 
+### Added
+
+- Added local benchmark suites for baseline costs and real Oxy, `package:http`,
+  and Dio HTTP client comparisons against a shared loopback server.
+
 ### Changed
 
 - Upgraded to `ht ^0.6.0` and accept upstream `ht.Body` values directly as
   request bodies.
 - Replayable request bodies are cloned for retry and preserved-method redirect
   attempts so each attempt consumes an independent `ht.Body`.
+
+### Fixed
+
+- Patched RFC850 `Retry-After` date parsing through the local
+  `http_parser` provider overlay.
 
 ## 0.5.0
 
