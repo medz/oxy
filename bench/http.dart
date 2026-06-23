@@ -1,86 +1,82 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
-import 'package:http/testing.dart' as http_testing;
 
 import 'src/data.dart';
 import 'src/runner.dart';
+import 'src/server.dart';
 
 final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
-  SyncBenchmark(
-    group: 'request',
-    name: 'construct-get',
-    run: () {
-      consume(http.Request('GET', _uri)..headers.addAll(_headers8));
+  AsyncBenchmark(
+    group: 'network',
+    name: 'get-empty',
+    run: () async {
+      final response = await _client.get(_uri('/empty'), headers: _headers8);
+      consume(response.statusCode);
     },
   ),
-  SyncBenchmark(
-    group: 'request',
-    name: 'construct-post-json',
-    run: () {
-      consume(
-        http.Request('POST', _uri)
-          ..headers.addAll(_jsonHeaders)
-          ..bodyBytes = utf8.encode(jsonText),
+  AsyncBenchmark(
+    group: 'network',
+    name: 'get-json-decode',
+    run: () async {
+      final response = await _client.get(_uri('/json'), headers: _headers8);
+      consume(jsonDecode(response.body));
+    },
+  ),
+  AsyncBenchmark(
+    group: 'network',
+    name: 'get-bytes-64k',
+    run: () async {
+      final response = await _client.get(
+        _uri('/bytes-64k'),
+        headers: _headers8,
       );
-    },
-  ),
-  AsyncBenchmark(
-    group: 'client',
-    name: 'send-no-middleware',
-    run: () async {
-      consume(await _client.get(_uri, headers: _headers8));
-    },
-  ),
-  AsyncBenchmark(
-    group: 'client',
-    name: 'post-json-body',
-    run: () async {
-      consume(await _client.post(_uri, headers: _jsonHeaders, body: jsonText));
-    },
-  ),
-  AsyncBenchmark(
-    group: 'response',
-    name: 'bytes-1k',
-    run: () async {
-      final response = await _client.get(_bytesUri);
       consume(response.bodyBytes);
     },
   ),
   AsyncBenchmark(
-    group: 'response',
-    name: 'json-decode',
+    group: 'network',
+    name: 'post-json',
     run: () async {
-      final response = await _client.get(_jsonUri);
+      final response = await _client.post(
+        _uri('/json'),
+        headers: _jsonHeaders,
+        body: jsonText,
+      );
       consume(jsonDecode(response.body));
+    },
+  ),
+  AsyncBenchmark(
+    group: 'network',
+    name: 'post-bytes-64k',
+    run: () async {
+      final response = await _client.post(
+        _uri('/bytes-64k'),
+        headers: _octetHeaders,
+        body: largeBytes,
+      );
+      consume(response.statusCode);
     },
   ),
 ]);
 
-final _uri = Uri.parse('https://example.test/users/42');
-final _jsonUri = Uri.parse('https://example.test/json');
-final _bytesUri = Uri.parse('https://example.test/bytes');
 final _headers8 = Map<String, String>.fromEntries(headerPairs8);
 const _jsonHeaders = <String, String>{
   'content-type': 'application/json; charset=utf-8',
 };
+const _octetHeaders = <String, String>{
+  'content-type': 'application/octet-stream',
+};
 
-final _client = http_testing.MockClient.streaming((request, bodyStream) async {
-  await bodyStream.drain<void>();
-  if (request.url == _jsonUri) {
-    return http.StreamedResponse(
-      Stream<List<int>>.value(utf8.encode(jsonText)),
-      200,
-      headers: _jsonHeaders,
-    );
-  }
-  if (request.url == _bytesUri) {
-    return http.StreamedResponse(
-      Stream<List<int>>.value(smallBytes),
-      200,
-      contentLength: smallBytes.length,
-    );
-  }
-  return http.StreamedResponse(const Stream<List<int>>.empty(), 200);
-});
+http.Client? _clientInstance;
+
+http.Client get _client {
+  return _clientInstance ??= http.Client();
+}
+
+Uri _uri(String path) => benchmarkServer.uri(path);
+
+Future<void> closeHttpBenchmarks() async {
+  _clientInstance?.close();
+  _clientInstance = null;
+}

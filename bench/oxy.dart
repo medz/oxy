@@ -1,194 +1,70 @@
-import 'dart:async';
-
 import 'package:oxy/oxy.dart';
 
 import 'src/data.dart';
 import 'src/runner.dart';
+import 'src/server.dart';
 
 final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
-  SyncBenchmark(
-    group: 'request',
-    name: 'construct-get',
-    run: () {
-      consume(Request('/users/42', headers: headerPairs8));
-    },
-  ),
-  SyncBenchmark(
-    group: 'request',
-    name: 'copy-with-headers',
-    run: () {
-      consume(_request.copyWith(headers: headerPairs32));
-    },
-  ),
-  SyncBenchmark(
-    group: 'body',
-    name: 'construct-string',
-    run: () {
-      consume(Body(jsonText));
-    },
-  ),
-  SyncBenchmark(
-    group: 'body',
-    name: 'clone-bytes',
-    run: () {
-      consume(Body(largeBytes).clone());
+  AsyncBenchmark(
+    group: 'network',
+    name: 'get-empty',
+    run: () async {
+      final response = await _client.get('/empty');
+      consume(await response.bytes());
     },
   ),
   AsyncBenchmark(
-    group: 'body',
-    name: 'bytes-1k',
+    group: 'network',
+    name: 'get-json-decode',
     run: () async {
-      consume(await Body(smallBytes).bytes());
+      final response = await _client.get('/json');
+      consume(await response.json<Map<String, Object?>>());
     },
   ),
   AsyncBenchmark(
-    group: 'response',
-    name: 'bytes-1k',
+    group: 'network',
+    name: 'get-bytes-64k',
     run: () async {
-      consume(await Response.bytes(smallBytes).bytes());
+      final response = await _client.get('/bytes-64k');
+      consume(await response.bytes());
     },
   ),
   AsyncBenchmark(
-    group: 'response',
-    name: 'json-decode',
+    group: 'network',
+    name: 'post-json',
     run: () async {
-      consume(await Response.json(jsonPayload).json<Map<String, Object?>>());
+      final response = await _client.post('/json', json: jsonPayload);
+      consume(await response.json<Map<String, Object?>>());
     },
   ),
   AsyncBenchmark(
-    group: 'client',
-    name: 'send-no-middleware',
+    group: 'network',
+    name: 'post-bytes-64k',
     run: () async {
-      consume(await _plainClient.send(_request));
-    },
-  ),
-  AsyncBenchmark(
-    group: 'client',
-    name: 'request-json-body',
-    run: () async {
-      consume(await _plainClient.post('/users', json: jsonPayload));
-    },
-  ),
-  AsyncBenchmark(
-    group: 'client',
-    name: 'send-5-middleware',
-    run: () async {
-      consume(await _middlewareClient.send(_request));
-    },
-  ),
-  AsyncBenchmark(
-    group: 'client',
-    name: 'retry-replayable-body',
-    run: () async {
-      consume(await _retryClient.send(_putRequest));
+      final response = await _client.post(
+        '/bytes-64k',
+        headers: _octetHeaders,
+        body: largeBytes,
+      );
+      consume(await response.bytes());
     },
   ),
 ]);
 
-final _request = Request(
-  '/users/42',
-  headers: headerPairs8,
-  options: const RequestOptions(query: <String, Object?>{'include': 'profile'}),
-);
+const _octetHeaders = <String, String>{
+  'content-type': 'application/octet-stream',
+};
 
-final _putRequest = Request(
-  '/users/42',
-  method: 'PUT',
-  headers: const <String, String>{'content-type': 'application/octet-stream'},
-  body: Body(largeBytes),
-);
+Client? _clientInstance;
 
-final _plainClient = Client(
-  ClientOptions(
-    baseUrl: Uri.parse('https://example.test'),
-    transport: const _StaticTransport(),
-  ),
-);
-
-final _middlewareClient = Client(
-  ClientOptions(
-    baseUrl: Uri.parse('https://example.test'),
-    transport: const _StaticTransport(),
-    middleware: List<Middleware>.filled(5, const _NoopMiddleware()),
-  ),
-);
-
-final _retryClient = Client(
-  ClientOptions(
-    baseUrl: Uri.parse('https://example.test'),
-    transport: const _RetryTransport(),
-    retryPolicy: const RetryPolicy(
-      maxRetries: 2,
-      idempotentMethodsOnly: false,
-      baseDelay: Duration.zero,
-      maxDelay: Duration.zero,
-      jitterRatio: 0,
-    ),
-  ),
-);
-
-final class _StaticTransport implements Transport {
-  const _StaticTransport();
-
-  @override
-  PlatformCapability get capability => PlatformCapability.test;
-
-  @override
-  Future<void> close() => Future<void>.value();
-
-  @override
-  Future<Response> send(Request request, Context context) {
-    return Future<Response>.value(Response.bytes(const <int>[]));
-  }
+Client get _client {
+  return _clientInstance ??= Client(
+    ClientOptions(baseUrl: benchmarkServer.baseUri),
+  );
 }
 
-final class _RetryTransport implements Transport {
-  const _RetryTransport();
-
-  @override
-  PlatformCapability get capability => PlatformCapability.test;
-
-  @override
-  Future<void> close() => Future<void>.value();
-
-  @override
-  Future<Response> send(Request request, Context context) {
-    final status = context.attempt < 2 ? 503 : 200;
-    return Future<Response>.value(
-      Response.bytes(const <int>[], status: status),
-    );
-  }
-}
-
-final class _NoopMiddleware
-    implements
-        RequestTransformer,
-        AttemptTransformer,
-        AttemptResponseHandler,
-        FinalResponseHandler,
-        FinalFinallyHandler {
-  const _NoopMiddleware();
-
-  @override
-  Request onRequest(Request request, Context context) => request;
-
-  @override
-  Request onAttempt(Request request, Context context) => request;
-
-  @override
-  Response onAttemptResponse(
-    Request request,
-    Response response,
-    Context context,
-  ) {
-    return response;
-  }
-
-  @override
-  Response onResponse(Request request, Response response, Context context) {
-    return response;
-  }
-
-  @override
-  void onFinally(Request request, Context context) {}
+Future<void> closeOxyBenchmarks() async {
+  final client = _clientInstance;
+  _clientInstance = null;
+  await client?.close();
 }

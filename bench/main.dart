@@ -3,6 +3,7 @@ import 'dio.dart' as dio_suite;
 import 'http.dart' as http_suite;
 import 'oxy.dart';
 import 'src/runner.dart';
+import 'src/server.dart';
 
 final _suites = <String, BenchmarkSuite>{
   baselineSuite.name: baselineSuite,
@@ -19,15 +20,29 @@ void main(List<String> args) async {
   }
 
   final suites = _selectSuites(config.suite);
-  final results = await measureSuites(config, suites);
-  if (results.isEmpty) {
-    throw ArgumentError(
-      'No benchmarks matched suite `${config.suite}`'
-      '${config.filter == null ? '' : ' and filter `${config.filter}`'}.',
-    );
+  final needsServer = suites.any(_needsBenchmarkServer);
+  if (needsServer) {
+    await startBenchmarkServer();
   }
 
-  printReport(config, results);
+  try {
+    final results = await measureSuites(config, suites);
+    if (results.isEmpty) {
+      throw ArgumentError(
+        'No benchmarks matched suite `${config.suite}`'
+        '${config.filter == null ? '' : ' and filter `${config.filter}`'}.',
+      );
+    }
+
+    printReport(config, results);
+  } finally {
+    if (needsServer) {
+      await closeOxyBenchmarks();
+      await http_suite.closeHttpBenchmarks();
+      await dio_suite.closeDioBenchmarks();
+      await closeBenchmarkServer();
+    }
+  }
 }
 
 List<BenchmarkSuite> _selectSuites(String value) {
@@ -55,6 +70,12 @@ List<BenchmarkSuite> _selectSuites(String value) {
   return selected.toSet().toList(growable: false);
 }
 
+bool _needsBenchmarkServer(BenchmarkSuite suite) {
+  return suite.name == oxySuite.name ||
+      suite.name == http_suite.httpSuite.name ||
+      suite.name == dio_suite.dioSuite.name;
+}
+
 void _printUsage() {
   print('Usage: dart bench/main.dart [--quick] [--json] [--suite=<name>] ');
   print('                           [--filter=<text>]');
@@ -64,5 +85,5 @@ void _printUsage() {
   print('Examples:');
   print('  dart bench/main.dart --quick');
   print('  dart bench/main.dart --suite=clients --json');
-  print('  dart bench/main.dart --suite=oxy --filter=body');
+  print('  dart bench/main.dart --suite=oxy --filter=network');
 }
