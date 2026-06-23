@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/core/body.dart' as internal;
 import 'package:oxy/src/transport/transport.stub.dart' as stub;
 import 'package:test/test.dart';
 
@@ -131,6 +132,15 @@ void main() {
       );
       expect(await body.clone().text(), 'q=oxy&page=1');
       expect(await body.clone().text(), 'q=oxy&page=1');
+    });
+
+    test('keeps JSON request bodies on the buffered web upload path', () async {
+      final body = internal.requestJsonBody({'ok': true});
+
+      expect(body.contentType, 'application/json; charset=utf-8');
+      expect(body.size, 11);
+      expect(internal.streamsRequestBody(body), isFalse);
+      expect(await body.clone().text(), '{"ok":true}');
     });
 
     test('accepts ht Body as replayable upstream body', () async {
