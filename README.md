@@ -66,10 +66,6 @@ Choose Oxy when you want:
 - `MockTransport` tests that exercise the real Oxy pipeline without opening a
   socket or running a server.
 
-Another package may be a better fit when `package:http` is enough, when `dio`
-already matches your Flutter app conventions, or when you want generated
-interfaces from `chopper` or `retrofit`.
-
 ## Quick Start
 
 ```sh
