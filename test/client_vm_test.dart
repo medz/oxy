@@ -254,13 +254,11 @@ void main() {
         ),
       );
       addTearDown(client.close);
-      final body = Body.replayableStream(
-        () async* {
+      final body = Body(
+        (() async* {
           await Future<void>.delayed(const Duration(milliseconds: 50));
           yield utf8.encode('payload');
-        },
-        contentLength: 7,
-        contentType: 'text/plain',
+        })(),
       );
 
       final response = await client.post('/echo', body: body);

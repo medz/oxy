@@ -119,11 +119,13 @@ Request _redirectRequest(Request request, Response response, String location) {
     nextHeaders.delete('content-length');
     nextHeaders.delete('content-type');
   }
+  final nextBody = clearBody ? null : request.body?.clone();
 
   return request.copyWith(
     method: method,
     uri: nextUri,
     headers: nextHeaders,
+    body: nextBody,
     clearBody: clearBody,
     attributes: nextAttributes,
   );

@@ -6,227 +6,117 @@ import 'package:ht/ht.dart' as ht;
 
 import 'errors.dart';
 
-/// The source kind of a request body.
-enum BodyKind { empty, bytes, text, json, form, multipart, file, stream }
-
 /// Opens a fresh byte stream for a replayable body.
-typedef BodyStreamFactory = Stream<List<int>> Function();
+typedef _BodyStreamFactory = Stream<List<int>> Function();
 
-typedef _HtBodyFactory = ht.Body Function();
+const _bufferedUpstreamBodyLimit = 64 * 1024;
 
-/// A request body with replayability and metadata.
+/// A request body backed by `ht.Body`.
 ///
 /// Oxy uses [replayable] to decide whether a request can be retried safely.
-/// Bodies created from bytes, text, JSON, forms, URL search params, blobs, and
-/// replayable stream factories are replayable. Bodies created from a raw
-/// `Stream<List<int>>` are one-shot.
-final class Body {
-  Body._({
-    required this.kind,
+/// Bodies created from raw `Stream<List<int>>` values are one-shot; pass an
+/// `ht.Body(stream)` when tee-based clone semantics are desired.
+final class Body extends ht.Body {
+  /// Creates a request body from any `ht.BodyInit` value.
+  Body([super.init])
+    : replayable = _defaultReplayable(init),
+      _streamUpload = _defaultStreamUpload(init),
+      super();
+
+  Body._withPolicy(
+    super.init, {
     required this.replayable,
-    required _HtBodyFactory open,
-    this.contentLength,
-    this.contentType,
-  }) : _open = open;
+    required bool streamUpload,
+  }) : _streamUpload = streamUpload,
+       super();
 
-  /// The original body source kind.
-  final BodyKind kind;
-
-  /// Whether [open] can be called more than once.
+  /// Whether [clone] can create an independent body for another attempt.
   final bool replayable;
 
-  /// The known content length, or `null` when unknown.
-  final int? contentLength;
+  final bool _streamUpload;
 
-  /// The content type supplied by the body source, or `null`.
-  final String? contentType;
-  final _HtBodyFactory _open;
-  bool _used = false;
-
-  /// Creates an empty replayable body.
-  static Body empty() {
-    return Body.fromBytes(const <int>[], kind: BodyKind.empty);
-  }
-
-  /// Creates a replayable body from [bytes].
-  static Body fromBytes(List<int> bytes, {BodyKind kind = BodyKind.bytes}) {
-    final data = Uint8List.fromList(bytes);
-    return Body._(
-      kind: kind,
+  @override
+  Body clone() {
+    if (!replayable) {
+      throw const BodyStateError('Body is not replayable.');
+    }
+    return Body._withPolicy(
+      this,
       replayable: true,
-      contentLength: data.length,
-      open: () => ht.Body(Uint8List.fromList(data)),
+      streamUpload: _streamUpload,
     );
   }
 
-  /// Creates a replayable text body.
-  static Body fromText(
-    String value, {
-    Encoding encoding = utf8,
-    String contentType = 'text/plain;charset=UTF-8',
-  }) {
-    final data = encoding.encode(value);
-    return Body._(
-      kind: BodyKind.text,
-      replayable: true,
-      contentLength: data.length,
-      contentType: contentType,
-      open: () => ht.Body(Uint8List.fromList(data)),
-    );
-  }
-
-  /// Creates a replayable JSON body.
-  static Body fromJson(
-    Object? value, {
-    String contentType = 'application/json; charset=utf-8',
-  }) {
-    final data = utf8.encode(jsonEncode(value));
-    return Body._(
-      kind: BodyKind.json,
-      replayable: true,
-      contentLength: data.length,
-      contentType: contentType,
-      open: () => ht.Body(Uint8List.fromList(data)),
-    );
-  }
-
-  /// Creates a one-shot streaming body.
-  static Body stream(Stream<List<int>> stream, {int? contentLength}) {
-    var consumed = false;
-    return Body._(
-      kind: BodyKind.stream,
-      replayable: false,
-      contentLength: contentLength,
-      open: () {
-        if (consumed) {
-          throw const BodyStateError('Request body stream was already used.');
-        }
-        consumed = true;
-        return ht.Body(stream);
-      },
-    );
-  }
-
-  /// Creates a replayable streaming body from an [open] factory.
-  static Body replayableStream(
-    BodyStreamFactory open, {
-    int? contentLength,
-    BodyKind kind = BodyKind.stream,
-    String? contentType,
-  }) {
-    return Body._(
-      kind: kind,
-      replayable: true,
-      contentLength: contentLength,
-      contentType: contentType,
-      open: () => ht.Body(open()),
-    );
-  }
-
-  /// Converts common request body inputs to a [Body].
-  ///
-  /// Returns `null` for `null`. Throws [ArgumentError] for unsupported inputs.
-  static Body? from(Object? value) {
-    return switch (value) {
-      null => null,
-      Body() => value,
-      String() => Body.fromText(value),
-      Uint8List() => Body.fromBytes(value),
-      ByteBuffer() => Body.fromBytes(value.asUint8List()),
-      List<int>() => Body.fromBytes(value),
-      ht.FormData() => Body.fromFormData(value),
-      ht.URLSearchParams() => Body.fromUrlSearchParams(value),
-      ht.Blob() => Body.fromBlob(value),
-      ht.Body() => Body._fromHtBody(value),
-      Stream<List<int>>() => Body.stream(value),
-      _ => Body._fromHtBody(ht.Body(value)),
+  static bool _defaultReplayable(Object? init) {
+    return switch (init) {
+      Body() => init.replayable,
+      ht.Body() => true,
+      Stream<List<int>>() => false,
+      _ => true,
     };
   }
 
-  /// Creates a replayable body backed by an upstream [ht.Body].
-  static Body _fromHtBody(ht.Body body) {
-    final source = body.clone();
-    return Body._(
-      kind: BodyKind.stream,
-      replayable: true,
-      contentType: source.contentType,
-      open: () => source.clone(),
-    );
+  static bool _defaultStreamUpload(Object? init) {
+    return switch (init) {
+      Body() => init._streamUpload,
+      ht.Body() => _streamsUpstreamBody(init),
+      Stream<List<int>>() || ht.FormData() || ht.Blob() => true,
+      _ => false,
+    };
   }
 
-  /// Creates a replayable multipart form body.
-  static Body fromFormData(ht.FormData formData) {
-    final encoded = formData.encodeMultipart();
-    return Body._(
-      kind: BodyKind.multipart,
-      replayable: true,
-      contentLength: encoded.contentLength,
-      contentType: encoded.contentType,
-      open: () => ht.Body(encoded.stream),
-    );
-  }
-
-  /// Creates a replayable `application/x-www-form-urlencoded` body.
-  static Body fromUrlSearchParams(ht.URLSearchParams params) {
-    final data = utf8.encode(params.toString());
-    return Body._(
-      kind: BodyKind.form,
-      replayable: true,
-      contentLength: data.length,
-      contentType: ht.Body(params).contentType,
-      open: () => ht.Body(Uint8List.fromList(data)),
-    );
-  }
-
-  /// Creates a replayable body from a [ht.Blob].
-  static Body fromBlob(ht.Blob blob) {
-    return Body._(
-      kind: BodyKind.file,
-      replayable: true,
-      contentLength: blob.size,
-      contentType: blob.type.isEmpty ? null : blob.type,
-      open: () => ht.Body(blob),
-    );
-  }
-
-  /// Opens the body stream.
-  ///
-  /// Throws [BodyStateError] if this body is not replayable and was already
-  /// opened.
-  Stream<Uint8List> open() {
-    if (!replayable) {
-      if (_used) {
-        throw const BodyStateError('Body is not replayable.');
-      }
-      _used = true;
+  static bool _streamsUpstreamBody(ht.Body body) {
+    final length = knownBodyLength(body);
+    if (length == null) {
+      return true;
     }
 
-    return _open().stream;
-  }
-
-  /// Reads the body as bytes.
-  ///
-  /// Throws [BodyTooLargeError] if [maxBytes] is set and the body exceeds it.
-  Future<Uint8List> bytes({int? maxBytes}) async {
-    final builder = BytesBuilder(copy: false);
-    await for (final chunk in open()) {
-      builder.add(chunk);
-      if (maxBytes != null && builder.length > maxBytes) {
-        throw BodyTooLargeError(limit: maxBytes);
-      }
+    final contentType = body.contentType?.toLowerCase();
+    if (contentType == null) {
+      return length > _bufferedUpstreamBodyLimit;
     }
-    return builder.takeBytes();
-  }
+    if (contentType == 'text/plain;charset=utf-8' ||
+        contentType == 'application/x-www-form-urlencoded;charset=utf-8') {
+      return false;
+    }
 
-  /// Reads the body as text using [encoding].
-  Future<String> text({Encoding encoding = utf8, int? maxBytes}) async {
-    return encoding.decode(await bytes(maxBytes: maxBytes));
+    return true;
   }
+}
 
-  /// Reads and decodes the body as JSON.
-  Future<Object?> json({int? maxBytes}) async {
-    return jsonDecode(await text(maxBytes: maxBytes));
+/// Converts request body inputs to an Oxy [Body].
+Body? requestBodyFrom(Object? value) {
+  return value == null
+      ? null
+      : value is Body
+      ? value
+      : Body(value);
+}
+
+/// Creates a JSON request body.
+Body requestJsonBody(Object? value) {
+  return Body._withPolicy(
+    ht.Blob([jsonEncode(value)], 'application/json; charset=utf-8'),
+    replayable: true,
+    streamUpload: false,
+  );
+}
+
+/// Returns a body byte length when it is available without consuming [body].
+int? knownBodyLength(ht.Body? body) {
+  if (body == null) {
+    return null;
   }
+  try {
+    return body.size;
+  } on UnsupportedError {
+    return null;
+  }
+}
+
+/// Whether web transport should upload [body] as a stream.
+bool streamsRequestBody(Body? body) {
+  return body?._streamUpload ?? false;
 }
 
 /// A response body with replayability and content length metadata.
@@ -237,7 +127,7 @@ final class Body {
 final class ResponseBody {
   ResponseBody._({
     required bool replayable,
-    required BodyStreamFactory open,
+    required _BodyStreamFactory open,
     this.contentLength,
   }) : _replayable = replayable,
        _open = open;
@@ -246,7 +136,7 @@ final class ResponseBody {
 
   /// The known content length, or `null` when unknown.
   final int? contentLength;
-  final BodyStreamFactory _open;
+  final _BodyStreamFactory _open;
   bool _used = false;
 
   /// Whether [open] can be called more than once.

@@ -1,3 +1,20 @@
+## Unreleased
+
+### Breaking Changes
+
+- Reworked request `Body` as a direct `ht.Body` subclass. The Oxy-specific
+  `BodyKind`, `Body.from*`, `Body.open()`, and request-body `contentLength`
+  APIs, plus `BodyStreamFactory`, were removed; use the upstream `ht.Body` APIs
+  such as `stream()`, `bytes()`, `text()`, `json()`, `clone()`, `size`, and
+  `contentType`.
+
+### Changed
+
+- Upgraded to `ht ^0.6.0` and accept upstream `ht.Body` values directly as
+  request bodies.
+- Replayable request bodies are cloned for retry and preserved-method redirect
+  attempts so each attempt consumes an independent `ht.Body`.
+
 ## 0.5.0
 
 ### Breaking Changes

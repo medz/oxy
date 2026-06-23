@@ -3,8 +3,12 @@ library;
 
 import 'dart:convert';
 import 'dart:js_interop';
+import 'dart:typed_data';
 
+import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
+import 'package:oxy/src/core/body.dart' as core;
+import 'package:oxy/src/transport/transport.web.dart' as web;
 import 'package:oxy/src/transport/web_stream_utils.dart';
 import 'package:test/test.dart';
 
@@ -34,6 +38,73 @@ void main() {
     );
 
     await expectLater(client.get(url), throwsA(isA<PolicyError>()));
+  });
+
+  test('web transport buffers uploads when fetch streams are unsupported', () {
+    final body = Body(Blob(['hello'], 'text/plain'));
+    final transport = web.WebTransport();
+
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isTrue,
+    );
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: false),
+      isFalse,
+    );
+  });
+
+  test('web transport preserves wrapped ht Body upload streams', () {
+    final body = Body(ht.Body(Blob(['hello'], 'text/plain')));
+    final transport = web.WebTransport();
+
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isTrue,
+    );
+  });
+
+  test('web transport buffers JSON request bodies', () {
+    final body = core.requestJsonBody({'name': 'oxy'});
+    final transport = web.WebTransport();
+
+    expect(body.contentType, 'application/json; charset=utf-8');
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isFalse,
+    );
+  });
+
+  test('web transport buffers small upstream ht Body payloads', () {
+    final textBody = Body(ht.Body('hello'));
+    final bytesBody = Body(ht.Body([1, 2, 3]));
+    final transport = web.WebTransport();
+
+    expect(
+      transport.shouldStreamRequestBody(
+        textBody,
+        requestStreamsSupported: true,
+      ),
+      isFalse,
+    );
+    expect(
+      transport.shouldStreamRequestBody(
+        bytesBody,
+        requestStreamsSupported: true,
+      ),
+      isFalse,
+    );
+  });
+
+  test('web transport streams large untyped upstream ht Body payloads', () {
+    final body = Body(ht.Body(Blob([Uint8List(128 * 1024)])));
+    final transport = web.WebTransport();
+
+    expect(body.contentType, isNull);
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isTrue,
+    );
   });
 
   test('web response stream read failures become NetworkError', () async {
