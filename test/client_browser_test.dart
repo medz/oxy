@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 import 'dart:js_interop';
 
+import 'package:ht/ht.dart' as ht;
 import 'package:oxy/oxy.dart';
 import 'package:oxy/src/transport/transport.web.dart' as web;
 import 'package:oxy/src/transport/web_stream_utils.dart';
@@ -48,6 +49,16 @@ void main() {
     expect(
       transport.shouldStreamRequestBody(body, requestStreamsSupported: false),
       isFalse,
+    );
+  });
+
+  test('web transport preserves wrapped ht Body upload streams', () {
+    final body = Body(ht.Body(Blob(['hello'], 'text/plain')));
+    final transport = web.WebTransport();
+
+    expect(
+      transport.shouldStreamRequestBody(body, requestStreamsSupported: true),
+      isTrue,
     );
   });
 

@@ -57,8 +57,7 @@ final class Body extends ht.Body {
   static bool _defaultStreamUpload(Object? init) {
     return switch (init) {
       Body() => init._streamUpload,
-      ht.Body() =>
-        _isMultipart(init.contentType) || knownBodyLength(init) == null,
+      ht.Body() => true,
       Stream<List<int>>() || ht.FormData() || ht.Blob() => true,
       _ => false,
     };
@@ -94,10 +93,6 @@ int? knownBodyLength(ht.Body? body) {
 /// Whether web transport should upload [body] as a stream.
 bool streamsRequestBody(Body? body) {
   return body?._streamUpload ?? false;
-}
-
-bool _isMultipart(String? contentType) {
-  return contentType?.toLowerCase().startsWith('multipart/form-data') ?? false;
 }
 
 /// A response body with replayability and content length metadata.
