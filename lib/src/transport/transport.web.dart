@@ -111,7 +111,8 @@ final class WebTransport implements Transport {
     _bindAbort(controller, context);
 
     final requestBody = request.body;
-    final streamBody = _shouldStreamRequestBody(requestBody);
+    final streamBody = streamsRequestBody(requestBody);
+    final contentLength = knownBodyLength(requestBody);
     final requestBodySent =
         streamBody && context.timeoutPolicy.firstByte != null
         ? Completer<void>()
@@ -126,7 +127,7 @@ final class WebTransport implements Transport {
 
     if (requestBody != null) {
       if (streamBody) {
-        final stream = _withSendTimeout(requestBody.open(), context, request);
+        final stream = _withSendTimeout(requestBody.stream(), context, request);
         init.body = toWebReadableStream(
           requestBodySent == null
               ? stream
@@ -156,8 +157,8 @@ final class WebTransport implements Transport {
 
     context.onSendProgress?.call(
       TransferProgress(
-        transferred: streamBody ? 0 : (requestBody?.contentLength ?? 0),
-        total: requestBody?.contentLength,
+        transferred: streamBody ? 0 : (contentLength ?? 0),
+        total: contentLength,
       ),
     );
 
@@ -405,13 +406,6 @@ final class WebTransport implements Transport {
   bool _isRedirect(int status) {
     return switch (status) {
       301 || 302 || 303 || 307 || 308 => true,
-      _ => false,
-    };
-  }
-
-  bool _shouldStreamRequestBody(Body? body) {
-    return switch (body?.kind) {
-      BodyKind.stream || BodyKind.multipart || BodyKind.file => true,
       _ => false,
     };
   }

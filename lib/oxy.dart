@@ -29,7 +29,7 @@ export 'package:ht/ht.dart'
 export 'src/client.dart';
 export 'src/core/abort.dart';
 export 'src/core/attributes.dart';
-export 'src/core/body.dart';
+export 'src/core/body.dart' show Body, ResponseBody;
 export 'src/core/errors.dart';
 export 'src/core/headers.dart';
 export 'src/core/request.dart';

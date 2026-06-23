@@ -67,10 +67,11 @@ ResolvedRequest resolveClientRequest(
   if (body?.contentType != null && !headers.has('content-type')) {
     headers.set('content-type', body!.contentType!);
   }
+  final contentLength = knownBodyLength(body);
   if (capability.name != 'web' &&
-      body?.contentLength != null &&
+      contentLength != null &&
       !headers.has('content-length')) {
-    headers.set('content-length', body!.contentLength!.toString());
+    headers.set('content-length', contentLength.toString());
   }
 
   final prepared = request.copyWith(
@@ -93,9 +94,9 @@ Body? resolveRequestBody({
     throw ArgumentError('Use either body or json, not both.');
   }
   if (!identical(json, jsonOmitted)) {
-    return Body.fromJson(json);
+    return requestJsonBody(json);
   }
-  return Body.from(body);
+  return requestBodyFrom(body);
 }
 
 void _overrideHeaders(Headers target, Headers source) {

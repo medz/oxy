@@ -14,7 +14,7 @@ import '../options.dart';
 /// final request = Request(
 ///   '/users',
 ///   method: 'POST',
-///   body: Body.fromJson({'name': 'oxy'}),
+///   body: Blob(['{"name":"oxy"}'], 'application/json; charset=utf-8'),
 /// );
 /// ```
 final class Request {
@@ -29,7 +29,7 @@ final class Request {
          method: method,
          uri: _parseUri(url),
          headers: Headers(headers),
-         body: Body.from(body),
+         body: requestBodyFrom(body),
          options: options ?? const RequestOptions(),
          attributes: attributes,
        );

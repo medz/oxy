@@ -285,7 +285,7 @@ final class Client {
   /// [url] can be a [String] or [Uri]. Relative URLs are resolved against
   /// [ClientOptions.baseUrl]. Pass [json] to encode a JSON request body and set
   /// the content type automatically, or pass [body] for raw body inputs accepted
-  /// by [Body.from].
+  /// by [Body].
   Future<Response> request(
     String method,
     Object url, {
@@ -585,7 +585,7 @@ final class Client {
         attempt: attempt,
         signal: attemptSignal,
       );
-      var attemptRequest = sanitizeRedirectHeaders(request);
+      var attemptRequest = sanitizeRedirectHeaders(_requestForAttempt(request));
 
       if (attempt > 0 && request.body != null && !request.body!.replayable) {
         attemptContext.emit(
@@ -717,6 +717,14 @@ final class Client {
         throw normalized;
       }
     }
+  }
+
+  Request _requestForAttempt(Request request) {
+    final body = request.body;
+    if (body == null || !body.replayable) {
+      return request;
+    }
+    return request.copyWith(body: body.clone());
   }
 
   void _throwIfAborted(AbortSignal? signal, Request request) {

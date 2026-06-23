@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../core/body.dart';
 import '../core/errors.dart';
 import '../core/headers.dart';
 import '../core/request.dart';
@@ -195,9 +196,9 @@ final class NativeTransport implements Transport {
 
     final body = request.body;
     if (body != null) {
-      if (body.contentLength != null &&
-          !request.headers.has('content-length')) {
-        httpRequest.headers.contentLength = body.contentLength!;
+      final contentLength = knownBodyLength(body);
+      if (contentLength != null && !request.headers.has('content-length')) {
+        httpRequest.headers.contentLength = contentLength;
       }
       if (body.contentType != null && !request.headers.has('content-type')) {
         httpRequest.headers.set('content-type', body.contentType!);
@@ -222,10 +223,10 @@ final class NativeTransport implements Transport {
       return;
     }
 
-    final total = body.contentLength;
+    final total = knownBodyLength(body);
     var transferred = 0;
 
-    final chunks = StreamIterator<Uint8List>(body.open());
+    final chunks = StreamIterator<Uint8List>(body.stream());
     Future<void>? cancelFuture;
     Future<void> cancelChunks() {
       return cancelFuture ??= chunks.cancel();

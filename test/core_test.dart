@@ -38,32 +38,38 @@ void main() {
   });
 
   group('Body', () {
-    test('marks bytes and json bodies as replayable', () async {
-      final bytes = Body.fromBytes([1, 2, 3]);
-      final text = Body.from('hello')!;
-      final json = Body.fromJson({'ok': true});
+    test('inherits ht body primitive APIs', () async {
+      final text = Body('hello');
 
-      expect(bytes.replayable, isTrue);
-      expect(await bytes.bytes(), [1, 2, 3]);
-      expect(await bytes.bytes(), [1, 2, 3]);
-      expect(text.kind, BodyKind.text);
+      expect(text, isA<ht.Body>());
+      expect(text, isA<Blob>());
+      expect(text, isA<Stream<Uint8List>>());
+      expect(text.replayable, isTrue);
+      expect(text.size, 5);
+      expect(text.type, 'text/plain;charset=utf-8');
       expect(text.contentType, 'text/plain;charset=UTF-8');
+      expect(text.bodyUsed, isFalse);
+
+      final clone = text.clone();
+      expect(clone, isA<Body>());
+      expect(await clone.text(), 'hello');
+      expect(text.bodyUsed, isFalse);
       expect(await text.text(), 'hello');
-      expect(json.contentType, contains('application/json'));
-      expect(utf8.decode(await json.bytes()), '{"ok":true}');
+      expect(text.bodyUsed, isTrue);
+      expect(text.text(), throwsStateError);
     });
 
-    test('isolates replayable byte reads from caller mutation', () async {
-      final body = Body.fromBytes([1, 2, 3]);
+    test('isolates cloned byte reads from caller mutation', () async {
+      final body = Body([1, 2, 3]);
 
-      final first = await body.bytes();
+      final first = await body.clone().bytes();
       first[0] = 9;
 
-      expect(await body.bytes(), [1, 2, 3]);
+      expect(await body.clone().bytes(), [1, 2, 3]);
     });
 
     test('protects one-shot streams from accidental replay', () async {
-      final body = Body.stream(
+      final body = Body(
         Stream<Uint8List>.fromIterable([
           Uint8List.fromList([1]),
         ]),
@@ -71,7 +77,8 @@ void main() {
 
       expect(body.replayable, isFalse);
       expect(await body.bytes(), [1]);
-      expect(body.bytes(), throwsA(isA<BodyStateError>()));
+      expect(body.bytes(), throwsStateError);
+      expect(body.clone, throwsA(isA<BodyStateError>()));
     });
 
     test('accepts built-in form primitives backed by ht', () async {
@@ -81,65 +88,60 @@ void main() {
           'file',
           Multipart.blob(Blob(['hello'], 'text/plain'), 'a.txt'),
         );
-      final body = Body.from(form)!;
+      final body = Body(form);
 
-      expect(body.kind, BodyKind.multipart);
       expect(body.replayable, isTrue);
       expect(body.contentType, startsWith('multipart/form-data; boundary='));
-      expect(body.contentLength, greaterThan(0));
+      expect(body.size, greaterThan(0));
 
       final boundary = body.contentType!.split('boundary=').last;
-      final text = utf8.decode(await body.bytes());
+      final text = utf8.decode(await body.clone().bytes());
       expect(text, startsWith('--$boundary\r\n'));
       expect(text, endsWith('--$boundary--\r\n'));
       expect(text, contains('name="name"'));
       expect(text, contains('oxy'));
       expect(text, contains('filename="a.txt"'));
-      expect(utf8.decode(await body.bytes()), text);
+      expect(utf8.decode(await body.clone().bytes()), text);
     });
 
     test('treats Blob and File bodies as streaming file-like bodies', () async {
-      final body = Body.from(Blob(['hello'], 'text/plain'))!;
-      final fileBody = Body.from(File(['file'], 'a.txt', type: 'text/plain'))!;
+      final body = Body(Blob(['hello'], 'text/plain'));
+      final fileBody = Body(File(['file'], 'a.txt', type: 'text/plain'));
 
-      expect(body.kind, BodyKind.file);
       expect(body.replayable, isTrue);
-      expect(body.contentLength, 5);
+      expect(body.size, 5);
       expect(body.contentType, 'text/plain');
-      expect(await body.text(), 'hello');
-      expect(await body.text(), 'hello');
+      expect(await body.clone().text(), 'hello');
+      expect(await body.clone().text(), 'hello');
 
-      expect(fileBody.kind, BodyKind.file);
       expect(fileBody.replayable, isTrue);
-      expect(fileBody.contentLength, 4);
+      expect(fileBody.size, 4);
       expect(fileBody.contentType, 'text/plain');
-      expect(await fileBody.text(), 'file');
-      expect(await fileBody.text(), 'file');
+      expect(await fileBody.clone().text(), 'file');
+      expect(await fileBody.clone().text(), 'file');
     });
 
     test('accepts URLSearchParams as replayable form body', () async {
       final params = URLSearchParams({'q': 'oxy', 'page': '1'});
-      final body = Body.from(params)!;
+      final body = Body(params);
 
-      expect(body.kind, BodyKind.form);
       expect(
         body.contentType,
         'application/x-www-form-urlencoded;charset=UTF-8',
       );
-      expect(await body.text(), 'q=oxy&page=1');
-      expect(await body.text(), 'q=oxy&page=1');
+      expect(await body.clone().text(), 'q=oxy&page=1');
+      expect(await body.clone().text(), 'q=oxy&page=1');
     });
 
     test('accepts ht Body as replayable upstream body', () async {
       final upstream = ht.Body('hello');
-      final body = Body.from(upstream)!;
+      final body = Body(upstream);
 
-      expect(body.kind, BodyKind.stream);
       expect(body.replayable, isTrue);
-      expect(body.contentLength, isNull);
+      expect(body.size, 5);
       expect(body.contentType, 'text/plain;charset=UTF-8');
-      expect(await body.text(), 'hello');
-      expect(await body.text(), 'hello');
+      expect(await body.clone().text(), 'hello');
+      expect(await body.clone().text(), 'hello');
       expect(upstream.bodyUsed, isFalse);
     });
 
@@ -150,20 +152,20 @@ void main() {
           utf8.encode('stream'),
         ]),
       );
-      final body = Body.from(upstream)!;
+      final body = Body(upstream);
 
       expect(body.replayable, isTrue);
-      expect(await body.text(), 'hello stream');
-      expect(await body.text(), 'hello stream');
+      expect(() => body.size, throwsUnsupportedError);
+      expect(await body.clone().text(), 'hello stream');
+      expect(await body.clone().text(), 'hello stream');
     });
 
     test('accepts ByteBuffer through ht-compatible body input', () async {
       final buffer = Uint8List.fromList([1, 2, 3]).buffer;
-      final body = Body.from(buffer)!;
+      final body = Body(buffer);
 
-      expect(body.kind, BodyKind.bytes);
       expect(body.replayable, isTrue);
-      expect(body.contentLength, 3);
+      expect(body.size, 3);
       expect(await body.bytes(), [1, 2, 3]);
     });
   });
