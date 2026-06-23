@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart' as dio;
 
 import 'src/data.dart';
+import 'src/network.dart';
 import 'src/runner.dart';
 import 'src/server.dart';
 
@@ -13,6 +14,7 @@ final dioSuite = BenchmarkSuite('dio', <BenchmarkCase>[
         '/empty',
         options: _headersOptions,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.statusCode);
     },
   ),
@@ -24,6 +26,7 @@ final dioSuite = BenchmarkSuite('dio', <BenchmarkCase>[
         '/json',
         options: _headersOptions,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.data);
     },
   ),
@@ -35,6 +38,7 @@ final dioSuite = BenchmarkSuite('dio', <BenchmarkCase>[
         '/bytes-64k',
         options: _bytesOptions,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.data);
     },
   ),
@@ -47,6 +51,7 @@ final dioSuite = BenchmarkSuite('dio', <BenchmarkCase>[
         data: jsonPayload,
         options: _jsonOptions,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.data);
     },
   ),
@@ -59,23 +64,20 @@ final dioSuite = BenchmarkSuite('dio', <BenchmarkCase>[
         data: largeBytes,
         options: _postBytesOptions,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.statusCode);
     },
   ),
 ]);
 
-final _headers8 = Map<String, String>.fromEntries(headerPairs8);
-const _jsonHeaders = <String, String>{
-  'content-type': 'application/json; charset=utf-8',
-};
-const _octetHeaders = <String, String>{
-  'content-type': 'application/octet-stream',
-};
-final _headersOptions = dio.Options(headers: _headers8);
-final _jsonOptions = dio.Options(headers: _jsonHeaders);
-final _bytesOptions = dio.Options(responseType: dio.ResponseType.bytes);
+final _headersOptions = dio.Options(headers: benchmarkHeaders);
+final _jsonOptions = dio.Options(headers: jsonHeaders);
+final _bytesOptions = dio.Options(
+  headers: benchmarkHeaders,
+  responseType: dio.ResponseType.bytes,
+);
 final _postBytesOptions = dio.Options(
-  headers: _octetHeaders,
+  headers: octetHeaders,
   responseType: dio.ResponseType.plain,
 );
 
@@ -86,7 +88,6 @@ dio.Dio get _client {
     dio.BaseOptions(
       baseUrl: benchmarkServer.baseUri.toString(),
       responseType: dio.ResponseType.json,
-      validateStatus: (_) => true,
     ),
   );
 }

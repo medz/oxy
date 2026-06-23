@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'src/data.dart';
+import 'src/network.dart';
 import 'src/runner.dart';
 import 'src/server.dart';
 
@@ -11,7 +12,11 @@ final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
     group: 'network',
     name: 'get-empty',
     run: () async {
-      final response = await _client.get(_uri('/empty'), headers: _headers8);
+      final response = await _client.get(
+        _uri('/empty'),
+        headers: benchmarkHeaders,
+      );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.statusCode);
     },
   ),
@@ -19,7 +24,11 @@ final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
     group: 'network',
     name: 'get-json-decode',
     run: () async {
-      final response = await _client.get(_uri('/json'), headers: _headers8);
+      final response = await _client.get(
+        _uri('/json'),
+        headers: benchmarkHeaders,
+      );
+      checkBenchmarkStatus(response.statusCode);
       consume(jsonDecode(response.body));
     },
   ),
@@ -29,8 +38,9 @@ final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
     run: () async {
       final response = await _client.get(
         _uri('/bytes-64k'),
-        headers: _headers8,
+        headers: benchmarkHeaders,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.bodyBytes);
     },
   ),
@@ -40,9 +50,10 @@ final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
     run: () async {
       final response = await _client.post(
         _uri('/json'),
-        headers: _jsonHeaders,
+        headers: jsonHeaders,
         body: jsonText,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(jsonDecode(response.body));
     },
   ),
@@ -52,21 +63,14 @@ final httpSuite = BenchmarkSuite('http', <BenchmarkCase>[
     run: () async {
       final response = await _client.post(
         _uri('/bytes-64k'),
-        headers: _octetHeaders,
+        headers: octetHeaders,
         body: largeBytes,
       );
+      checkBenchmarkStatus(response.statusCode);
       consume(response.statusCode);
     },
   ),
 ]);
-
-final _headers8 = Map<String, String>.fromEntries(headerPairs8);
-const _jsonHeaders = <String, String>{
-  'content-type': 'application/json; charset=utf-8',
-};
-const _octetHeaders = <String, String>{
-  'content-type': 'application/octet-stream',
-};
 
 http.Client? _clientInstance;
 

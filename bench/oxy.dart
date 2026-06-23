@@ -1,6 +1,7 @@
 import 'package:oxy/oxy.dart';
 
 import 'src/data.dart';
+import 'src/network.dart';
 import 'src/runner.dart';
 import 'src/server.dart';
 
@@ -9,7 +10,8 @@ final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
     group: 'network',
     name: 'get-empty',
     run: () async {
-      final response = await _client.get('/empty');
+      final response = await _client.get('/empty', headers: benchmarkHeaders);
+      checkBenchmarkStatus(response.status);
       consume(await response.bytes());
     },
   ),
@@ -17,7 +19,8 @@ final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
     group: 'network',
     name: 'get-json-decode',
     run: () async {
-      final response = await _client.get('/json');
+      final response = await _client.get('/json', headers: benchmarkHeaders);
+      checkBenchmarkStatus(response.status);
       consume(await response.json<Map<String, Object?>>());
     },
   ),
@@ -25,7 +28,11 @@ final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
     group: 'network',
     name: 'get-bytes-64k',
     run: () async {
-      final response = await _client.get('/bytes-64k');
+      final response = await _client.get(
+        '/bytes-64k',
+        headers: benchmarkHeaders,
+      );
+      checkBenchmarkStatus(response.status);
       consume(await response.bytes());
     },
   ),
@@ -34,6 +41,7 @@ final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
     name: 'post-json',
     run: () async {
       final response = await _client.post('/json', json: jsonPayload);
+      checkBenchmarkStatus(response.status);
       consume(await response.json<Map<String, Object?>>());
     },
   ),
@@ -43,17 +51,14 @@ final oxySuite = BenchmarkSuite('oxy', <BenchmarkCase>[
     run: () async {
       final response = await _client.post(
         '/bytes-64k',
-        headers: _octetHeaders,
+        headers: octetHeaders,
         body: largeBytes,
       );
+      checkBenchmarkStatus(response.status);
       consume(await response.bytes());
     },
   ),
 ]);
-
-const _octetHeaders = <String, String>{
-  'content-type': 'application/octet-stream',
-};
 
 Client? _clientInstance;
 
