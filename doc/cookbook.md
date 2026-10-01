@@ -49,6 +49,7 @@ See [`example/policies.dart`](../example/policies.dart).
 final client = Client(
   ClientOptions(
     timeoutPolicy: const TimeoutPolicy(total: Duration(seconds: 20)),
+    baseUrl: Uri.parse('https://api.example.com'),
     retryPolicy: const RetryPolicy(maxRetries: 1),
     redirectPolicy: RedirectPolicy.manual,
   ),
@@ -63,6 +64,16 @@ final response = await client.get(
 Use `StatusPolicy.returnResponse` when non-2xx responses are expected data. Keep
 the default `StatusPolicy.throwOnError` when non-2xx responses should fail fast
 with `StatusError`.
+
+## Identify Your API Client
+
+Oxy's default non-Web `User-Agent` is `oxy`. It deliberately omits the package
+release version so it cannot become stale when package metadata changes.
+For non-Web requests, use `ClientOptions(userAgent: 'users-sdk/1.0')` for your
+application's own identity. An explicit `user-agent` header takes precedence
+over this option. An empty `userAgent` stops Oxy from adding its default header,
+but the native HTTP stack may supply its own. On Web, Oxy ignores this option
+and the browser controls the wire user agent.
 
 ## Use Result for No-Throw Flows
 
