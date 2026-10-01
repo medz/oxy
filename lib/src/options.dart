@@ -56,7 +56,7 @@ final class ClientOptions {
     this.hooks = const Hooks(),
     this.transport,
     this.keepAlive = true,
-    this.userAgent = 'oxy/0.3.0',
+    this.userAgent = 'oxy',
     this.errorBodyPreviewLimit = 4096,
     this.attributes = const Attributes(),
     this.onEvent,
@@ -93,6 +93,10 @@ final class ClientOptions {
   final bool keepAlive;
 
   /// User agent sent by non-Web default transports.
+  ///
+  /// Defaults to `oxy`, without a release version. Explicit `user-agent`
+  /// headers take precedence. An empty string disables Oxy's default header;
+  /// the underlying transport may still supply its own user agent.
   final String userAgent;
 
   /// Maximum number of response body bytes to include in `StatusError` previews.

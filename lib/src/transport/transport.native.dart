@@ -191,7 +191,12 @@ final class NativeTransport implements Transport {
     Context context,
   ) {
     for (final entry in request.headers) {
-      httpRequest.headers.add(entry.key, entry.value);
+      if (entry.key == 'user-agent') {
+        // Replace dart:io's default rather than appending to the caller's UA.
+        httpRequest.headers.set(entry.key, entry.value);
+      } else {
+        httpRequest.headers.add(entry.key, entry.value);
+      }
     }
 
     final body = request.body;

@@ -93,9 +93,31 @@ void main() {
         expect(payload['method'], 'POST');
         expect(payload['body'], '{"name":"oxy"}');
         expect(payload['query'], {'existing': '1', 'page': '2'});
-        expect(payload['ua'], contains('oxy/0.3.0'));
+        expect(payload['ua'], 'oxy');
       },
     );
+
+    test('preserves custom and explicit native user-agent headers', () async {
+      final client = Client(
+        ClientOptions(baseUrl: baseUrl, userAgent: 'users-sdk/1.0'),
+      );
+      addTearDown(client.close);
+
+      final custom = await client.get('/echo');
+      expect(
+        (await custom.json<Map<String, Object?>>())['ua'],
+        'users-sdk/1.0',
+      );
+
+      final explicit = await client.get(
+        '/echo',
+        headers: {'user-agent': 'application/2.0'},
+      );
+      expect(
+        (await explicit.json<Map<String, Object?>>())['ua'],
+        'application/2.0',
+      );
+    });
 
     test('retries replayable idempotent requests', () async {
       flakyCalls = 0;
