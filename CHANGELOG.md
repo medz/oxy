@@ -1,3 +1,16 @@
+## Unreleased
+
+### Breaking Changes
+
+- Raised the declared minimum Dart SDK to 3.12, matching the required
+  `patchwork ^0.5.0` dependency. Published 0.6.0 already fails dependency
+  resolution on Dart 3.10 and 3.11 despite declaring a 3.10 minimum.
+
+### Changed
+
+- CI now checks Dart 3.12.0 as well as stable.
+- Added concrete qualification gaps and admission gates for 1.0.
+
 ## 0.6.0
 
 ### Breaking Changes
