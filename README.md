@@ -150,8 +150,8 @@ rules, and status handling out of UI and feature code.
 
 Non-Web requests use `User-Agent: oxy` by default. To identify your own API
 client and its version, set `ClientOptions(userAgent: 'users-sdk/1.0')`.
-Explicit `user-agent` headers take precedence; browser requests use the
-browser's user agent.
+Explicit `user-agent` headers take precedence. Oxy does not add this default
+header on Web.
 
 ## Request Lifecycle
 

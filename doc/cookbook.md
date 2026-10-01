@@ -72,7 +72,7 @@ release version so it cannot become stale when package metadata changes.
 Use `ClientOptions(userAgent: 'users-sdk/1.0')` for your application's own
 identity. An explicit `user-agent` header takes precedence over this option.
 An empty `userAgent` stops Oxy from adding its default header, but the native
-HTTP stack may supply its own. Browser requests use the browser's user agent.
+HTTP stack may supply its own. Oxy does not add this default header on Web.
 
 ## Use Result for No-Throw Flows
 
