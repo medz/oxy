@@ -68,6 +68,9 @@ Choose Oxy when you want:
 
 ## Quick Start
 
+Oxy requires Dart 3.12 or newer, including Flutter SDKs that bundle Dart 3.12
+or newer. This matches the minimum SDK of its required Patchwork dependency.
+
 ```sh
 dart pub add oxy
 ```
@@ -276,6 +279,9 @@ hardens. Breaking changes before 1.0 should be deliberate, documented in
 [CHANGELOG.md](CHANGELOG.md), and focused on making the `Client`, `Request`,
 `Response`, policy, middleware, typed error, `Result`, and single-package
 native/Web model simpler or safer.
+
+The [road to 1.0](doc/roadmap.md) lists the remaining qualification gaps,
+small release sequence, and admission gates.
 
 ## License
 

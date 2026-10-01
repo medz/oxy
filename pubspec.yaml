@@ -15,7 +15,7 @@ funding:
   - https://opencollective.com/openodroe
 
 environment:
-  sdk: ^3.10.0
+  sdk: ^3.12.0
 
 dependencies:
   ht: ^0.6.0
