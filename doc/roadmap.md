@@ -10,15 +10,18 @@ README still applies. This plan builds on the completed stability work in
 
 The starting point is published 0.6.0 and main commit `7633f785`, checked on
 2026-10-01. A missing qualification below is not evidence of a runtime defect.
+The unreleased development branch now declares Dart 3.12 and checks both
+Dart 3.12.0 and stable. Its default non-Web user-agent is version-independent
+`oxy`; the historical 0.6.0 observations below describe the published package.
 
 | Area | Current evidence | Required before 1.0 |
 | --- | --- | --- |
 | Default request cost | Real loopback suites cover five payload/transfer scenarios; #76 remains open. | Measure narrow changes with default policies enabled, preserve behavior, and compare small requests and 64KiB transfers. |
-| Minimum SDK | Oxy declares Dart 3.10; its required `patchwork 0.5.0` declares Dart 3.12. CI uses only stable. | Align the declared SDK with the resolvable dependency graph and test the effective minimum as well as stable. |
+| Minimum SDK | Published 0.6.0 declares Dart 3.10, while required `patchwork 0.5.0` requires 3.12. Development manifest and CI now match Dart 3.12. | Retain effective minimum/stable checks and verify the corrected declaration in the next published package. |
 | Public API | 0.3–0.6 deliberately changed core, middleware, headers, cookies, and bodies. | Review and freeze exports, defaults, ownership, replayability, cancellation, and error contracts; document any final changes. Include re-exported upstream types. |
 | Platform promises | CI tests VM, Node, and Chrome. The default transport selects native or Web through conditional imports. | Document actual browser restrictions and distinguish compilation/core tests from real transport tests. Add a Flutter consumer and native/browser HTTP consumer smoke checks. |
 | Capability metadata | Native capability flags advertise proxy/TLS configuration; the built-in transport exposes no corresponding configuration input. | Make capability claims match the supported API or explicitly document custom transport requirements. |
-| Release metadata | The default user-agent is still `oxy/0.3.0` in 0.6.0. | Choose and verify a consistent user-agent/version policy. |
+| Release metadata | Published 0.6.0 sends `oxy/0.3.0`; development uses `oxy` with tested application/header overrides. | Retain the version-independent default and verify package/version metadata for each release. |
 | Dependency overlays | A fresh hosted 0.6.0 consumer on Dart 3.13.4 honors RFC850 Retry-After through Patchwork's automatic build hook. | Repeat hosted-consumer checks on the effective minimum SDK and supported build paths; keep provider patches in the published archive. |
 
 ## Small release sequence

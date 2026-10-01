@@ -8,8 +8,18 @@
 
 ### Changed
 
+- The default non-Web user-agent is now the version-independent `oxy` rather
+  than the stale `oxy/0.3.0`. Applications can continue to set their own
+  versioned user-agent through `ClientOptions.userAgent` or explicit headers.
 - CI now checks Dart 3.12.0 as well as stable.
 - Added concrete qualification gaps and admission gates for 1.0.
+
+### Fixed
+
+- Native transport now replaces `dart:io`'s default user-agent when Oxy or
+  the caller provides one, rather than appending a second identity.
+- Added the required base URL to the README and cookbook policy examples so
+  their relative `/missing` request demonstrates status handling correctly.
 
 ## 0.6.0
 
