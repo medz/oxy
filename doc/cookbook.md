@@ -69,10 +69,11 @@ with `StatusError`.
 
 Oxy's default non-Web `User-Agent` is `oxy`. It deliberately omits the package
 release version so it cannot become stale when package metadata changes.
-Use `ClientOptions(userAgent: 'users-sdk/1.0')` for your application's own
-identity. An explicit `user-agent` header takes precedence over this option.
-An empty `userAgent` stops Oxy from adding its default header, but the native
-HTTP stack may supply its own. Oxy does not add this default header on Web.
+For non-Web requests, use `ClientOptions(userAgent: 'users-sdk/1.0')` for your
+application's own identity. An explicit `user-agent` header takes precedence
+over this option. An empty `userAgent` stops Oxy from adding its default header,
+but the native HTTP stack may supply its own. On Web, Oxy ignores this option
+and the browser controls the wire user agent.
 
 ## Use Result for No-Throw Flows
 

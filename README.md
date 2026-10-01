@@ -148,10 +148,10 @@ final users = UsersApi(client);
 That shape keeps parsing, base URLs, authorization, timeout behavior, retry
 rules, and status handling out of UI and feature code.
 
-Non-Web requests use `User-Agent: oxy` by default. To identify your own API
-client and its version, set `ClientOptions(userAgent: 'users-sdk/1.0')`.
-Explicit `user-agent` headers take precedence. Oxy does not add this default
-header on Web.
+Non-Web requests use `User-Agent: oxy` by default. For non-Web requests, set
+`ClientOptions(userAgent: 'users-sdk/1.0')` to identify your API client and its
+version; explicit `user-agent` headers take precedence over this option.
+On Web, Oxy ignores this option and the browser controls the wire user agent.
 
 ## Request Lifecycle
 
