@@ -52,7 +52,7 @@ Response withReadTimeout(Response response, Request request, Context context) {
 
   return response.copyWith(
     body: ResponseBody.stream(
-      _readTimeoutStream(body.open(), timeout, request),
+      _readTimeoutStream(body.open(), timeout, request, context.signal),
       contentLength: body.contentLength,
     ),
   );
@@ -84,6 +84,7 @@ Stream<List<int>> _readTimeoutStream(
   Stream<List<int>> source,
   Duration timeout,
   Request request,
+  AbortSignal? signal,
 ) async* {
   final iterator = StreamIterator<List<int>>(source);
   try {
@@ -97,6 +98,8 @@ Stream<List<int>> _readTimeoutStream(
             request: request,
             sent: true,
           );
+          // Unblock transport reads before waiting for stream cancellation.
+          signal?.abort(timeoutError);
           throw timeoutError;
         },
       );

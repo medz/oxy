@@ -1,3 +1,20 @@
+## 0.7.1
+
+### Fixed
+
+- Read timeouts now interrupt stalled native and Web response-body reads,
+  including when the total timeout is disabled, and preserve `TimeoutError`.
+- Native cancellation now stops pending response-body reads after headers
+  arrive, preserving `CancelError` and the caller's reason.
+- Default native capability flags no longer advertise unexposed proxy/TLS
+  configuration. Web request-streaming capability reflects its runtime probe.
+
+### Added
+
+- Documented transport capabilities, browser restrictions, cancellation,
+  timeouts, and custom transport ownership, with live HTTP regressions on
+  native, Node, and Chrome.
+
 ## 0.7.0
 
 ### Breaking Changes
