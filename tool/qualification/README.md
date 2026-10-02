@@ -23,6 +23,9 @@ the app, pub cache, logs, and build caches there, and stops its server/driver
 when finished. It never deletes an existing workspace. Flutter can also write
 its SDK cache, so provide an isolated SDK if sharing a developer installation.
 Analytics are suppressed for the run. No login is required.
+Each Flutter step has a 900-second timeout, configurable with `--step-timeout`.
+A timed-out step logs its name, returns code 124, and stops its process group;
+the runner also stops its owned server/driver on exit.
 
 The cold macOS automatic-overlay probe is currently a known failing admission
 gate: the first compiled app uses the original `http_parser` even though the

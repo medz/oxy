@@ -20,12 +20,16 @@ on:
       - 'patches/**'
       - 'patchwork.yaml'
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   flutter-web:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: browser-actions/setup-chrome@v2
         id: chrome
         with:

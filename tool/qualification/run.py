@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import subprocess
 import time
@@ -21,7 +22,11 @@ def main():
     dependency.add_argument('--oxy-source', type=Path)
     parser.add_argument('--chrome-binary', type=Path)
     parser.add_argument('--chromedriver', type=Path)
+    parser.add_argument('--step-timeout', type=float, default=900,
+                        help='Maximum seconds per Flutter step (default: 900)')
     args = parser.parse_args()
+    if args.step_timeout <= 0:
+        parser.error('--step-timeout must be positive')
     workspace = args.workspace.resolve()
     workspace.mkdir(parents=True, exist_ok=False)
     app = workspace / 'consumer'
@@ -40,10 +45,31 @@ def main():
 
     def run(name, command, cwd=app):
         with (logs / f'{name}.log').open('w') as output:
-            result = subprocess.run(command, cwd=cwd, env=env,
-                                    stdout=output, stderr=subprocess.STDOUT)
-        print(f'{name}: exit {result.returncode}', flush=True)
-        return result.returncode
+            with subprocess.Popen(command, cwd=cwd, env=env, stdout=output,
+                                  stderr=subprocess.STDOUT,
+                                  start_new_session=True) as process:
+                try:
+                    code = process.wait(timeout=args.step_timeout)
+                except subprocess.TimeoutExpired:
+                    output.write(f'\n{name}: timed out after {args.step_timeout}s\n')
+                    output.flush()
+                    try:
+                        os.killpg(process.pid, signal.SIGTERM)
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    # The wrapper can exit before its compiler/browser children.
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                    code = 124
+        print(f'{name}: exit {code}', flush=True)
+        return code
 
     platforms = args.platforms.split(',')
     if not set(platforms) <= {'macos', 'web'}:
