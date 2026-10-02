@@ -2,6 +2,9 @@
 
 ### Fixed
 
+- RFC850 `Retry-After` dates now work on the first Flutter native compilation
+  without relying on build-hook overlay ordering. The internal parser handles
+  the complete 50-year cutoff and retains other date formats and fallback.
 - Cancelling a response stream now interrupts an already pending body read
   through Web transport and read/total timeout wrappers, without waiting for
   more server data or mutating the caller's cancellation signal.
@@ -15,7 +18,7 @@
 
 - Reproducible public-API Flutter macOS/Web application qualification with
   observed socket closure, timeout/cancellation/client-reuse regressions,
-  payload integrity, response buffering, and automatic dependency overlays.
+  payload integrity, response buffering, and RFC850 retry delays.
 - A Web application CI job and a public contract baseline for the 1.0 review.
 
 ## 0.7.1

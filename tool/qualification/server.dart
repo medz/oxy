@@ -2,11 +2,40 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+String rfc850(DateTime date) {
+  const days = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${days[date.weekday - 1]}, ${two(date.day)}-${months[date.month - 1]}-${two(date.year % 100)} ${two(date.hour)}:${two(date.minute)}:${two(date.second)} GMT';
+}
+
 // A raw loopback HTTP fixture makes client-side socket closure observable.
 // Ordinary responses close their connection; /stream deliberately stays open.
 Future<void> main() async {
   final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
   final streams = <String, bool>{};
+  final retries = <String, int>{};
   final sockets = <Socket>{};
   server.listen((socket) {
     sockets.add(socket);
@@ -50,6 +79,7 @@ Future<void> main() async {
         const cors =
             'Access-Control-Allow-Origin: *\r\n'
             'Access-Control-Allow-Headers: content-type\r\n'
+            'Access-Control-Expose-Headers: retry-after\r\n'
             'Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n';
         if (uri.path == '/stream') {
           final id = uri.queryParameters['id']!;
@@ -66,8 +96,20 @@ Future<void> main() async {
           return;
         }
         final List<int> body;
+        var status = '200 OK';
+        var responseHeaders = '';
         if (method == 'OPTIONS') {
           body = const [];
+        } else if (uri.path == '/retry') {
+          final id = uri.queryParameters['id']!;
+          final attempt = (retries[id] ?? 0) + 1;
+          retries[id] = attempt;
+          if (attempt == 1) {
+            status = '503 Service Unavailable';
+            responseHeaders =
+                'Retry-After: ${rfc850(DateTime.now().toUtc().add(const Duration(seconds: 2)))}\r\n';
+          }
+          body = utf8.encode(jsonEncode({'attempt': attempt}));
         } else if (uri.path == '/state') {
           final id = uri.queryParameters['id'];
           body = utf8.encode(
@@ -88,7 +130,7 @@ Future<void> main() async {
         }
         socket.add(
           ascii.encode(
-            'HTTP/1.1 200 OK\r\n$cors'
+            'HTTP/1.1 $status\r\n$cors$responseHeaders'
             'Connection: close\r\nContent-Length: ${body.length}\r\n\r\n',
           ),
         );

@@ -1,7 +1,6 @@
 import 'dart:math';
 
-import 'package:http_parser/http_parser.dart' show parseHttpDate;
-
+import 'client/retry_after.dart';
 import 'core/request.dart';
 import 'core/response.dart';
 
@@ -168,11 +167,7 @@ final class RetryPolicy {
   }
 
   DateTime? _parseRetryAfterDate(String value) {
-    try {
-      return parseHttpDate(value);
-    } on FormatException {
-      return DateTime.tryParse(value);
-    }
+    return parseRetryAfterDate(value);
   }
 }
 

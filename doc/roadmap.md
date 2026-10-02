@@ -22,7 +22,7 @@ A missing qualification is not evidence of a runtime defect.
 | Platform promises | VM/Node/Chrome Dart tests and real loopback HTTP regressions are complemented by [fresh Flutter macOS/Web applications](../tool/qualification/README.md) and observable socket closure. | Qualify additional promised Flutter targets/build modes, packaged browser artifacts, and supported streaming-upload paths; preserve exact version/target evidence. |
 | Capability metadata | Development flags match native configuration inputs and Web's request-streaming probe. | Keep feature claims aligned with the supported API and runtime. |
 | Release metadata | Published 0.7.0 uses `oxy`; fresh hosted consumers verified application/header overrides. | Retain the version-independent default and verify package/version metadata for each release. |
-| Dependency overlays | Fresh hosted Dart consumers passed automatic RFC850 overlay checks on minimum/stable SDKs. The cold Flutter macOS app probe instead compiles the original parser before the final package mapping is updated. | Resolve the cold native build gate and keep provider patches in the archive. [#80](https://github.com/medz/oxy/issues/80) separately tracks removal only after an upstream release is verified. |
+| Dependency overlays | Fresh hosted Dart consumers passed automatic RFC850 overlay checks on minimum/stable SDKs. Cold Flutter macOS compilation can use the original parser before the final mapping is updated. Oxy's own Retry-After normalization avoids that ordering dependency. | Qualify remaining upstream parser/cookie contracts and retain provider patches. [#80](https://github.com/medz/oxy/issues/80) separately tracks removal only after an upstream release is verified. |
 
 ## Small release sequence
 

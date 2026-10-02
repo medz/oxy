@@ -74,7 +74,7 @@ void main() {
     expect(await replayable.bytes(), await replayable.bytes());
   });
 
-  testWidgets('automatic RFC850 overlay applies on a cold app build', (
+  testWidgets('RFC850 Retry-After works on the first app compilation', (
     tester,
   ) async {
     final retryAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
@@ -116,6 +116,19 @@ void main() {
     );
     expect(delay, greaterThan(const Duration(minutes: 4)));
     expect(delay, lessThanOrEqualTo(const Duration(minutes: 5)));
+  });
+
+  testWidgets('actual HTTP retries wait for RFC850 Retry-After', (
+    tester,
+  ) async {
+    final client = makeClient();
+    final elapsed = Stopwatch()..start();
+    final response = await client
+        .get('/retry?id=$runId-rfc850')
+        .timeout(const Duration(seconds: 5));
+    expect((await response.json<Map>())['attempt'], 2);
+    expect(elapsed.elapsed, greaterThan(const Duration(milliseconds: 500)));
+    expect((await (await client.get('/health')).json<Map>())['method'], 'GET');
   });
 
   for (final phase in [TimeoutPhase.read, TimeoutPhase.total]) {
