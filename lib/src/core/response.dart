@@ -8,8 +8,9 @@ import '../options.dart';
 /// An HTTP response returned by Oxy.
 ///
 /// A response owns status metadata, headers, and an optional [ResponseBody].
-/// Response instances are immutable; use [copyWith] or [buffered] when a
-/// middleware needs to derive a modified response.
+/// Fields are final, while headers remain mutable and streaming bodies are
+/// consumable. Use [copyWith] or [buffered] to derive a response. [copyWith]
+/// copies headers but shares the body unless it is replaced.
 ///
 /// Response bodies can be replayable or one-shot. Convenience readers such as
 /// [text], [json], and [bytes] consume the body stream.

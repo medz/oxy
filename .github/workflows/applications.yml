@@ -1,0 +1,50 @@
+name: Application contracts
+on:
+  pull_request:
+    paths:
+      - 'lib/**'
+      - 'tool/qualification/**'
+      - '.github/workflows/applications.yml'
+      - 'pubspec.*'
+      - 'hook/**'
+      - 'patches/**'
+      - 'patchwork.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'tool/qualification/**'
+      - '.github/workflows/applications.yml'
+      - 'pubspec.*'
+      - 'hook/**'
+      - 'patches/**'
+      - 'patchwork.yaml'
+  workflow_dispatch:
+jobs:
+  flutter-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+        with:
+          chrome-version: '150.0.7871.115'
+          install-chromedriver: true
+      - name: Set up qualified Flutter
+        run: |
+          git clone --depth 1 --branch 3.47.5 https://github.com/flutter/flutter.git "$RUNNER_TEMP/qualified-flutter"
+          test "$(git -C "$RUNNER_TEMP/qualified-flutter" rev-parse HEAD)" = 6a19cca56475dbfba1478ee68d7bd0c2ef891da1
+      - name: Qualify public API in a Flutter Web application
+        run: |
+          python3 tool/qualification/run.py \
+            --flutter "$RUNNER_TEMP/qualified-flutter/bin/flutter" \
+            --workspace "$RUNNER_TEMP/oxy-application" \
+            --platforms web \
+            --oxy-source "$GITHUB_WORKSPACE" \
+            --chrome-binary '${{ steps.chrome.outputs.chrome-path }}' \
+            --chromedriver '${{ steps.chrome.outputs.chromedriver-path }}'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: application-contract-logs
+          path: ${{ runner.temp }}/oxy-application/logs

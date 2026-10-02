@@ -375,6 +375,115 @@ void main() {
     );
   });
 
+  test(
+    'read timeout excludes time while the response reader is paused',
+    () async {
+      final source = StreamController<List<int>>();
+      late AbortSignal signal;
+      final client = Client(
+        ClientOptions(
+          timeoutPolicy: const TimeoutPolicy(
+            total: null,
+            read: Duration(milliseconds: 30),
+          ),
+          transport: MockTransport((request, context) async {
+            signal = context.signal!;
+            return Response.stream(source.stream);
+          }),
+        ),
+      );
+      final response = await client.get('https://example.com/paused-read');
+      final reader = StreamIterator(response.stream());
+      try {
+        source.add([1]);
+        expect(await reader.moveNext(), isTrue);
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(signal.aborted, isFalse);
+        source.add([2]);
+        expect(await reader.moveNext(), isTrue);
+        expect(reader.current, [2]);
+      } finally {
+        await reader.cancel();
+        await source.close();
+        await client.close();
+      }
+    },
+  );
+
+  test(
+    'expired total deadline rejects buffered chunks before delivery',
+    () async {
+      final client = Client(
+        ClientOptions(
+          timeoutPolicy: const TimeoutPolicy(total: Duration(milliseconds: 30)),
+          transport: MockTransport(
+            (request, context) async =>
+                Response.stream(Stream<List<int>>.value([1])),
+          ),
+        ),
+      );
+      try {
+        final response = await client.get('https://example.com/late-body');
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        await expectLater(
+          response.bytes(),
+          throwsA(
+            isA<TimeoutError>().having(
+              (error) => error.phase,
+              'phase',
+              TimeoutPhase.total,
+            ),
+          ),
+        );
+      } finally {
+        await client.close();
+      }
+    },
+  );
+
+  test(
+    'total timeout cancels its source while the reader remains paused',
+    () async {
+      final cancelled = Completer<void>();
+      final source = StreamController<List<int>>(
+        onCancel: () => cancelled.complete(),
+      );
+      final client = Client(
+        ClientOptions(
+          timeoutPolicy: const TimeoutPolicy(
+            total: Duration(milliseconds: 100),
+          ),
+          transport: MockTransport(
+            (request, context) async => Response.stream(source.stream),
+          ),
+        ),
+      );
+      final reader = StreamIterator(
+        (await client.get('https://example.com/paused-total')).stream(),
+      );
+      try {
+        source.add([1]);
+        expect(await reader.moveNext(), isTrue);
+        // Do not request another chunk until source cancellation is observed.
+        await cancelled.future.timeout(const Duration(seconds: 1));
+        await expectLater(
+          reader.moveNext(),
+          throwsA(
+            isA<TimeoutError>().having(
+              (error) => error.phase,
+              'phase',
+              TimeoutPhase.total,
+            ),
+          ),
+        );
+      } finally {
+        await reader.cancel();
+        await source.close();
+        await client.close();
+      }
+    },
+  );
+
   test('first-byte timeout remains retryable', () async {
     var calls = 0;
     final client = Client(

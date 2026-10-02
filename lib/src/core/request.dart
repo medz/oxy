@@ -3,12 +3,14 @@ import 'body.dart';
 import 'headers.dart';
 import '../options.dart';
 
-/// An immutable HTTP request prepared for Oxy's pipeline.
+/// An HTTP request prepared for Oxy's pipeline.
 ///
 /// A request stores the method, URI, headers, optional [Body], and
 /// per-request [RequestOptions]. Use [copyWith] to derive a modified request in
 /// middleware; copy existing headers with `Headers(request.headers)` before
 /// changing them.
+/// Fields are final, while headers and body consumption retain their own state.
+/// [copyWith] copies headers but shares the body unless it is replaced.
 ///
 /// ```dart
 /// final request = Request(

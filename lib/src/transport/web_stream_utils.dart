@@ -77,54 +77,94 @@ Stream<Uint8List> toDartStream(
   AbortSignal? signal,
   ProgressCallback? onProgress,
   int? total,
-}) async* {
-  final reader = stream.getReader();
+}) {
+  late final StreamController<Uint8List> controller;
+  late final ReadableStreamDefaultReader reader;
+  late final Future<void> pumping;
+  Future<void>? cancellation;
+  Completer<void>? resume;
+  var cancelled = false;
   var transferred = 0;
   var done = false;
 
-  try {
-    while (true) {
-      final result = await reader.read().toDart;
-      if (result.done) {
-        done = true;
-        break;
-      }
-      final value = result.value;
-      if (value == null) {
-        continue;
-      }
-      final bytes = value.toDart;
-      transferred += bytes.length;
-      onProgress?.call(
-        TransferProgress(transferred: transferred, total: total),
-      );
-      yield bytes;
-    }
-  } catch (error, trace) {
-    if (signal?.aborted == true) {
-      if (signal?.reason case final TimeoutError timeout) {
-        throw timeout;
-      }
-      throw CancelError(reason: signal?.reason, request: request, trace: trace);
-    }
-    if (error is RequestError) {
-      rethrow;
-    }
-    throw NetworkError(
-      error.toString(),
-      request: request,
-      cause: error,
-      trace: trace,
-      sent: true,
-    );
-  } finally {
-    if (!done) {
+  Future<void> cancelReader() {
+    return cancellation ??= () async {
+      if (done) return;
       try {
-        unawaited(
-          reader.cancel('cancelled'.toJS).toDart.catchError((_) => null),
-        );
-      } catch (_) {}
-    }
-    reader.releaseLock();
+        await reader.cancel('cancelled'.toJS).toDart;
+      } catch (_) {
+        // A failed or already-aborted Fetch stream needs no second error.
+      }
+    }();
   }
+
+  Future<void> pump() async {
+    try {
+      while (!cancelled) {
+        if (controller.isPaused) {
+          await resume!.future;
+          if (cancelled) break;
+        }
+        final result = await reader.read().toDart;
+        if (cancelled) break;
+        if (result.done) {
+          done = true;
+          break;
+        }
+        final value = result.value;
+        if (value == null) continue;
+        final bytes = value.toDart;
+        transferred += bytes.length;
+        onProgress?.call(
+          TransferProgress(transferred: transferred, total: total),
+        );
+        controller.add(bytes);
+      }
+    } catch (error, trace) {
+      if (!cancelled) {
+        var normalized = error;
+        if (signal?.aborted == true) {
+          normalized = signal?.reason is TimeoutError
+              ? signal!.reason!
+              : CancelError(
+                  reason: signal?.reason,
+                  request: request,
+                  trace: trace,
+                );
+        } else if (error is! RequestError) {
+          normalized = NetworkError(
+            error.toString(),
+            request: request,
+            cause: error,
+            trace: trace,
+            sent: true,
+          );
+        }
+        controller.addError(normalized, trace);
+      }
+    } finally {
+      await cancelReader();
+      reader.releaseLock();
+      unawaited(controller.close());
+    }
+  }
+
+  controller = StreamController<Uint8List>(
+    onListen: () {
+      reader = stream.getReader();
+      pumping = pump();
+    },
+    onPause: () => resume = Completer<void>(),
+    onResume: () {
+      resume?.complete();
+      resume = null;
+    },
+    onCancel: () async {
+      cancelled = true;
+      resume?.complete();
+      await cancelReader();
+      await pumping;
+    },
+  );
+  return controller.stream;
 }
