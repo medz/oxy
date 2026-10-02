@@ -8,38 +8,37 @@ README still applies. This plan builds on the completed stability work in
 
 ## Qualification gaps
 
-The starting point is published 0.6.0 and main commit `7633f785`, checked on
-2026-10-01. A missing qualification below is not evidence of a runtime defect.
-The unreleased development branch now declares Dart 3.12 and checks both
-Dart 3.12.0 and stable. Its default non-Web user-agent is version-independent
-`oxy`; the historical 0.6.0 observations below describe the published package.
+The starting point was published 0.6.0 and main commit `7633f785`. Published
+0.7.0 corrected the SDK declaration and user-agent contract; independent hosted
+consumers verified both on Dart 3.12.0 and 3.13.4. The following table separates
+that completed work from remaining gates and current development coverage.
+A missing qualification is not evidence of a runtime defect.
 
 | Area | Current evidence | Required before 1.0 |
 | --- | --- | --- |
 | Default request cost | Real loopback suites cover five payload/transfer scenarios; #76 remains open. | Measure narrow changes with default policies enabled, preserve behavior, and compare small requests and 64KiB transfers. |
-| Minimum SDK | Published 0.6.0 declares Dart 3.10, while required `patchwork 0.5.0` requires 3.12. Development manifest and CI now match Dart 3.12. | Retain effective minimum/stable checks and verify the corrected declaration in the next published package. |
+| Minimum SDK | Published 0.7.0 declares Dart 3.12, matching `patchwork 0.5.0`; fresh hosted consumers passed minimum/stable checks. | Retain effective minimum/stable checks. |
 | Public API | 0.3–0.6 deliberately changed core, middleware, headers, cookies, and bodies. | Review and freeze exports, defaults, ownership, replayability, cancellation, and error contracts; document any final changes. Include re-exported upstream types. |
-| Platform promises | CI tests VM, Node, and Chrome. The default transport selects native or Web through conditional imports. | Document actual browser restrictions and distinguish compilation/core tests from real transport tests. Add a Flutter consumer and native/browser HTTP consumer smoke checks. |
-| Capability metadata | Native capability flags advertise proxy/TLS configuration; the built-in transport exposes no corresponding configuration input. | Make capability claims match the supported API or explicitly document custom transport requirements. |
-| Release metadata | Published 0.6.0 sends `oxy/0.3.0`; development uses `oxy` with tested application/header overrides. | Retain the version-independent default and verify package/version metadata for each release. |
-| Dependency overlays | A fresh hosted 0.6.0 consumer on Dart 3.13.4 honors RFC850 Retry-After through Patchwork's automatic build hook. | Repeat hosted-consumer checks on the effective minimum SDK and supported build paths; keep provider patches in the published archive. |
+| Platform promises | CI tests VM, Node, and Chrome. Development includes real loopback HTTP, body integrity, cancellation, and read-timeout regressions; [transport contracts](platforms.md) document limits and ownership. | Add fresh packaged browser and Flutter consumers and qualify supported streaming-upload paths. |
+| Capability metadata | Development flags match native configuration inputs and Web's request-streaming probe. | Keep feature claims aligned with the supported API and runtime. |
+| Release metadata | Published 0.7.0 uses `oxy`; fresh hosted consumers verified application/header overrides. | Retain the version-independent default and verify package/version metadata for each release. |
+| Dependency overlays | Fresh hosted 0.7.0 consumers passed automatic RFC850 overlay checks on minimum/stable SDKs. | Keep provider patches in the archive and repeat consumer checks. [#80](https://github.com/medz/oxy/issues/80) tracks removal only after an upstream release is verified. |
 
 ## Small release sequence
 
-1. **Correct the SDK contract.** Align the manifest and CI with the dependency
-   graph’s Dart 3.12 minimum. Reproduce the published 0.6.0 failure on Dart
-   3.10, then qualify Dart 3.12.0 and stable.
-2. **Measure default lifecycle overhead.** Complete one independently measured
-   slice of #76. Leave signals, status validation, and native uploads for
-   separate changes unless their behavior and benefit are demonstrated.
-3. **Settle release metadata.** Choose a consistent user-agent policy and
-   validate package/version metadata.
-4. **Qualify platform contracts.** Document native/Web limitations, correct
-   capability claims, and run fresh native, browser, and Flutter consumers.
-5. **Freeze the public contract.** Audit exported types and defaults against
+1. **Correct SDK and release metadata contracts — completed in 0.7.0.**
+   Minimum/stable CI and independent hosted consumers cover the actual SDK
+   floor, package metadata, and version-independent user-agent.
+2. **Qualify transport lifecycle and platform contracts.** Correct capability
+   claims, stop pending body reads on cancellation and timeout, and document
+   ownership. Complete fresh browser and Flutter consumers before 1.0.
+3. **Measure default lifecycle overhead.** Complete one independently measured
+   slice of #76 using default policies and real loopback comparisons. No
+   performance improvement is claimed by the transport-contract fixes.
+4. **Freeze the public contract.** Audit exported types and defaults against
    the cookbook and executable examples. Make any necessary breaking changes
    in a focused 0.x minor release with migration examples.
-6. **Release a 1.0 candidate.** Validate the frozen contract and packaged
+5. **Release a 1.0 candidate.** Validate the frozen contract and packaged
    artifact. Ship 1.0 only when all gates below pass; a candidate label alone
    does not establish stability.
 

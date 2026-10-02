@@ -109,7 +109,17 @@ final class WebTransport implements Transport {
   final bool? _requestStreamsSupportedOverride;
 
   @override
-  PlatformCapability get capability => PlatformCapability.web;
+  PlatformCapability get capability => _supportsRequestStreams
+      ? PlatformCapability.web
+      : const PlatformCapability(
+          name: 'web',
+          uploadProgress: false,
+          downloadProgress: true,
+          streamingRequestBody: false,
+          streamingResponseBody: true,
+          proxyConfiguration: false,
+          tlsConfiguration: false,
+        );
 
   @override
   Future<void> close() async {}

@@ -289,6 +289,9 @@ native/Web model simpler or safer.
 The [road to 1.0](doc/roadmap.md) lists the remaining qualification gaps,
 small release sequence, and admission gates.
 
+The [transport contracts](doc/platforms.md) describe native/Web capabilities,
+browser restrictions, cancellation, timeouts, and transport ownership.
+
 ## License
 
 MIT

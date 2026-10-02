@@ -102,6 +102,9 @@ Stream<Uint8List> toDartStream(
     }
   } catch (error, trace) {
     if (signal?.aborted == true) {
+      if (signal?.reason case final TimeoutError timeout) {
+        throw timeout;
+      }
       throw CancelError(reason: signal?.reason, request: request, trace: trace);
     }
     if (error is RequestError) {

@@ -348,37 +348,81 @@ final class NativeTransport implements Transport {
     Request request,
     Context context,
     int? total,
-  ) async* {
+  ) {
+    late final StreamController<Uint8List> controller;
+    late final StreamSubscription<List<int>> subscription;
+    Future<void>? cancellation;
+    var ended = false;
     var transferred = 0;
-    try {
-      await for (final chunk in response) {
-        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
-        transferred += bytes.length;
-        context.onReceiveProgress?.call(
-          TransferProgress(transferred: transferred, total: total),
-        );
-        yield bytes;
-      }
-    } catch (error, trace) {
+
+    Future<void> cancelSource() => cancellation ??= subscription.cancel();
+
+    void fail(Object error, StackTrace trace) {
+      if (ended) return;
+      ended = true;
       if (context.signal?.aborted == true) {
-        throw CancelError(
-          reason: context.signal?.reason,
+        error = context.signal?.reason is TimeoutError
+            ? context.signal!.reason!
+            : CancelError(
+                reason: context.signal?.reason,
+                request: request,
+                trace: trace,
+              );
+      } else if (error is! RequestError) {
+        error = NetworkError(
+          error.toString(),
           request: request,
+          cause: error,
           trace: trace,
+          sent: true,
+          retryable: true,
         );
       }
-      if (error is RequestError) {
-        rethrow;
-      }
-      throw NetworkError(
-        error.toString(),
-        request: request,
-        cause: error,
-        trace: trace,
-        sent: true,
-        retryable: true,
-      );
+      controller.addError(error, trace);
+      unawaited(controller.close());
+      unawaited(cancelSource().catchError((Object _) {}));
     }
+
+    controller = StreamController<Uint8List>(
+      onListen: () {
+        subscription = response.listen(
+          (chunk) {
+            if (ended) return;
+            try {
+              final bytes = chunk is Uint8List
+                  ? chunk
+                  : Uint8List.fromList(chunk);
+              transferred += bytes.length;
+              context.onReceiveProgress?.call(
+                TransferProgress(transferred: transferred, total: total),
+              );
+              controller.add(bytes);
+            } catch (error, trace) {
+              fail(error, trace);
+            }
+          },
+          onError: fail,
+          onDone: () {
+            ended = true;
+            unawaited(controller.close());
+          },
+        );
+        context.signal?.onAbort(() {
+          if (ended) return;
+          fail(
+            CancelError(reason: context.signal?.reason, request: request),
+            StackTrace.current,
+          );
+        });
+      },
+      onPause: () => subscription.pause(),
+      onResume: () => subscription.resume(),
+      onCancel: () {
+        ended = true;
+        return cancelSource();
+      },
+    );
+    return controller.stream;
   }
 
   void _bindAbort(Context context, HttpClientRequest request) {

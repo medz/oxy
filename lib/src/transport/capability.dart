@@ -28,10 +28,10 @@ final class PlatformCapability {
   /// Whether response bodies may be streamed.
   final bool streamingResponseBody;
 
-  /// Whether proxy configuration is available.
+  /// Whether proxy configuration is exposed by this transport's API.
   final bool proxyConfiguration;
 
-  /// Whether TLS configuration is available.
+  /// Whether TLS configuration is exposed by this transport's API.
   final bool tlsConfiguration;
 
   /// Capability set for the default native transport.
@@ -41,11 +41,13 @@ final class PlatformCapability {
     downloadProgress: true,
     streamingRequestBody: true,
     streamingResponseBody: true,
-    proxyConfiguration: true,
-    tlsConfiguration: true,
+    proxyConfiguration: false,
+    tlsConfiguration: false,
   );
 
-  /// Capability set for the default Web transport.
+  /// Web capabilities when Fetch request streaming is supported.
+  ///
+  /// Query the transport instance for the runtime's actual capabilities.
   static const PlatformCapability web = PlatformCapability(
     name: 'web',
     uploadProgress: false,
