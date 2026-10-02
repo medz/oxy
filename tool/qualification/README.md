@@ -9,7 +9,8 @@ The raw loopback HTTP server holds chunked responses open and records when the
 client closes each socket. Tests require that closure after read/total timeout,
 caller abort, and cancellation of a pending response read, then reuse the
 client. They also check Unicode JSON POST, 128KiB payload integrity, response
-buffering, capability metadata, and automatic RFC850 dependency overlays.
+buffering, capability metadata, and RFC850 Retry-After interpretation and
+actual HTTP retry delays on the first compilation.
 
 ## Run
 
@@ -27,12 +28,14 @@ Each Flutter step has a 900-second timeout, configurable with `--step-timeout`.
 A timed-out step logs its name, returns code 124, and stops its process group;
 the runner also stops its owned server/driver on exit.
 
-The cold macOS automatic-overlay probe is currently a known failing admission
-gate: the first compiled app uses the original `http_parser` even though the
-build hook has updated package resolution by the end of the build. The runner
-retains that failure and exits nonzero; passing transport tests do not imply
-that this separate gate passed. Web and ordinary Dart consumers are qualified
-independently. Do not warm/retry the app and call that a cold-build pass.
+Oxy normalizes RFC850 Retry-After dates internally, so its public retry policy
+does not depend on automatic overlay ordering. Fresh macOS first-compilation
+tests must pass with ordinary pub resolution. A separate Patchwork integration
+gap remains: the native compiler can read the original `http_parser` before
+the hook replaces package resolution. This fixture qualifies Oxy retry behavior,
+not other consumers of that parser (including upstream cookie types). The
+dependency overlay and its retirement plan remain in place. Do not warm/retry
+the app and call that a cold-build pass.
 
 ```sh
 python3 tool/qualification/run.py \

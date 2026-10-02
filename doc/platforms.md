@@ -73,6 +73,7 @@ fresh public-API Flutter macOS and Web consumers and observes actual socket
 closure after timeout, caller abort, and response-stream cancellation. Its
 version/target scope is explicit. Other Flutter targets/build modes and browser
 HTTP/2 streaming uploads remain gates in the [1.0 roadmap](roadmap.md).
-The cold macOS automatic dependency-overlay probe remains a failing gate;
-transport/socket regressions alone do not qualify that build path's RFC850
-retry-date behavior.
+Oxy's RFC850 Retry-After normalization works independently of build-hook
+overlay ordering, and application probes require correct retry behavior on
+the first compilation. This does not fix Patchwork's cold native resolution
+gap or qualify upstream parser/cookie contracts; those remain separate gates.
