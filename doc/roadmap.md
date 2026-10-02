@@ -18,11 +18,11 @@ A missing qualification is not evidence of a runtime defect.
 | --- | --- | --- |
 | Default request cost | Real loopback suites cover five payload/transfer scenarios; #76 remains open. | Measure narrow changes with default policies enabled, preserve behavior, and compare small requests and 64KiB transfers. |
 | Minimum SDK | Published 0.7.0 declares Dart 3.12, matching `patchwork 0.5.0`; fresh hosted consumers passed minimum/stable checks. | Retain effective minimum/stable checks. |
-| Public API | 0.3–0.6 deliberately changed core, middleware, headers, cookies, and bodies. | Review and freeze exports, defaults, ownership, replayability, cancellation, and error contracts; document any final changes. Include re-exported upstream types. |
-| Platform promises | CI tests VM, Node, and Chrome. Development includes real loopback HTTP, body integrity, cancellation, and read-timeout regressions; [transport contracts](platforms.md) document limits and ownership. | Add fresh packaged browser and Flutter consumers and qualify supported streaming-upload paths. |
+| Public API | 0.3–0.6 deliberately changed core, middleware, headers, cookies, and bodies. The [contract baseline](api-contracts.md) records defaults, state/ownership, upstream exports, lazy-body hooks, and the JSON error boundary. | Explicitly decide remaining error/export contracts before freezing; document any final changes with migration examples. |
+| Platform promises | VM/Node/Chrome Dart tests and real loopback HTTP regressions are complemented by [fresh Flutter macOS/Web applications](../tool/qualification/README.md) and observable socket closure. | Qualify additional promised Flutter targets/build modes, packaged browser artifacts, and supported streaming-upload paths; preserve exact version/target evidence. |
 | Capability metadata | Development flags match native configuration inputs and Web's request-streaming probe. | Keep feature claims aligned with the supported API and runtime. |
 | Release metadata | Published 0.7.0 uses `oxy`; fresh hosted consumers verified application/header overrides. | Retain the version-independent default and verify package/version metadata for each release. |
-| Dependency overlays | Fresh hosted 0.7.0 consumers passed automatic RFC850 overlay checks on minimum/stable SDKs. | Keep provider patches in the archive and repeat consumer checks. [#80](https://github.com/medz/oxy/issues/80) tracks removal only after an upstream release is verified. |
+| Dependency overlays | Fresh hosted Dart consumers passed automatic RFC850 overlay checks on minimum/stable SDKs. The cold Flutter macOS app probe instead compiles the original parser before the final package mapping is updated. | Resolve the cold native build gate and keep provider patches in the archive. [#80](https://github.com/medz/oxy/issues/80) separately tracks removal only after an upstream release is verified. |
 
 ## Small release sequence
 
@@ -31,7 +31,8 @@ A missing qualification is not evidence of a runtime defect.
    floor, package metadata, and version-independent user-agent.
 2. **Qualify transport lifecycle and platform contracts.** Correct capability
    claims, stop pending body reads on cancellation and timeout, and document
-   ownership. Complete fresh browser and Flutter consumers before 1.0.
+   ownership. Retain fresh macOS/Web consumers and qualify the additional
+   promised Flutter targets/build modes and packaged browser artifacts.
 3. **Measure default lifecycle overhead.** Complete one independently measured
    slice of #76 using default policies and real loopback comparisons. No
    performance improvement is claimed by the transport-contract fixes.

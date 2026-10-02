@@ -1,0 +1,227 @@
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:integration_test/integration_test.dart';
+import 'package:oxy/oxy.dart';
+
+const baseUrl = String.fromEnvironment('QUALIFICATION_BASE_URL');
+const runId = String.fromEnvironment('QUALIFICATION_RUN');
+
+Client makeClient({TimeoutPolicy timeout = const TimeoutPolicy()}) {
+  final client = Client(
+    ClientOptions(baseUrl: Uri.parse(baseUrl), timeoutPolicy: timeout),
+  );
+  addTearDown(client.close);
+  return client;
+}
+
+Future<StreamIterator<List<int>>> startRead(
+  Client client,
+  String id,
+  AbortSignal caller,
+) async {
+  final response = await client.get(
+    '/stream?id=$id',
+    options: RequestOptions(signal: caller),
+  );
+  final reader = StreamIterator(response.stream());
+  addTearDown(() async {
+    caller.abort('fixture cleanup');
+    await reader.cancel();
+  });
+  expect(await reader.moveNext().timeout(const Duration(seconds: 3)), isTrue);
+  expect(utf8.decode(reader.current), 'first');
+  return reader;
+}
+
+Future<void> expectSocketClosed(Client observer, String id) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 3));
+  while (DateTime.now().isBefore(deadline)) {
+    final state = await (await observer.get('/state?id=$id')).json<Map>();
+    if (state['closed'] == true) return;
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+  fail('The server did not observe the $id socket close.');
+}
+
+void main() {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('actual app sends HTTP and preserves body bytes', (tester) async {
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: Text('Oxy consumer'),
+      ),
+    );
+    expect(find.text('Oxy consumer'), findsOneWidget);
+    final client = makeClient();
+    expect((await (await client.get('/health')).json<Map>())['method'], 'GET');
+    final post = await (await client.post(
+      '/echo',
+      json: {'name': 'Oxy 🌍'},
+    )).json<Map>();
+    expect(post['body'], '{"name":"Oxy 🌍"}');
+    expect(
+      await (await client.get('/bytes')).bytes(),
+      orderedEquals(List<int>.generate(128 * 1024, (i) => i % 251)),
+    );
+    expect(client.transport.capability.proxyConfiguration, isFalse);
+    expect(client.transport.capability.tlsConfiguration, isFalse);
+    final replayable = await (await client.get('/bytes')).buffered();
+    expect(await replayable.bytes(), await replayable.bytes());
+  });
+
+  testWidgets('automatic RFC850 overlay applies on a cold app build', (
+    tester,
+  ) async {
+    final retryAt = DateTime.now().toUtc().add(const Duration(minutes: 5));
+    const weekdays = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    String two(int value) => value.toString().padLeft(2, '0');
+    final date =
+        '${weekdays[retryAt.weekday - 1]}, ${two(retryAt.day)}-'
+        '${months[retryAt.month - 1]}-${two(retryAt.year % 100)} '
+        '${two(retryAt.hour)}:${two(retryAt.minute)}:${two(retryAt.second)} GMT';
+    final delay = const RetryPolicy(jitterRatio: 0).delayFor(
+      0,
+      response: Response.text(
+        'busy',
+        status: 503,
+        headers: {'retry-after': date},
+      ),
+    );
+    expect(delay, greaterThan(const Duration(minutes: 4)));
+    expect(delay, lessThanOrEqualTo(const Duration(minutes: 5)));
+  });
+
+  for (final phase in [TimeoutPhase.read, TimeoutPhase.total]) {
+    testWidgets('$phase stops the wire read and releases its connection', (
+      tester,
+    ) async {
+      final observer = makeClient();
+      final client = makeClient(
+        timeout: TimeoutPolicy(
+          total: phase == TimeoutPhase.total
+              ? const Duration(seconds: 1)
+              : null,
+          read: phase == TimeoutPhase.read
+              ? const Duration(milliseconds: 300)
+              : null,
+        ),
+      );
+      final caller = AbortSignal();
+      final id = '$runId-${phase.name}';
+      final reader = await startRead(client, id, caller);
+      await expectLater(
+        reader.moveNext().timeout(const Duration(seconds: 3)),
+        throwsA(isA<TimeoutError>().having((e) => e.phase, 'phase', phase)),
+      );
+      expect(caller.aborted, isFalse);
+      expect(caller.reason, isNull);
+      await expectSocketClosed(observer, id);
+      expect(
+        (await (await client.get('/health')).json<Map>())['method'],
+        'GET',
+      );
+    });
+  }
+
+  testWidgets('JSON body-read failures retain their typed cause', (
+    tester,
+  ) async {
+    final observer = makeClient();
+    final client = makeClient(
+      timeout: const TimeoutPolicy(
+        total: null,
+        read: Duration(milliseconds: 300),
+      ),
+    );
+    final id = '$runId-json-timeout';
+    final result = await Result.capture(() async {
+      final response = await client.get('/stream?id=$id');
+      return response.json<Map>();
+    });
+    expect(
+      result.error,
+      isA<DecodeError>().having(
+        (e) => e.cause,
+        'cause',
+        isA<TimeoutError>().having((e) => e.phase, 'phase', TimeoutPhase.read),
+      ),
+    );
+    await expectSocketClosed(observer, id);
+  });
+
+  for (final total in [null, const Duration(seconds: 30)]) {
+    testWidgets('body cancel releases a pending read with total=$total', (
+      tester,
+    ) async {
+      final observer = makeClient();
+      final client = makeClient(timeout: TimeoutPolicy(total: total));
+      final caller = AbortSignal();
+      final id =
+          '$runId-body-cancel-${total == null ? 'unlimited' : 'default'}';
+      final reader = await startRead(client, id, caller);
+      final pending = reader.moveNext();
+      // Let the source enter its asynchronous read before cancelling it.
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      await reader.cancel().timeout(const Duration(seconds: 3));
+      expect(await pending.timeout(const Duration(seconds: 1)), isFalse);
+      expect(caller.aborted, isFalse);
+      await expectSocketClosed(observer, id);
+      expect(
+        (await (await client.get('/health')).json<Map>())['method'],
+        'GET',
+      );
+    });
+  }
+
+  testWidgets('caller abort releases a pending body connection', (
+    tester,
+  ) async {
+    final observer = makeClient();
+    final client = makeClient(timeout: const TimeoutPolicy(total: null));
+    final caller = AbortSignal();
+    final id = '$runId-abort';
+    final reader = await startRead(client, id, caller);
+    final pending = reader.moveNext();
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    caller.abort('consumer stopped');
+    await expectLater(
+      pending.timeout(const Duration(seconds: 3)),
+      throwsA(
+        isA<CancelError>().having(
+          (e) => e.reason,
+          'reason',
+          'consumer stopped',
+        ),
+      ),
+    );
+    await expectSocketClosed(observer, id);
+    expect((await (await client.get('/health')).json<Map>())['method'], 'GET');
+  });
+}

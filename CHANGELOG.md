@@ -1,3 +1,23 @@
+## Unreleased
+
+### Fixed
+
+- Cancelling a response stream now interrupts an already pending body read
+  through Web transport and read/total timeout wrappers, without waiting for
+  more server data or mutating the caller's cancellation signal.
+- Absolute total deadlines now cancel the source while the body subscription
+  is paused. Regressions preserve paused read-idle budgets and reject expired
+  total-deadline chunks before delivery.
+- Clarified that request/response fields are final while headers and body
+  consumption retain mutable state; copying headers does not replay a body.
+
+### Added
+
+- Reproducible public-API Flutter macOS/Web application qualification with
+  observed socket closure, timeout/cancellation/client-reuse regressions,
+  payload integrity, response buffering, and automatic dependency overlays.
+- A Web application CI job and a public contract baseline for the 1.0 review.
+
 ## 0.7.1
 
 ### Fixed

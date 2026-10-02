@@ -85,33 +85,7 @@ Stream<List<int>> _readTimeoutStream(
   Duration timeout,
   Request request,
   AbortSignal? signal,
-) async* {
-  final iterator = StreamIterator<List<int>>(source);
-  try {
-    while (true) {
-      final hasNext = await iterator.moveNext().timeout(
-        timeout,
-        onTimeout: () {
-          final timeoutError = TimeoutError(
-            phase: TimeoutPhase.read,
-            duration: timeout,
-            request: request,
-            sent: true,
-          );
-          // Unblock transport reads before waiting for stream cancellation.
-          signal?.abort(timeoutError);
-          throw timeoutError;
-        },
-      );
-      if (!hasNext) {
-        break;
-      }
-      yield iterator.current;
-    }
-  } finally {
-    await iterator.cancel();
-  }
-}
+) => _timeoutStream(source, timeout, TimeoutPhase.read, request, signal);
 
 Stream<List<int>> _totalTimeoutStream(
   Stream<List<int>> source,
@@ -119,42 +93,93 @@ Stream<List<int>> _totalTimeoutStream(
   DateTime deadline,
   Request request,
   AbortSignal? signal,
-) async* {
-  final iterator = StreamIterator<List<int>>(source);
-  try {
-    while (true) {
-      final remaining = deadline.difference(DateTime.now().toUtc());
-      if (remaining <= Duration.zero) {
-        throw _abortTotalTimeout(timeout, request, signal);
-      }
+) => _timeoutStream(
+  source,
+  timeout,
+  TimeoutPhase.total,
+  request,
+  signal,
+  deadline: deadline,
+);
 
-      final hasNext = await iterator.moveNext().timeout(
-        remaining,
-        onTimeout: () {
-          throw _abortTotalTimeout(timeout, request, signal);
+Stream<List<int>> _timeoutStream(
+  Stream<List<int>> source,
+  Duration timeout,
+  TimeoutPhase phase,
+  Request request,
+  AbortSignal? signal, {
+  DateTime? deadline,
+}) {
+  late final StreamController<List<int>> controller;
+  late final StreamSubscription<List<int>> subscription;
+  Timer? timer;
+  var ended = false;
+  Future<void>? cancellation;
+
+  Future<void> cancelSource() => cancellation ??= subscription.cancel();
+
+  void expire() {
+    if (ended) return;
+    ended = true;
+    final error = TimeoutError(
+      phase: phase,
+      duration: timeout,
+      request: request,
+      sent: true,
+    );
+    controller.addError(error);
+    signal?.abort(error);
+    unawaited(controller.close());
+    unawaited(cancelSource().catchError((Object _) {}));
+  }
+
+  void startTimer() {
+    timer?.cancel();
+    final remaining = deadline?.difference(DateTime.now().toUtc()) ?? timeout;
+    if (deadline != null && remaining <= Duration.zero) {
+      expire();
+    } else {
+      timer = Timer(remaining, expire);
+    }
+  }
+
+  controller = StreamController<List<int>>(
+    onListen: () {
+      subscription = source.listen(
+        (chunk) {
+          if (ended) return;
+          controller.add(chunk);
+          if (deadline == null) startTimer();
+        },
+        onError: (Object error, StackTrace trace) {
+          if (ended) return;
+          ended = true;
+          timer?.cancel();
+          controller.addError(error, trace);
+          unawaited(controller.close());
+          unawaited(cancelSource().catchError((Object _) {}));
+        },
+        onDone: () {
+          ended = true;
+          timer?.cancel();
+          unawaited(controller.close());
         },
       );
-      if (!hasNext) {
-        break;
-      }
-      yield iterator.current;
-    }
-  } finally {
-    await iterator.cancel();
-  }
-}
-
-TimeoutError _abortTotalTimeout(
-  Duration timeout,
-  Request request,
-  AbortSignal? signal,
-) {
-  final timeoutError = TimeoutError(
-    phase: TimeoutPhase.total,
-    duration: timeout,
-    request: request,
-    sent: true,
+      startTimer();
+    },
+    onPause: () {
+      if (deadline == null) timer?.cancel();
+      subscription.pause();
+    },
+    onResume: () {
+      subscription.resume();
+      if (deadline == null && !ended) startTimer();
+    },
+    onCancel: () {
+      ended = true;
+      timer?.cancel();
+      return cancelSource();
+    },
   );
-  signal?.abort(timeoutError);
-  return timeoutError;
+  return controller.stream;
 }

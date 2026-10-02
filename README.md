@@ -291,6 +291,8 @@ small release sequence, and admission gates.
 
 The [transport contracts](doc/platforms.md) describe native/Web capabilities,
 browser restrictions, cancellation, timeouts, and transport ownership.
+The [public contract baseline](doc/api-contracts.md) records defaults, upstream
+exports, mutable state, and remaining API-freeze decisions.
 
 ## License
 

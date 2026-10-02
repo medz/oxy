@@ -48,6 +48,10 @@ caller-supplied signal, and the client remains usable for subsequent requests.
 
 Response streams are one-shot. Consume or cancel the body when finished with a
 response; use `Response.buffered()` when it must be read repeatedly.
+Await the subscription or iterator's cancellation, including while its next
+read is pending. Built-in transports release that read without waiting for
+more server bytes. Pausing the consumer suspends the read-idle timer; the
+absolute total deadline continues while the subscription is paused.
 
 `Client.close()` is idempotent and closes its owned default transport. Native
 close forcibly closes the underlying `HttpClient`. Web close does not close
@@ -64,5 +68,11 @@ buffering when unsupported, 128KiB response integrity, cancellation after
 response headers, and stalled-response read timeouts followed by client reuse.
 These complement the policy and middleware tests.
 
-This coverage does not qualify browser HTTP/2 streaming uploads or fresh Flutter
-application consumers. Those remain explicit gates in the [1.0 roadmap](roadmap.md).
+[Application qualification](../tool/qualification/README.md) additionally runs
+fresh public-API Flutter macOS and Web consumers and observes actual socket
+closure after timeout, caller abort, and response-stream cancellation. Its
+version/target scope is explicit. Other Flutter targets/build modes and browser
+HTTP/2 streaming uploads remain gates in the [1.0 roadmap](roadmap.md).
+The cold macOS automatic dependency-overlay probe remains a failing gate;
+transport/socket regressions alone do not qualify that build path's RFC850
+retry-date behavior.
